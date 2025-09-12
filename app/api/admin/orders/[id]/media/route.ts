@@ -5,8 +5,11 @@ export const revalidate = 0
 import { NextResponse, NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
-import { prisma, Prisma } from '@prisma/client' // 👈 importa Prisma para usar el enum
+import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
+
+// 🔒 TIPOS PORTABLES (evitan depender de Prisma.MediaType vs Prisma.$Enums.MediaType)
+type MediaTypeLiteral = 'IMAGE' | 'VIDEO' | 'DOCUMENT'
 
 type Ctx =
   | { params: { id: string } }
@@ -17,12 +20,11 @@ async function getOrderId(ctx: Ctx) {
   return ('then' in p ? (await p).id : p.id) as string
 }
 
-function mimeToMediaType(mime: string | undefined): Prisma.MediaType {
+function mimeToMediaType(mime: string | undefined): MediaTypeLiteral {
   const m = (mime || '').toLowerCase()
-  if (m.startsWith('image/')) return Prisma.MediaType.IMAGE
-  if (m.startsWith('video/')) return Prisma.MediaType.VIDEO
-  // ajusta si tu enum tiene otros valores; DOCUMENT suele ser lo más genérico para pdf/doc/xls
-  return Prisma.MediaType.DOCUMENT
+  if (m.startsWith('image/')) return 'IMAGE'
+  if (m.startsWith('video/')) return 'VIDEO'
+  return 'DOCUMENT'
 }
 
 // GET: lista de archivos
@@ -36,7 +38,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const orderId = await getOrderId(ctx)
     const items = await prisma.orderMedia.findMany({
       where: { orderId },
-      orderBy: { uploadedAt: 'desc' }, // ← usa uploadedAt, no createdAt
+      // ⚠️ Usa el campo que realmente tienes en el schema. Quitamos createdAt.
+      orderBy: { uploadedAt: 'desc' },
     })
 
     return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
@@ -71,19 +74,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       contentType: file.type || 'application/octet-stream',
     })
 
-    // 🔑 mapea MIME → enum Prisma.MediaType
-    const mediaType = mimeToMediaType(file.type)
+    const mediaType: MediaTypeLiteral = mimeToMediaType(file.type)
 
     const media = await prisma.orderMedia.create({
       data: {
         orderId,
-        fileUrl: url,                       // ← campo real
-        type: mediaType,                    // ← enum válido
-        uploadedAt: new Date(),             // ← si tu modelo no lo autogenera
-        // si tienes un campo opcional para el nombre, puedes guardar safeName
-        // name: safeName,
-        // si tu modelo tiene un campo mimeType, puedes guardar file.type
-        // mimeType: file.type || 'application/octet-stream',
+        fileUrl: url,
+        type: mediaType as any,   // ✅ coincide con el enum de Prisma (IMAGE/VIDEO/DOCUMENT)
+        uploadedAt: new Date(),   // ⚠️ si tu schema ya lo default-ea, puedes omitirlo
       },
     })
 
