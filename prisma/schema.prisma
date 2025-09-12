@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  role     Role
+  approved Boolean @default(false)
+
+  dealerId String? @unique
+  dealer   Dealer? @relation(fields: [dealerId], references: [id])
+
+  histories OrderHistory[]
+  createdAt DateTime       @default(now())
+}
+
+model Dealer {
+  id                    String    @id @default(uuid())
+  name                  String
+  email                 String    @unique
+  phone                 String?
+  address               String?
+  city                  String?
+  state                 String?
+  agreementUrl          String?
+  agreementSignatureUrl String?
+  agreementSignedAt     DateTime?
+
+  createdAt     DateTime       @default(now())
+  orders        Order[]
+  notifications Notification[]
+  User          User?
+
+  taxDocUrl             String? // W-9 / tax document opcional
+  onboarding            Json      @default("{}") // flags y metadatos (flexible)
+  onboardingCompletedAt DateTime?
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  deliveryAddress String
+  status          OrderStatus
+  paymentProofUrl String?
+  notes           String? // <- si la estás enviando
+  createdAt       DateTime    @default(now())
+
+  dealerId String
+  dealer   Dealer @relation(fields: [dealerId], references: [id])
+
+  poolModelId String
+  poolModel   PoolModel @relation(fields: [poolModelId], references: [id])
+
+  colorId String
+  color   Color  @relation(fields: [colorId], references: [id])
+
+  factoryLocationId String
+  factoryLocation   FactoryLocation @relation(fields: [factoryLocationId], references: [id])
+
+  histories     OrderHistory[]
+  media         OrderMedia[]
+  notifications Notification[]
+}
+
+model OrderHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id])
+  status    OrderStatus
+  comment   String?
+  createdAt DateTime    @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model OrderMedia {
+  id         String    @id @default(uuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id])
+  fileUrl    String
+  type       MediaType
+  uploadedAt DateTime  @default(now())
+}
+
+model PoolModel {
+  id       String  @id @default(uuid())
+  name     String
+  lengthFt Float
+  widthFt  Float
+  depthFt  Float
+  shape    String?
+  orders   Order[]
+}
+
+model Color {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  swatchUrl String? // <-- nuevo
+  orders    Order[]
+}
+
+model Notification {
+  id       String @id @default(uuid())
+  dealerId String
+  dealer   Dealer @relation(fields: [dealerId], references: [id])
+
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // 🔽 opcional para no romper con filas existentes
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  @@index([dealerId, createdAt])
+}
+
+model FactoryLocation {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  address   String?
+  city      String?
+  state     String?
+  active    Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  createdAt   DateTime    @default(now())
+  actorUserId String?
+  actorEmail  String?
+  actorRole   Role?
+  dealerId    String?
+  orderId     String?
+  action      AuditAction
+  message     String
+  meta        Json?
+
+  @@index([createdAt])
+  @@index([dealerId])
+  @@index([orderId])
+  @@index([action])
+}
+
+enum Role {
+  ADMIN
+  DEALER
+  SUPERADMIN
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT_APPROVAL
+  APPROVED
+  IN_PRODUCTION
+  COMPLETED
+  CANCELED
+}
+
+enum MediaType {
+  update
+  proof
+  photo
+  note
+}
+
+enum AuditAction {
+  USER_LOGIN
+  DEALER_APPROVED
+  DEALER_REVOKED
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  FILE_UPLOADED
+  AGREEMENT_SIGNED
+  NOTIFICATION_SENT
+}
