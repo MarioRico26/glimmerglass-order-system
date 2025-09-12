@@ -6,15 +6,20 @@ import { PDFDocument, rgb } from 'pdf-lib'
 import path from 'path'
 import fs from 'fs/promises'
 
-/**
- * Utilidad simple para almacenar archivos en /public/uploads
- */
-async function saveFile(buf: Buffer, filename: string) {
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-  await fs.mkdir(uploadsDir, { recursive: true })
-  const dest = path.join(uploadsDir, filename)
-  await fs.writeFile(dest, buf)
-  return '/uploads/' + filename
+// 👇 import dinámico de Blob (evita tree-shaking en entornos no Vercel)
+async function saveToBlob(
+  buf: Buffer,
+  key: string,
+  contentType: string
+): Promise<string> {
+  const { put } = await import('@vercel/blob')
+  const res = await put(key, buf, {
+    access: 'public',
+    contentType,
+    // usa el token que ya añadiste en Vercel
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  })
+  return res.url
 }
 
 export async function POST(req: Request) {
@@ -29,19 +34,24 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { signatureDataUrl } = await req.json() as { signatureDataUrl?: string }
+    const { signatureDataUrl } = (await req.json()) as { signatureDataUrl?: string }
     if (!signatureDataUrl || !signatureDataUrl.startsWith('data:image/png;base64,')) {
       return NextResponse.json({ message: 'Invalid signature' }, { status: 400 })
     }
 
-    // 1) Guardar PNG de firma
-    const sigBuf = Buffer.from(signatureDataUrl.replace(/^data:image\/png;base64,/, ''), 'base64')
-    const sigUrl = await saveFile(
-      sigBuf,
-      `dealer-sign-${user.dealerId}-${Date.now()}.png`
+    // 1) Firma PNG desde el DataURL (sin escribir disco)
+    const sigBuf = Buffer.from(
+      signatureDataUrl.replace(/^data:image\/png;base64,/, ''),
+      'base64'
     )
 
-    // 2) Cargar PDF plantilla desde /public/sample/...
+    // 2) Subir firma a Blob
+    const ts = Date.now()
+    const folder = `dealer-agreements/${user.dealerId}`
+    const sigKey = `${folder}/signature-${ts}.png`
+    const sigUrl = await saveToBlob(sigBuf, sigKey, 'image/png')
+
+    // 3) Cargar la plantilla PDF (lectura SÍ está permitida)
     const templatePath = path.join(
       process.cwd(),
       'public',
@@ -51,34 +61,30 @@ export async function POST(req: Request) {
     const pdfBytes = await fs.readFile(templatePath)
     const pdfDoc = await PDFDocument.load(pdfBytes)
 
-    // 3) Incrustar la firma
+    // 4) Incrustar firma en la 1a página
     const pngImage = await pdfDoc.embedPng(sigBuf)
     const pages = pdfDoc.getPages()
     const firstPage = pages[0]
 
-    // ⚠️ Ajusta coordenadas y tamaño a tu plantilla
-    // Sistema de coordenadas: origen en abajo-izquierda
     const sigWidth = 220
     const sigHeight = (pngImage.height / pngImage.width) * sigWidth
-    const x = 80        // distancia desde el borde izquierdo
-    const y = 120       // distancia desde el borde inferior (firmas suelen ir cerca del pie de página)
+    const x = 80
+    const y = 120
 
     firstPage.drawImage(pngImage, { x, y, width: sigWidth, height: sigHeight })
 
-    // 4) Sello de tiempo y nombre del dealer opcional
+    // 5) Sello de tiempo
     const dealer = await prisma.dealer.findUnique({ where: { id: user.dealerId } })
     const stamp = `Signed by ${dealer?.name || user.email} on ${new Date().toLocaleString()}`
-    firstPage.drawText(stamp, { x, y: y - 18, size: 10, color: rgb(0.2,0.2,0.2) })
+    firstPage.drawText(stamp, { x, y: y - 18, size: 10, color: rgb(0.2, 0.2, 0.2) })
 
     const finalPdf = await pdfDoc.save()
 
-    // 5) Guardar PDF final
-    const pdfUrl = await saveFile(
-      Buffer.from(finalPdf),
-      `dealer-agreement-${user.dealerId}-${Date.now()}.pdf`
-    )
+    // 6) Subir PDF final a Blob
+    const pdfKey = `${folder}/agreement-${ts}.pdf`
+    const pdfUrl = await saveToBlob(Buffer.from(finalPdf), pdfKey, 'application/pdf')
 
-    // 6) Persistir en Dealer
+    // 7) Persistir en BD
     await prisma.dealer.update({
       where: { id: user.dealerId },
       data: {
