@@ -1,3 +1,4 @@
+// app/api/admin/orders/[id]/media/route.ts
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -16,7 +17,7 @@ async function getOrderId(ctx: Ctx) {
   return ('then' in p ? (await p).id : p.id) as string
 }
 
-// GET: lista de media del pedido
+// GET: lista de archivos
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
@@ -27,8 +28,9 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const orderId = await getOrderId(ctx)
     const items = await prisma.orderMedia.findMany({
       where: { orderId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { uploadedAt: 'desc' }, // <-- corrige createdAt -> uploadedAt
     })
+
     return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('GET /orders/[id]/media error:', e)
@@ -36,7 +38,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
 }
 
-// POST: sube archivo a Vercel Blob y guarda en DB
+// POST: sube a Vercel Blob y guarda registro
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
@@ -47,7 +49,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const orderId = await getOrderId(ctx)
     const form = await req.formData()
     const file = form.get('file') as File | null
-    const label = (form.get('label') as string) || null
 
     if (!file) {
       return NextResponse.json({ message: 'file is required' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
@@ -59,26 +60,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     const { url } = await put(key, buf, {
       access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN,       // <-- ya lo tienes en Vercel
+      token: process.env.BLOB_READ_WRITE_TOKEN,
       contentType: file.type || 'application/octet-stream',
     })
 
+    // Usa los campos que existen en tu modelo
     const media = await prisma.orderMedia.create({
       data: {
         orderId,
-        url,
-        fileName: file.name || safeName,
-        contentType: file.type || 'application/octet-stream',
-        size: file.size ?? 0,
-        label,
-        uploadedByEmail: session.user.email ?? null, // ajusta si tu schema usa userId
+        fileUrl: url,                               // <-- campo real
+        type: file.type || 'application/octet-stream',
+        uploadedAt: new Date(),                     // <-- si tu modelo no lo autogenera
+        // si tu modelo tiene otros campos (p. ej. name) puedes añadir:
+        // name: file.name || safeName,
       },
     })
 
-    return NextResponse.json(media, {
-      status: 201,
-      headers: { 'Cache-Control': 'no-store' },
-    })
+    return NextResponse.json(media, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('POST /orders/[id]/media error:', e)
     return NextResponse.json({ message: 'Internal server error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
