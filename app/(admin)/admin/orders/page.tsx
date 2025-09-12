@@ -148,6 +148,19 @@ function AdminOrdersInner() {
   const [refreshing, setRefreshing] = useState(false)
   const handleRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false) }
 
+  // -------- NUEVO: helper para registrar historial tras acciones ----------
+  const logHistory = async (orderId: string, status: StatusKey, comment = '') => {
+    try {
+      await fetch(`/api/admin/orders/${orderId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, comment }),
+        cache: 'no-store',
+      })
+    } catch { /* noop */ }
+  }
+  // -----------------------------------------------------------------------
+
   const updateStatus = async (orderId: string, newStatus: StatusKey) => {
     try {
       setBusyId(orderId)
@@ -160,6 +173,10 @@ function AdminOrdersInner() {
       const updated = await safeJson<Order>(res)
       if (!updated) throw new Error('Invalid response')
       setOrders(prev => prev.map(o => (o.id === orderId ? updated : o)))
+
+      // Registrar historial y refrescar
+      await logHistory(orderId, newStatus, 'Status changed from Orders list')
+      router.refresh()
     } catch {
       alert('Could not update status')
     } finally {
@@ -175,6 +192,10 @@ function AdminOrdersInner() {
       const updated = await safeJson<Order>(res)
       if (!updated) throw new Error('Invalid response')
       setOrders(prev => prev.map(o => (o.id === orderId ? updated : o)))
+
+      // Registrar historial y refrescar
+      await logHistory(orderId, 'APPROVED', 'Approved from Orders list')
+      router.refresh()
     } catch {
       alert('Could not approve order')
     } finally {

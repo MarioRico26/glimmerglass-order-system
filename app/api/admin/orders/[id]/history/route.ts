@@ -1,7 +1,9 @@
-// app/api/admin/orders/[id]/history/route.ts
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/authOptions' // ← usa el mismo import que en el resto del proyecto
 import { createNotification } from '@/lib/createNotification'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -31,7 +33,7 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const orderId = await getOrderId(context)
@@ -42,10 +44,13 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(history)
+    return NextResponse.json(history, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('GET /history error:', error)
-    return NextResponse.json({ message: 'Failed to fetch history' }, { status: 500 })
+    return NextResponse.json(
+      { message: 'Failed to fetch history' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
 }
 
@@ -58,7 +63,7 @@ export async function POST(
     const session = await getServerSession(authOptions)
     const userEmail = session?.user?.email
     if (!userEmail) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const orderId = await getOrderId(context)
@@ -67,12 +72,12 @@ export async function POST(
     const comment = (body.comment ?? '').toString()
 
     if (!ALLOWED_STATUSES.includes(status)) {
-      return NextResponse.json({ message: 'Invalid status' }, { status: 400 })
+      return NextResponse.json({ message: 'Invalid status' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const user = await prisma.user.findUnique({ where: { email: userEmail } })
     if (!user) {
-      return NextResponse.json({ message: 'User not found' }, { status: 404 })
+      return NextResponse.json({ message: 'User not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const order = await prisma.order.findUnique({
@@ -80,7 +85,7 @@ export async function POST(
       select: { id: true, dealerId: true },
     })
     if (!order) {
-      return NextResponse.json({ message: 'Order not found' }, { status: 404 })
+      return NextResponse.json({ message: 'Order not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
     }
 
     // Transacción: actualizar estado + crear historial
@@ -104,20 +109,27 @@ export async function POST(
     })
 
     // Notificación (no rompe si falla)
-    await createNotification({
-      dealerId: order.dealerId,
-      title: 'Order Status Updated',
-      message: `Status manually changed to ${status.replace(/_/g, ' ')}`,
-      orderId: order.id, // si tu tabla Notification aún no tiene orderId, createNotification lo ignora
-    })
+    try {
+      await createNotification({
+        dealerId: order.dealerId,
+        title: 'Order Status Updated',
+        message: `Status manually changed to ${status.replace(/_/g, ' ')}`,
+        orderId: order.id,
+      })
+    } catch {
+      // silencioso
+    }
 
-    return NextResponse.json(newHistory)
+    return NextResponse.json(newHistory, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error: any) {
     console.error('POST /history error:', {
       code: error?.code,
       message: error?.message,
       meta: error?.meta,
     })
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
 }
