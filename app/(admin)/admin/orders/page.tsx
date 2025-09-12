@@ -1,7 +1,7 @@
 // app/(admin)/admin/orders/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -87,7 +87,7 @@ function SkeletonRow() {
     )
 }
 
-export default function AdminOrdersPage() {
+function AdminOrdersInner() {
     const router = useRouter()
     const pathname = usePathname()
     const sp = useSearchParams()
@@ -578,4 +578,14 @@ export default function AdminOrdersPage() {
       `}</style>
         </div>
     )
+}
+
+export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 text-slate-600">Loading orders…</div>
+    }>
+      <AdminOrdersInner />
+    </Suspense>
+  )
 }
