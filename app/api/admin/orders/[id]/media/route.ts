@@ -6,10 +6,8 @@ import { NextResponse, NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { put } from '@vercel/blob'
-
-// 🔒 TIPOS PORTABLES (evitan depender de Prisma.MediaType vs Prisma.$Enums.MediaType)
-type MediaTypeLiteral = 'IMAGE' | 'VIDEO' | 'DOCUMENT'
 
 type Ctx =
   | { params: { id: string } }
@@ -20,11 +18,39 @@ async function getOrderId(ctx: Ctx) {
   return ('then' in p ? (await p).id : p.id) as string
 }
 
-function mimeToMediaType(mime: string | undefined): MediaTypeLiteral {
+// Categoriza el MIME en image / video / doc
+function coarseKind(mime: string | undefined): 'image' | 'video' | 'doc' {
   const m = (mime || '').toLowerCase()
-  if (m.startsWith('image/')) return 'IMAGE'
-  if (m.startsWith('video/')) return 'VIDEO'
-  return 'DOCUMENT'
+  if (m.startsWith('image/')) return 'image'
+  if (m.startsWith('video/')) return 'video'
+  return 'doc'
+}
+
+/**
+ * Devuelve un valor VÁLIDO del enum MediaType según los valores reales del schema.
+ * Si tu enum tiene valores como ['IMAGE', 'VIDEO', 'DOCUMENT'] usará esos.
+ * Si tu enum tiene ['IMAGE', 'VIDEO', 'FILE'] o ['PHOTO','VIDEO','DOC'] se adapta.
+ */
+function pickValidMediaType(mime: string | undefined): any {
+  const allowed: string[] =
+    (Prisma as any)?.$Enums?.MediaType
+      ? Object.values((Prisma as any).$Enums.MediaType)
+      : []
+
+  // heurística: escogemos por orden de preferencia dependiendo del tipo
+  const kind = coarseKind(mime)
+  const tryOrder = kind === 'image'
+    ? ['IMAGE', 'PHOTO', 'IMG']
+    : kind === 'video'
+      ? ['VIDEO', 'VID']
+      : ['DOCUMENT', 'DOC', 'FILE', 'OTHER']
+
+  // elige la primera opción que exista en el enum
+  for (const candidate of tryOrder) {
+    if (allowed.includes(candidate)) return candidate
+  }
+  // si nada coincide, usa la primera del enum o falla con string genérico
+  return allowed[0] ?? 'DOCUMENT'
 }
 
 // GET: lista de archivos
@@ -38,8 +64,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const orderId = await getOrderId(ctx)
     const items = await prisma.orderMedia.findMany({
       where: { orderId },
-      // ⚠️ Usa el campo que realmente tienes en el schema. Quitamos createdAt.
-      orderBy: { uploadedAt: 'desc' },
+      orderBy: { uploadedAt: 'desc' }, // ⚠️ Usa el campo existente en tu modelo
     })
 
     return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
@@ -74,14 +99,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       contentType: file.type || 'application/octet-stream',
     })
 
-    const mediaType: MediaTypeLiteral = mimeToMediaType(file.type)
+    const enumValue = pickValidMediaType(file.type)
 
     const media = await prisma.orderMedia.create({
       data: {
         orderId,
         fileUrl: url,
-        type: mediaType as any,   // ✅ coincide con el enum de Prisma (IMAGE/VIDEO/DOCUMENT)
-        uploadedAt: new Date(),   // ⚠️ si tu schema ya lo default-ea, puedes omitirlo
+        // 👇 Guardamos un valor válido de tu enum real
+        type: enumValue as any,
+        uploadedAt: new Date(), // si tu modelo lo tiene con default, puedes omitir
       },
     })
 
