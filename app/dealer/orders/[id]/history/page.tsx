@@ -81,14 +81,14 @@ export default function DealerOrderHistoryPage() {
         setLoading(true)
         setError(null)
 
-        const hRes = await fetch(/api/dealer/orders/${orderId}/history)
+        const hRes = await fetch(`/api/dealer/orders/${orderId}/history`)
         const hJson = await hRes.json()
         if (!abort) {
           if (hRes.ok) setHistory(Array.isArray(hJson) ? hJson : [])
           else throw new Error(hJson?.message || 'Failed to load history')
         }
 
-        const mRes = await fetch(/api/admin/orders/${orderId}/media)
+        const mRes = await fetch(`/api/admin/orders/${orderId}/media`)
         const mJson = await mRes.json()
         if (!abort) {
           if (mRes.ok) setMedia(Array.isArray(mJson) ? mJson : [])
@@ -118,7 +118,7 @@ export default function DealerOrderHistoryPage() {
           <h3 className="text-lg font-bold text-slate-900">Timeline</h3>
           <div
             className="h-1 w-24 rounded-full"
-            style={{ backgroundImage: linear-gradient(90deg, ${aqua}, ${deep}) }}
+            style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
           />
         </div>
 
@@ -143,12 +143,12 @@ export default function DealerOrderHistoryPage() {
                 {/* Línea base */}
                 <div
                   className="absolute left-0 right-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full opacity-40"
-                  style={{ backgroundImage: linear-gradient(90deg, ${aqua}, ${deep}) }}
+                  style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
                 />
                 <div
                   className="grid"
                   style={{
-                    gridTemplateColumns: repeat(${sortedHistory.length}, minmax(0,1fr)),
+                    gridTemplateColumns: `repeat(${sortedHistory.length}, minmax(0,1fr))`,
                   }}
                 >
                   {sortedHistory.map((h, idx) => {
@@ -162,7 +162,7 @@ export default function DealerOrderHistoryPage() {
                         <div
                           className="absolute left-0 right-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full"
                           style={{
-                            backgroundImage: linear-gradient(90deg, ${aqua}, ${deep}),
+                            backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})`,
                             opacity: isLast ? 0.9 : 0.65,
                           }}
                         />
@@ -178,7 +178,7 @@ export default function DealerOrderHistoryPage() {
                         {/* Etiquetas */}
                         <div className="mt-3 text-center">
                           <div
-                            className={inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}}
+                            className={`inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}`}
                           >
                             {h.status.replaceAll('_', ' ')}
                           </div>
@@ -203,7 +203,7 @@ export default function DealerOrderHistoryPage() {
               <div className="relative pl-5">
                 <div
                   className="absolute left-2.5 top-0 bottom-0 w-[3px] rounded-full opacity-40"
-                  style={{ backgroundImage: linear-gradient(${aqua}, ${deep}) }}
+                  style={{ backgroundImage: `linear-gradient(${aqua}, ${deep})` }}
                 />
                 <div className="space-y-4">
                   {sortedHistory.map((h) => {
@@ -222,7 +222,7 @@ export default function DealerOrderHistoryPage() {
                         <div className="rounded-xl border border-slate-200 bg-white p-3 pl-4">
                           <div className="flex items-center justify-between">
                             <div
-                              className={inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}}
+                              className={`inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}`}
                             >
                               {h.status.replaceAll('_', ' ')}
                             </div>
@@ -301,7 +301,7 @@ export default function DealerOrderHistoryPage() {
 
       <div
         className="mt-8 h-1 w-full rounded-full"
-        style={{ backgroundImage: linear-gradient(90deg, ${aqua}, ${deep}) }}
+        style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
       />
     </div>
   )
