@@ -1,8 +1,6 @@
-// app/api/orders/route.ts
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs/promises'
-import path from 'path'
+import { put } from '@vercel/blob'
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,19 +31,21 @@ export async function POST(req: NextRequest) {
       prisma.poolModel.findUnique({ where: { id: poolModelId } }),
       prisma.color.findUnique({ where: { id: colorId } }),
     ])
-    if (!dealer)      return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
-    if (!factory)     return NextResponse.json({ message: 'Factory location not found' }, { status: 404 })
-    if (!poolModel)   return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
-    if (!color)       return NextResponse.json({ message: 'Color not found' }, { status: 404 })
+    if (!dealer)    return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
+    if (!factory)   return NextResponse.json({ message: 'Factory location not found' }, { status: 404 })
+    if (!poolModel) return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+    if (!color)     return NextResponse.json({ message: 'Color not found' }, { status: 404 })
 
-    // Guardar archivo
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const filename = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`
-    const uploadDir = path.join(process.cwd(), 'public/uploads')
-    await fs.mkdir(uploadDir, { recursive: true })
-    await fs.writeFile(path.join(uploadDir, filename), buffer)
-    const paymentProofUrl = `/uploads/${filename}`
+    // ✅ Subir el archivo a blob storage (no a disco)
+    const buf = await file.arrayBuffer()
+    const safeName = (file.name || 'payment-proof').replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const key = `orders/payment-proofs/${Date.now()}-${safeName}`
+
+    const { url: paymentProofUrl } = await put(key, buf, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      contentType: file.type || 'application/octet-stream',
+    })
 
     // Crear orden
     const newOrder = await prisma.order.create({
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         paymentProofUrl,
         status: 'PENDING_PAYMENT_APPROVAL',
 
-        // 🔽 nuevos campos en DB
+        // ✅ nuevos campos booleanos
         hardwareSkimmer,
         hardwareAutocover,
         hardwareReturns,
