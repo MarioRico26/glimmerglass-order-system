@@ -280,6 +280,13 @@ export default function NewOrderPage() {
               </label>
             </div>
           </div>
+          <div className="mt-2 rounded-md bg-gray-100 p-3 text-xs text-gray-700">
+            <strong>Hardware:</strong> Skimmer, Main Drain, Returns included and shipped loose.
+            <br />
+            <span className="text-red-600 font-semibold">
+              $125 per penetration if installed by Glimmerglass.
+            </span>
+          </div>
 
           {/* Payment proof */}
           <div>
