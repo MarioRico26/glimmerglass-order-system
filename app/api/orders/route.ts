@@ -16,6 +16,12 @@ export async function POST(req: NextRequest) {
     const deliveryAddress   = formData.get('deliveryAddress')?.toString() || ''
     const file              = formData.get('paymentProof') as File | null
 
+    // 🔽 nuevos campos booleanos (checkboxes)
+    const hardwareSkimmer    = formData.get('hardwareSkimmer') === 'true'
+    const hardwareAutocover  = formData.get('hardwareAutocover') === 'true'
+    const hardwareReturns    = formData.get('hardwareReturns') === 'true'
+    const hardwareMainDrains = formData.get('hardwareMainDrains') === 'true'
+
     if (!dealerId || !file || !poolModelId || !colorId || !factoryLocationId || !deliveryAddress) {
       return NextResponse.json({ message: 'Missing required fields.' }, { status: 400 })
     }
@@ -25,12 +31,12 @@ export async function POST(req: NextRequest) {
       prisma.dealer.findUnique({ where: { id: dealerId } }),
       prisma.factoryLocation.findUnique({ where: { id: factoryLocationId } }),
       prisma.poolModel.findUnique({ where: { id: poolModelId } }),
-      prisma.color.findUnique({ where: { id: colorId } }), // <-- Color (no PoolColor)
+      prisma.color.findUnique({ where: { id: colorId } }),
     ])
-    if (!dealer)  return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
-    if (!factory) return NextResponse.json({ message: 'Factory location not found' }, { status: 404 })
-    if (!poolModel) return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
-    if (!color)    return NextResponse.json({ message: 'Color not found' }, { status: 404 })
+    if (!dealer)      return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
+    if (!factory)     return NextResponse.json({ message: 'Factory location not found' }, { status: 404 })
+    if (!poolModel)   return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+    if (!color)       return NextResponse.json({ message: 'Color not found' }, { status: 404 })
 
     // Guardar archivo
     const bytes = await file.arrayBuffer()
@@ -52,6 +58,12 @@ export async function POST(req: NextRequest) {
         deliveryAddress,
         paymentProofUrl,
         status: 'PENDING_PAYMENT_APPROVAL',
+
+        // 🔽 nuevos campos en DB
+        hardwareSkimmer,
+        hardwareAutocover,
+        hardwareReturns,
+        hardwareMainDrains,
       },
       include: {
         poolModel: { select: { name: true } },
