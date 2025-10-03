@@ -46,6 +46,12 @@ export default function NewOrderPage() {
   const [notes, setNotes] = useState('')
   const [paymentProof, setPaymentProof] = useState<File | null>(null)
 
+  // NEW: Hardware checkboxes
+  const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
+  const [hardwareAutocover, setHardwareAutocover] = useState(false)
+  const [hardwareReturns, setHardwareReturns] = useState(false)
+  const [hardwareMainDrains, setHardwareMainDrains] = useState(false)
+
   // data
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
@@ -54,7 +60,7 @@ export default function NewOrderPage() {
   // ui
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [msg, setMsg] = useState<{type: 'ok'|'err'; text: string} | null>(null)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   const selectedModel = useMemo(
     () => models.find(m => m.id === poolModelId) ?? null,
@@ -85,22 +91,21 @@ export default function NewOrderPage() {
         setModels(mJson.items || [])
         setColors(cJson.items || [])
         setFactories(fJson.items || [])
-      } catch (e:any) {
-        setMsg({ type:'err', text: e?.message || 'Error fetching data' })
+      } catch (e: any) {
+        setMsg({ type: 'err', text: e?.message || 'Error fetching data' })
       } finally {
         setLoading(false)
       }
     })()
   }, [])
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setMsg(null)
 
-    if (!dealerId) return setMsg({ type:'err', text:'Dealer not detected. Please sign in again.' })
+    if (!dealerId) return setMsg({ type: 'err', text: 'Dealer not detected. Please sign in again.' })
     if (!poolModelId || !colorId || !factoryLocationId || !deliveryAddress)
-      return setMsg({ type:'err', text:'Please complete all required fields.' })
-    if (!paymentProof) return setMsg({ type:'err', text:'Please attach the payment proof.' })
+      return setMsg({ type: 'err', text: 'Please complete all required fields.' })
+    if (!paymentProof) return setMsg({ type: 'err', text: 'Please attach the payment proof.' })
 
     try {
       setSubmitting(true)
@@ -113,20 +118,29 @@ export default function NewOrderPage() {
       formData.append('notes', notes)
       formData.append('paymentProof', paymentProof)
 
-      const res = await fetch('/api/orders', { method:'POST', body: formData })
+      // Append hardware checkboxes
+      formData.append('hardwareSkimmer', hardwareSkimmer ? 'true' : 'false')
+      formData.append('hardwareAutocover', hardwareAutocover ? 'true' : 'false')
+      formData.append('hardwareReturns', hardwareReturns ? 'true' : 'false')
+      formData.append('hardwareMainDrains', hardwareMainDrains ? 'true' : 'false')
+
+      const res = await fetch('/api/orders', { method: 'POST', body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.message || 'Order creation failed')
 
-      setMsg({ type:'ok', text:'Order created successfully' })
-      // reset
+      setMsg({ type: 'ok', text: 'Order created successfully' })
       setPoolModelId('')
       setColorId('')
       setFactoryLocationId('')
       setDeliveryAddress('')
       setNotes('')
       setPaymentProof(null)
-    } catch (e:any) {
-      setMsg({ type:'err', text: e?.message || 'Network error during order creation' })
+      setHardwareSkimmer(false)
+      setHardwareAutocover(false)
+      setHardwareReturns(false)
+      setHardwareMainDrains(false)
+    } catch (e: any) {
+      setMsg({ type: 'err', text: e?.message || 'Network error during order creation' })
     } finally {
       setSubmitting(false)
     }
@@ -138,7 +152,7 @@ export default function NewOrderPage() {
         <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
           <div className="h-6 w-40 rounded bg-slate-100 mb-6" />
           <div className="space-y-4">
-            {[...Array(6)].map((_,i)=>(
+            {[...Array(6)].map((_, i) => (
               <div key={i} className="h-12 w-full rounded bg-slate-100" />
             ))}
           </div>
@@ -146,13 +160,12 @@ export default function NewOrderPage() {
       </div>
     )
   }
-
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">New Order</h1>
-          <p className="text-slate-600">Create a new pool order with model, color and factory.</p>
+          <p className="text-slate-600">Create a new pool order with model, color, factory, and hardware options.</p>
         </div>
 
         {msg && (
@@ -170,203 +183,130 @@ export default function NewOrderPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Model */}
+          {/* Pool model */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Pool Model
-            </label>
-            <div className="relative">
-              <select
-                value={poolModelId}
-                onChange={(e) => setPoolModelId(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                required
-              >
-                <option value="">Select pool model</option>
-                {models.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-              <Ruler className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
-            </div>
-
-            {selectedModel && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  L: {selectedModel.lengthFt ?? '-'} ft
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  W: {selectedModel.widthFt ?? '-'} ft
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  D: {selectedModel.depthFt ?? '-'} ft
-                </span>
-              </div>
-            )}
+            <label className="block text-sm font-medium text-slate-700 mb-2">Pool Model</label>
+            <select
+              value={poolModelId}
+              onChange={(e) => setPoolModelId(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+            >
+              <option value="">Select a model</option>
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} {model.lengthFt && model.widthFt && model.depthFt ? `(${model.lengthFt}ft x ${model.widthFt}ft x ${model.depthFt}ft)` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Color */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Pool Color
-            </label>
-            <div className="relative">
-              <select
-                value={colorId}
-                onChange={(e) => setColorId(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                required
-              >
-                <option value="">Select pool color</option>
-                {colors.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <Palette className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
-            </div>
-
-            {/* Swatches */}
-            <div className="mt-3 flex flex-wrap gap-3">
-              {colors.map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setColorId(c.id)}
-                  className={[
-                    'inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm',
-                    colorId === c.id
-                      ? 'border-sky-300 ring-2 ring-sky-200 bg-sky-50'
-                      : 'border-slate-200 hover:bg-slate-50'
-                  ].join(' ')}
-                  title={c.name}
-                >
-                  {c.swatchUrl ? (
-                    <img
-                      src={c.swatchUrl}
-                      alt={c.name}
-                      className="h-4 w-6 rounded object-cover"
-                    />
-                  ) : (
-                    <span className="h-4 w-6 rounded bg-slate-200 block" />
-                  )}
-                  <span className="text-slate-700">{c.name}</span>
-                </button>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Color</label>
+            <select
+              value={colorId}
+              onChange={(e) => setColorId(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+            >
+              <option value="">Select a color</option>
+              {colors.map((color) => (
+                <option key={color.id} value={color.id}>
+                  {color.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* Factory */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Factory Location
-            </label>
-            <div className="relative">
-              <select
-                value={factoryLocationId}
-                onChange={(e) => setFactoryLocationId(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                required
-              >
-                <option value="">Select factory</option>
-                {factories.map(f => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}{f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
-                  </option>
-                ))}
-              </select>
-              <FactoryIcon className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
-            </div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Factory Location</label>
+            <select
+              value={factoryLocationId}
+              onChange={(e) => setFactoryLocationId(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+            >
+              <option value="">Select a factory</option>
+              {factories.map((factory) => (
+                <option key={factory.id} value={factory.id}>
+                  {factory.name} {factory.city ? `(${factory.city}, ${factory.state})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Delivery */}
+          {/* Delivery address */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Delivery Address
-            </label>
-            <div className="relative">
-              <textarea
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-                rows={3}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                placeholder="Street, city, state and ZIP"
-                required
-              />
-              <Truck className="pointer-events-none absolute right-3 top-2.5 text-slate-300" size={18}/>
-            </div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Delivery Address</label>
+            <input
+              type="text"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+              placeholder="Street, city, state, ZIP"
+            />
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Additional Notes (optional)
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
             <textarea
               value={notes}
-              onChange={(e)=>setNotes(e.target.value)}
-              rows={3}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-              placeholder="Any special instructions…"
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+              placeholder="Optional notes or instructions"
             />
+          </div>
+
+          {/* Hardware checkboxes */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Pool Hardware (check all that apply)</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={hardwareSkimmer} onChange={(e) => setHardwareSkimmer(e.target.checked)} className="accent-sky-600"/>
+                <span className="text-slate-800 text-sm">Skimmer</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={hardwareAutocover} onChange={(e) => setHardwareAutocover(e.target.checked)} className="accent-sky-600"/>
+                <span className="text-slate-800 text-sm">Autocover</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={hardwareReturns} onChange={(e) => setHardwareReturns(e.target.checked)} className="accent-sky-600"/>
+                <span className="text-slate-800 text-sm">Returns</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={hardwareMainDrains} onChange={(e) => setHardwareMainDrains(e.target.checked)} className="accent-sky-600"/>
+                <span className="text-slate-800 text-sm">Main Drains</span>
+              </label>
+            </div>
           </div>
 
           {/* Payment proof */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Payment Proof (image or PDF)
-            </label>
-            <div className="flex items-center gap-3">
-              <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50">
-                <Paperclip size={16} className="text-slate-500"/>
-                <span className="text-sm font-medium text-slate-800">
-                  {paymentProof ? paymentProof.name : 'Choose file'}
-                </span>
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
-                  className="hidden"
-                  required
-                />
-              </label>
-              {paymentProof && (
-                <span className="text-xs text-slate-500">
-                  {(paymentProof.size/1024/1024).toFixed(2)} MB
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Only certified checks or bank transfers are accepted. Your payment will be reviewed by our accounting department before production begins.
-            </p>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Payment Proof (PDF or Image)</label>
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setPaymentProof(e.target.files[0])
+                }
+              }}
+              className="text-sm"
+            />
           </div>
 
-          {/* Submit */}
-          <div className="pt-2">
+          <div>
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center justify-center w-full h-11 rounded-xl text-white font-semibold shadow-lg transition-transform active:scale-[0.99] disabled:opacity-70"
-              style={{ backgroundImage: 'linear-gradient(90deg,#00B2CA,#007A99)' }}
+              className="w-full rounded-xl bg-sky-600 text-white py-2 px-4 text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="animate-spin mr-2" size={18} />
-                  Creating order…
-                </>
-              ) : (
-                'Submit Order'
-              )}
+              {submitting ? <Loader2 className="animate-spin w-4 h-4 inline-block" /> : 'Submit Order'}
             </button>
           </div>
         </form>
       </div>
-
-      {/* gradient underline */}
-      <div
-        className="mt-6 h-1 w-full rounded-full"
-        style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-      />
     </div>
   )
 }
-
