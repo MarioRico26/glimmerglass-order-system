@@ -51,6 +51,12 @@ model Order {
   notes           String? // <- si la estás enviando
   createdAt       DateTime    @default(now())
 
+  // 🔽 nuevo hardware checkboxes
+  hardwareSkimmer        Boolean @default(false)
+  hardwareAutocover      Boolean @default(false)
+  hardwareReturns        Boolean @default(false)
+  hardwareMainDrains     Boolean @default(false)
+
   dealerId String
   dealer   Dealer @relation(fields: [dealerId], references: [id])
 
@@ -90,7 +96,7 @@ model OrderMedia {
 }
 
 model PoolModel {
-  id       String  @id @default(uuid())
+  id       String  @id @default(uuid()) 
   name     String
   lengthFt Float
   widthFt  Float
