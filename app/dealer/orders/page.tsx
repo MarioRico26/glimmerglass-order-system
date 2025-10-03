@@ -1,10 +1,11 @@
+// glimmerglass-order-system/app/dealer/orders/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { PackageSearch, Palette, Truck, Clock, CheckCircle2, CircleCheckBig, CircleX, FileText } from 'lucide-react'
+import { PackageSearch, Palette, Truck, Clock, CheckCircle2, CircleCheckBig, CircleX, FileText, CheckSquare } from 'lucide-react'
 
 type Order = {
   id: string
@@ -15,6 +16,10 @@ type Order = {
   paymentProofUrl: string
   notes?: string | null
   createdAt: string
+  hardwareSkimmer?: boolean
+  hardwareAutocover?: boolean
+  hardwareReturns?: boolean
+  hardwareMainDrains?: boolean
 }
 
 const aqua = '#00B2CA'
@@ -144,6 +149,20 @@ export default function MyOrdersPage() {
                     </span>
                   </div>
                 ) : null}
+
+                {/* HARDWARE CHECKS */}
+                <div className="pt-1">
+                  <div className="text-slate-500 font-semibold mb-1">Hardware:</div>
+                  <ul className="pl-4 space-y-1 text-slate-700 list-disc">
+                    {o.hardwareSkimmer && <li>Skimmer</li>}
+                    {o.hardwareMainDrains && <li>Main Drains</li>}
+                    {o.hardwareReturns && <li>Returns</li>}
+                    {o.hardwareAutocover && <li>Auto Cover</li>}
+                  </ul>
+                  <p className="text-xs text-slate-400 mt-1 italic">
+                    (Skimmer, Main Drain, Returns included and shipped loose. $125 per penetration if installed by Glimmerglass)
+                  </p>
+                </div>
               </div>
 
               <div className="mt-4 flex items-center gap-3">
