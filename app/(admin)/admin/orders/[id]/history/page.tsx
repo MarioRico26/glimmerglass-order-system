@@ -1,4 +1,3 @@
-// app/(admin)/admin/orders/[id]/history/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -18,6 +17,22 @@ interface OrderMedia {
   fileUrl: string
   type: string
   uploadedAt: string
+}
+
+interface OrderSummary {
+  id: string
+  deliveryAddress: string
+  status: string
+  paymentProofUrl?: string
+  dealer?: { name: string }
+  poolModel?: { name: string }
+  color?: { name: string }
+  factory?: { name: string }
+
+  hardwareSkimmer: boolean
+  hardwareReturns: boolean
+  hardwareAutocover: boolean
+  hardwareMainDrains: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -44,6 +59,7 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
 }
 
 export default function OrderHistoryPage() {
+  const [summary, setSummary] = useState<OrderSummary | null>(null)
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
   const [status, setStatus] = useState('')
@@ -57,10 +73,15 @@ export default function OrderHistoryPage() {
   const orderId = params.id as string
 
   useEffect(() => {
+    const fetchSummary = async () => {
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' })
+      const data = await safeJson<OrderSummary>(res)
+      if (res.ok && data) setSummary(data)
+    }
+
     const fetchHistory = async () => {
       try {
         const res = await fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
         const data = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(res)
         const list = Array.isArray(data) ? data : Array.isArray((data as any)?.items) ? (data as any).items : []
         setHistory(list)
@@ -73,7 +94,6 @@ export default function OrderHistoryPage() {
     const fetchMedia = async () => {
       try {
         const res = await fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`Failed to fetch media`)
         const data = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(res)
         const list = Array.isArray(data) ? data : Array.isArray((data as any)?.items) ? (data as any).items : []
         setMediaFiles(list)
@@ -82,6 +102,7 @@ export default function OrderHistoryPage() {
       }
     }
 
+    fetchSummary()
     fetchHistory()
     fetchMedia()
   }, [orderId])
@@ -107,10 +128,20 @@ export default function OrderHistoryPage() {
     }
   }
 
+  const hardwareSelected = useMemo(() => {
+    if (!summary) return []
+    const items = []
+    if (summary.hardwareSkimmer) items.push('Skimmer')
+    if (summary.hardwareReturns) items.push('Returns')
+    if (summary.hardwareMainDrains) items.push('Main Drains')
+    if (summary.hardwareAutocover) items.push('Autocover')
+    return items
+  }, [summary])
+
   return (
     <div className="p-4 sm:p-6 relative rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-black text-slate-900">Order History</h1>
+        <h1 className="text-2xl font-black text-slate-900">Order Details & History</h1>
         <div
           className="h-1 w-32 rounded-full"
           style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
@@ -120,6 +151,22 @@ export default function OrderHistoryPage() {
       {error && <p className="text-red-600 mb-4">{error}</p>}
       {message && <p className="text-blue-600 mb-4">{message}</p>}
 
+      {/* Resumen de la orden */}
+      {summary && (
+        <div className="mb-6 text-sm bg-slate-50 p-4 rounded-lg border">
+          <h2 className="font-bold text-slate-800 mb-2">Order Summary</h2>
+          <p><b>Dealer:</b> {summary.dealer?.name}</p>
+          <p><b>Model:</b> {summary.poolModel?.name}</p>
+          <p><b>Color:</b> {summary.color?.name}</p>
+          <p><b>Factory:</b> {summary.factory?.name}</p>
+          <p><b>Delivery Address:</b> {summary.deliveryAddress}</p>
+          {hardwareSelected.length > 0 && (
+            <p><b>Hardware Selected:</b> {hardwareSelected.join(', ')}</p>
+          )}
+        </div>
+      )}
+
+      {/* Botones */}
       <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={() => setShowModal(true)}
@@ -141,7 +188,7 @@ export default function OrderHistoryPage() {
         </Link>
       </div>
 
-      {/* Timeline (compact) */}
+      {/* Línea de tiempo */}
       <div className="mb-8">
         <h3 className="text-lg font-bold text-slate-900 mb-3">Timeline</h3>
         <div className="relative pl-6">
@@ -178,7 +225,7 @@ export default function OrderHistoryPage() {
         </div>
       </div>
 
-      {/* Media Section */}
+      {/* Media */}
       <div className="mb-2">
         <h3 className="text-lg font-bold text-slate-900 mb-2">Uploaded Media</h3>
         {mediaFiles.length === 0 ? (
