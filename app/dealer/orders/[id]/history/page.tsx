@@ -1,3 +1,4 @@
+// Parte 1/3
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -28,10 +29,23 @@ type OrderMedia = {
   url?: string
 }
 
+type Order = {
+  id: string
+  poolModel: { name: string }
+  color: { name: string }
+  deliveryAddress: string
+  factory: { name: string }
+  paymentProofUrl?: string | null
+  hardwareSkimmer?: boolean
+  hardwareAutocover?: boolean
+  hardwareReturns?: boolean
+  hardwareMainDrains?: boolean
+  dealer: { name: string; email: string }
+}
+
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
-// Opcional: proxy si sirves /uploads por /api/uploads
 function toApiUrl(u: string) {
   if (!u) return ''
   return u.startsWith('/uploads/')
@@ -53,12 +67,13 @@ const statusColor: Record<string, string> = {
   IN_PRODUCTION: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   COMPLETED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   CANCELED: 'bg-rose-100 text-rose-700 border-rose-200',
-}
+}  
 
 export default function DealerOrderHistoryPage() {
   const { id: orderId } = useParams() as { id: string }
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [media, setMedia] = useState<OrderMedia[]>([])
+  const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,12 +82,19 @@ export default function DealerOrderHistoryPage() {
   }, [media])
 
   const sortedHistory = useMemo(
-    () =>
-      [...history].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      ),
+    () => [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [history]
   )
+
+  const selectedHardware = useMemo(() => {
+    if (!order) return []
+    return [
+      order.hardwareSkimmer && 'Skimmer',
+      order.hardwareAutocover && 'Auto Cover',
+      order.hardwareReturns && 'Returns',
+      order.hardwareMainDrains && 'Main Drains',
+    ].filter(Boolean)
+  }, [order])
 
   useEffect(() => {
     let abort = false
@@ -84,8 +106,12 @@ export default function DealerOrderHistoryPage() {
         const hRes = await fetch(`/api/dealer/orders/${orderId}/history`)
         const hJson = await hRes.json()
         if (!abort) {
-          if (hRes.ok) setHistory(Array.isArray(hJson) ? hJson : [])
-          else throw new Error(hJson?.message || 'Failed to load history')
+          if (hRes.ok) {
+            setHistory(hJson.history ?? [])
+            setOrder(hJson.order ?? null)
+          } else {
+            throw new Error(hJson?.message || 'Failed to load history')
+          }
         }
 
         const mRes = await fetch(`/api/admin/orders/${orderId}/media`)
@@ -107,202 +133,36 @@ export default function DealerOrderHistoryPage() {
 
   return (
     <div className="p-6">
+      {/* ENCABEZADO */}
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Order History</h1>
-        <p className="text-slate-600">Timeline and files for this order.</p>
+        <p className="text-slate-600">Timeline, media, and hardware summary.</p>
       </div>
 
-      {/* TIMELINE CARD */}
-      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-900">Timeline</h3>
-          <div
-            className="h-1 w-24 rounded-full"
-            style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-          />
-        </div>
-
-        {loading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-12 rounded bg-slate-100" />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="rounded-xl border border-rose-100 bg-rose-50 text-rose-700 px-3 py-2 inline-flex items-center gap-2">
-            <AlertCircle size={18} />
-            {error}
-          </div>
-        ) : sortedHistory.length === 0 ? (
-          <div className="text-slate-600">No history found.</div>
-        ) : (
-          <>
-            {/* Horizontal timeline (≥ md) */}
-            <div className="hidden md:block">
-              <div className="relative px-2 py-8">
-                {/* Línea base */}
-                <div
-                  className="absolute left-0 right-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full opacity-40"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-                />
-                <div
-                  className="grid"
-                  style={{
-                    gridTemplateColumns: `repeat(${sortedHistory.length}, minmax(0,1fr))`,
-                  }}
-                >
-                  {sortedHistory.map((h, idx) => {
-                    const Icon = statusIcon[h.status] ?? Clock
-                    const badge =
-                      statusColor[h.status] ?? 'bg-slate-100 text-slate-700 border-slate-200'
-                    const isLast = idx === sortedHistory.length - 1
-                    return (
-                      <div key={h.id} className="relative flex flex-col items-center px-2">
-                        {/* tramo resaltado hasta el nodo */}
-                        <div
-                          className="absolute left-0 right-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full"
-                          style={{
-                            backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})`,
-                            opacity: isLast ? 0.9 : 0.65,
-                          }}
-                        />
-                        {/* Glow */}
-                        <div className="absolute top-[calc(50%-22px)] w-11 h-11 rounded-full blur-md bg-[#00B2CA]/20" />
-                        {/* Nodo */}
-                        <div
-                          className="relative z-10 flex items-center justify-center w-11 h-11 rounded-full border bg-white shadow-sm ring-2 ring-[#007A99]"
-                          title={h.status}
-                        >
-                          <Icon size={18} className="text-[#007A99]" />
-                        </div>
-                        {/* Etiquetas */}
-                        <div className="mt-3 text-center">
-                          <div
-                            className={`inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}`}
-                          >
-                            {h.status.replaceAll('_', ' ')}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {new Date(h.createdAt).toLocaleString()}
-                          </div>
-                          {h.comment ? (
-                            <div className="mt-1 text-[13px] text-slate-700 max-w-[16rem] mx-auto">
-                              {h.comment}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+      {/* RESUMEN DE LA ORDEN */}
+      {order && (
+        <div className="mb-8 rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.10)] p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
+            <div>
+              <strong className="text-slate-900">Dealer:</strong> {order.dealer.name} ({order.dealer.email})
             </div>
-
-            {/* Vertical timeline (< md) */}
-            <div className="md:hidden">
-              <div className="relative pl-5">
-                <div
-                  className="absolute left-2.5 top-0 bottom-0 w-[3px] rounded-full opacity-40"
-                  style={{ backgroundImage: `linear-gradient(${aqua}, ${deep})` }}
-                />
-                <div className="space-y-4">
-                  {sortedHistory.map((h) => {
-                    const Icon = statusIcon[h.status] ?? Clock
-                    const badge =
-                      statusColor[h.status] ?? 'bg-slate-100 text-slate-700 border-slate-200'
-                    return (
-                      <div key={h.id} className="relative">
-                        {/* Glow */}
-                        <div className="absolute left-1 top-1 w-6 h-6 rounded-full blur-md bg-[#00B2CA]/25" />
-                        {/* Nodo */}
-                        <div className="absolute -left-0.5 top-1.5 w-5 h-5 rounded-full border bg-white flex items-center justify-center shadow-sm ring-2 ring-[#007A99]">
-                          <Icon size={12} className="text-[#007A99]" />
-                        </div>
-                        {/* Contenido */}
-                        <div className="rounded-xl border border-slate-200 bg-white p-3 pl-4">
-                          <div className="flex items-center justify-between">
-                            <div
-                              className={`inline-flex items-center gap-2 border px-2 py-1 rounded-full text-xs font-semibold ${badge}`}
-                            >
-                              {h.status.replaceAll('_', ' ')}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {new Date(h.createdAt).toLocaleString()}
-                            </div>
-                          </div>
-                          {h.comment ? (
-                            <div className="mt-2 text-[13px] text-slate-700">{h.comment}</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            <div>
+              <strong className="text-slate-900">Pool:</strong> {order.poolModel.name} - {order.color.name}
             </div>
-          </>
-        )}
-      </div>
-
-      {/* FILES CARD */}
-      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-slate-900">Files</h3>
+            <div>
+              <strong className="text-slate-900">Delivery Address:</strong> {order.deliveryAddress}
+            </div>
+            <div>
+              <strong className="text-slate-900">Factory:</strong> {order.factory.name}
+            </div>
+            {selectedHardware.length > 0 && (
+              <div className="md:col-span-2">
+                <strong className="text-slate-900">Hardware:</strong> {selectedHardware.join(', ')}
+                <p className="text-xs text-slate-500 mt-1">
+                  (Skimmer, Main Drain, Returns included and shipped loose. $125 per penetration if installed by Glimmerglass)
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-20 rounded bg-slate-100" />
-            ))}
-          </div>
-        ) : normalizedMedia.length === 0 ? (
-          <div className="text-slate-600">No media files found.</div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {normalizedMedia.map((m) => {
-              const href = toApiUrl(m.fileUrl || '')
-              const isImage = /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(href)
-              const isPdf = /\.pdf$/i.test(href)
-              return (
-                <a
-                  key={m.id}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="group rounded-xl border border-slate-200 bg-white hover:bg-slate-50 p-3 flex flex-col gap-2 transition shadow-sm hover:shadow-md"
-                  title="View / Download"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700 capitalize">
-                      {m.type}
-                    </span>
-                    {isImage ? (
-                      <ImageDown size={18} className="text-slate-500 group-hover:text-slate-700" />
-                    ) : (
-                      <FileDown size={18} className="text-slate-500 group-hover:text-slate-700" />
-                    )}
-                  </div>
-                  {m.uploadedAt && (
-                    <div className="text-xs text-slate-500">
-                      {new Date(m.uploadedAt).toLocaleString()}
-                    </div>
-                  )}
-                  <div className="text-[13px] font-semibold text-slate-800 group-hover:underline">
-                    {isPdf ? 'Open PDF' : isImage ? 'Open image' : 'Open file'}
-                  </div>
-                </a>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div
-        className="mt-8 h-1 w-full rounded-full"
-        style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-      />
-    </div>
-  )
-}
+      )}
