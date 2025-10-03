@@ -159,9 +159,6 @@ export default function MyOrdersPage() {
                     {o.hardwareReturns && <li>Returns</li>}
                     {o.hardwareAutocover && <li>Auto Cover</li>}
                   </ul>
-                  <p className="text-xs text-slate-400 mt-1 italic">
-                    (Skimmer, Main Drain, Returns included and shipped loose. $125 per penetration if installed by Glimmerglass)
-                  </p>
                 </div>
               </div>
 
