@@ -46,12 +46,6 @@ export default function NewOrderPage() {
   const [notes, setNotes] = useState('')
   const [paymentProof, setPaymentProof] = useState<File | null>(null)
 
-  // NEW: Hardware checkboxes
-  const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
-  const [hardwareAutocover, setHardwareAutocover] = useState(false)
-  const [hardwareReturns, setHardwareReturns] = useState(false)
-  const [hardwareMainDrains, setHardwareMainDrains] = useState(false)
-
   // data
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
@@ -119,28 +113,18 @@ export default function NewOrderPage() {
       formData.append('notes', notes)
       formData.append('paymentProof', paymentProof)
 
-      // NEW: append checkboxes
-      formData.append('hardwareSkimmer', hardwareSkimmer ? 'true' : 'false')
-      formData.append('hardwareAutocover', hardwareAutocover ? 'true' : 'false')
-      formData.append('hardwareReturns', hardwareReturns ? 'true' : 'false')
-      formData.append('hardwareMainDrains', hardwareMainDrains ? 'true' : 'false')
-
       const res = await fetch('/api/orders', { method:'POST', body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.message || 'Order creation failed')
 
       setMsg({ type:'ok', text:'Order created successfully' })
+      // reset
       setPoolModelId('')
       setColorId('')
       setFactoryLocationId('')
       setDeliveryAddress('')
       setNotes('')
       setPaymentProof(null)
-      // reset hardware checkboxes
-      setHardwareSkimmer(false)
-      setHardwareAutocover(false)
-      setHardwareReturns(false)
-      setHardwareMainDrains(false)
     } catch (e:any) {
       setMsg({ type:'err', text: e?.message || 'Network error during order creation' })
     } finally {
@@ -186,44 +170,174 @@ export default function NewOrderPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Pool Model */}
-          {/* ... OMITIDO por espacio ... */}
-
-          {/* Factory */}
-          {/* ... OMITIDO por espacio ... */}
-
-          {/* Delivery Address */}
-          {/* ... OMITIDO por espacio ... */}
-
-          {/* Notes */}
-          {/* ... OMITIDO por espacio ... */}
-
-          {/* Payment Proof */}
-          {/* ... OMITIDO por espacio ... */}
-
-          {/* NEW: Hardware checkboxes */}
+          {/* Model */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Pool Hardware (check all that apply)
+              Pool Model
             </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareSkimmer} onChange={(e) => setHardwareSkimmer(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Skimmer</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareAutocover} onChange={(e) => setHardwareAutocover(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Autocover</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareReturns} onChange={(e) => setHardwareReturns(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Returns</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareMainDrains} onChange={(e) => setHardwareMainDrains(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Main Drains</span>
-              </label>
+            <div className="relative">
+              <select
+                value={poolModelId}
+                onChange={(e) => setPoolModelId(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                required
+              >
+                <option value="">Select pool model</option>
+                {models.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+              <Ruler className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
             </div>
+
+            {selectedModel && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                  L: {selectedModel.lengthFt ?? '-'} ft
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                  W: {selectedModel.widthFt ?? '-'} ft
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                  D: {selectedModel.depthFt ?? '-'} ft
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Color */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Pool Color
+            </label>
+            <div className="relative">
+              <select
+                value={colorId}
+                onChange={(e) => setColorId(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                required
+              >
+                <option value="">Select pool color</option>
+                {colors.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <Palette className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
+            </div>
+
+            {/* Swatches */}
+            <div className="mt-3 flex flex-wrap gap-3">
+              {colors.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setColorId(c.id)}
+                  className={[
+                    'inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm',
+                    colorId === c.id
+                      ? 'border-sky-300 ring-2 ring-sky-200 bg-sky-50'
+                      : 'border-slate-200 hover:bg-slate-50'
+                  ].join(' ')}
+                  title={c.name}
+                >
+                  {c.swatchUrl ? (
+                    <img
+                      src={c.swatchUrl}
+                      alt={c.name}
+                      className="h-4 w-6 rounded object-cover"
+                    />
+                  ) : (
+                    <span className="h-4 w-6 rounded bg-slate-200 block" />
+                  )}
+                  <span className="text-slate-700">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Factory */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Factory Location
+            </label>
+            <div className="relative">
+              <select
+                value={factoryLocationId}
+                onChange={(e) => setFactoryLocationId(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                required
+              >
+                <option value="">Select factory</option>
+                {factories.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}{f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
+                  </option>
+                ))}
+              </select>
+              <FactoryIcon className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={18}/>
+            </div>
+          </div>
+
+          {/* Delivery */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Delivery Address
+            </label>
+            <div className="relative">
+              <textarea
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="Street, city, state and ZIP"
+                required
+              />
+              <Truck className="pointer-events-none absolute right-3 top-2.5 text-slate-300" size={18}/>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Additional Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e)=>setNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              placeholder="Any special instructions…"
+            />
+          </div>
+
+          {/* Payment proof */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Payment Proof (image or PDF)
+            </label>
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50">
+                <Paperclip size={16} className="text-slate-500"/>
+                <span className="text-sm font-medium text-slate-800">
+                  {paymentProof ? paymentProof.name : 'Choose file'}
+                </span>
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                  className="hidden"
+                  required
+                />
+              </label>
+              {paymentProof && (
+                <span className="text-xs text-slate-500">
+                  {(paymentProof.size/1024/1024).toFixed(2)} MB
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Only certified checks or bank transfers are accepted. Your payment will be reviewed by our accounting department before production begins.
+            </p>
           </div>
 
           {/* Submit */}
@@ -247,6 +361,7 @@ export default function NewOrderPage() {
         </form>
       </div>
 
+      {/* gradient underline */}
       <div
         className="mt-6 h-1 w-full rounded-full"
         style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
@@ -254,3 +369,4 @@ export default function NewOrderPage() {
     </div>
   )
 }
+
