@@ -1,4 +1,3 @@
-// app/api/admin/orders/[id]/factory/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
@@ -11,7 +10,10 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.email || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPERADMIN')) {
+    if (
+      !session?.user?.email ||
+      (session.user.role !== 'ADMIN' && session.user.role !== 'SUPERADMIN')
+    ) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
@@ -49,7 +51,7 @@ export async function PATCH(
     })
 
     return NextResponse.json({
-      message: 'Factory updated successfully',
+      message: '✅ Factory updated successfully',
       order: {
         id: updated.id,
         deliveryAddress: updated.deliveryAddress,
@@ -57,11 +59,14 @@ export async function PATCH(
         poolModel: updated.poolModel,
         color: updated.color,
         dealer: updated.dealer,
-        factory: updated.factoryLocation,
+        factory: updated.factoryLocation, // alias en la respuesta
       },
     })
   } catch (err: any) {
     console.error('PATCH /factory error:', err)
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json(
+      { message: '❌ Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
