@@ -1,3 +1,4 @@
+// glimmerglass-order-system/app/api/orders/route.ts
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
@@ -6,13 +7,12 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
 
-    const poolModelId       = formData.get('poolModelId')?.toString() || ''
-    const colorId           = formData.get('colorId')?.toString() || ''
-    const factoryLocationId = formData.get('factoryLocationId')?.toString() || ''
-    const dealerId          = formData.get('dealerId')?.toString() || ''
-    const notes             = formData.get('notes')?.toString() || ''
-    const deliveryAddress   = formData.get('deliveryAddress')?.toString() || ''
-    const file              = formData.get('paymentProof') as File | null
+    const poolModelId     = formData.get('poolModelId')?.toString() || ''
+    const colorId         = formData.get('colorId')?.toString() || ''
+    const dealerId        = formData.get('dealerId')?.toString() || ''
+    const notes           = formData.get('notes')?.toString() || ''
+    const deliveryAddress = formData.get('deliveryAddress')?.toString() || ''
+    const file            = formData.get('paymentProof') as File | null
 
     // 🔽 nuevos campos booleanos (checkboxes)
     const hardwareSkimmer    = formData.get('hardwareSkimmer') === 'true'
@@ -20,21 +20,26 @@ export async function POST(req: NextRequest) {
     const hardwareReturns    = formData.get('hardwareReturns') === 'true'
     const hardwareMainDrains = formData.get('hardwareMainDrains') === 'true'
 
-    if (!dealerId || !file || !poolModelId || !colorId || !factoryLocationId || !deliveryAddress) {
+    // ⚠️ Ahora NO se pide factoryLocationId desde el front
+    if (!dealerId || !file || !poolModelId || !colorId || !deliveryAddress) {
       return NextResponse.json({ message: 'Missing required fields.' }, { status: 400 })
     }
 
     // Validaciones de existencia
-    const [dealer, factory, poolModel, color] = await Promise.all([
+    const [dealer, poolModel, color] = await Promise.all([
       prisma.dealer.findUnique({ where: { id: dealerId } }),
-      prisma.factoryLocation.findUnique({ where: { id: factoryLocationId } }),
       prisma.poolModel.findUnique({ where: { id: poolModelId } }),
       prisma.color.findUnique({ where: { id: colorId } }),
     ])
     if (!dealer)    return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
-    if (!factory)   return NextResponse.json({ message: 'Factory location not found' }, { status: 404 })
     if (!poolModel) return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
     if (!color)     return NextResponse.json({ message: 'Color not found' }, { status: 404 })
+
+    // ✅ Buscar factory en backend (por ejemplo la primera o una lógica tuya)
+    const factory = await prisma.factoryLocation.findFirst()
+    if (!factory) {
+      return NextResponse.json({ message: 'No default factory configured' }, { status: 500 })
+    }
 
     // ✅ Subir el archivo a blob storage (no a disco)
     const buf = await file.arrayBuffer()
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
       data: {
         poolModelId,
         colorId,
-        factoryLocationId,
+        factoryLocationId: factory.id, // asignado en backend automáticamente
         dealerId,
         notes,
         deliveryAddress,
