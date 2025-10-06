@@ -51,9 +51,9 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELED: 'Canceled',
 }
 
-const SHIPPING_OPTIONS: Record<string, string> = {
+const SHIPPING_METHOD_LABELS: Record<string, string> = {
   PICK_UP: 'Pick Up',
-  QUOTE: 'Send me a shipping quote',
+  QUOTE: 'Quote',
 }
 
 const aqua = '#00B2CA'
@@ -77,7 +77,8 @@ export default function OrderHistoryPage() {
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
   const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
   const [selectedFactoryId, setSelectedFactoryId] = useState('')
-  const [shippingMethod, setShippingMethod] = useState<string>('') 
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState('')
+  const [editing, setEditing] = useState(false)
   const [status, setStatus] = useState('')
   const [comment, setComment] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -95,7 +96,7 @@ export default function OrderHistoryPage() {
       if (res.ok && data) {
         setSummary(data)
         setSelectedFactoryId(data.factory?.id || '')
-        setShippingMethod(data.shippingMethod || '')
+        setSelectedShippingMethod(data.shippingMethod || '')
       }
     }
 
@@ -138,41 +139,28 @@ export default function OrderHistoryPage() {
     fetchFactories()
   }, [orderId])
 
-  const handleFactoryUpdate = async () => {
+  const handleSaveChanges = async () => {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ factoryLocationId: selectedFactoryId }),
+        body: JSON.stringify({
+          factoryLocationId: selectedFactoryId,
+          shippingMethod: selectedShippingMethod,
+        }),
       })
-      if (!res.ok) throw new Error('Failed to update factory')
-      const updated = await safeJson<OrderSummary>(res)
-      if (updated) {
-        setSummary(updated)
-        setMessage('✅ Factory updated successfully.')
-      }
-    } catch (err: any) {
-      console.error(err)
-      setMessage('❌ Error updating factory.')
-    }
-  }
 
-  const handleShippingUpdate = async () => {
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/shipping`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shippingMethod }),
-      })
-      if (!res.ok) throw new Error('Failed to update shipping method')
+      if (!res.ok) throw new Error('Failed to update')
+
       const updated = await safeJson<OrderSummary>(res)
       if (updated) {
         setSummary(updated)
-        setMessage('✅ Shipping method updated successfully.')
+        setEditing(false)
+        setMessage('✅ Changes saved.')
       }
     } catch (err: any) {
       console.error(err)
-      setMessage('❌ Error updating shipping method.')
+      setMessage('❌ Error saving changes.')
     }
   }
 
@@ -183,7 +171,9 @@ export default function OrderHistoryPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, comment }),
     })
+
     const payload = await safeJson<OrderHistory>(res)
+
     if (res.ok && payload) {
       setHistory((prev) => [payload, ...prev])
       setStatus('')
@@ -204,163 +194,198 @@ export default function OrderHistoryPage() {
     if (summary.hardwareAutocover) items.push('Autocover')
     return items
   }, [summary])
-
   return (
-    <div className="p-4 sm:p-6 relative rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-black text-slate-900">Order Details & History</h1>
-        <div className="h-1 w-32 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }} />
-      </div>
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4 border-b pb-1 border-cyan-700 flex justify-between items-center">
+        Order Details & History
+        <span className="h-1 w-20 bg-cyan-600 block rounded-full"></span>
+      </h1>
 
-      {error && <p className="text-red-600 mb-4">{error}</p>}
-      {message && <p className="text-blue-600 mb-4">{message}</p>}
-
-      {summary && (
-        <div className="mb-6 text-sm bg-slate-50 p-4 rounded-lg border">
-          <h2 className="font-bold text-slate-800 mb-2">Order Summary</h2>
-          <p><b>Dealer:</b> {summary.dealer?.name}</p>
-          <p><b>Model:</b> {summary.poolModel?.name}</p>
-          <p><b>Color:</b> {summary.color?.name}</p>
-
-          {/* Factory */}
-          <div className="mt-3">
-            <label className="block mb-1 font-semibold text-slate-700">Factory Location</label>
-            <div className="flex gap-2">
-              <select
-                value={selectedFactoryId}
-                onChange={(e) => setSelectedFactoryId(e.target.value)}
-                className="w-full border px-3 py-2 rounded bg-white text-sm"
-              >
-                <option value="">Select a factory</option>
-                {factoryList.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name} {f.city ? `(${f.city}, ${f.state})` : ''}
-                  </option>
-                ))}
-              </select>
-              <button onClick={handleFactoryUpdate} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm">Save</button>
-            </div>
-          </div>
-
-          {/* Shipping */}
-          <div className="mt-3">
-            <label className="block mb-1 font-semibold text-slate-700">Shipping Method</label>
-            <div className="flex gap-2">
-              <select
-                value={shippingMethod}
-                onChange={(e) => setShippingMethod(e.target.value)}
-                className="w-full border px-3 py-2 rounded bg-white text-sm"
-              >
-                <option value="">Select shipping method</option>
-                {Object.entries(SHIPPING_OPTIONS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-              <button onClick={handleShippingUpdate} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm">Save</button>
-            </div>
-          </div>
-
-          <p className="mt-2"><b>Delivery Address:</b> {summary.deliveryAddress}</p>
-          {hardwareSelected.length > 0 && <p><b>Hardware Selected:</b> {hardwareSelected.join(', ')}</p>}
+      {message && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded mb-4 text-sm">
+          {message}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 mb-6">
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ Manual Entry</button>
-        <button onClick={() => router.push(`/admin/orders/${orderId}/media`)} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Upload Media</button>
-        <Link href="/admin/orders" className="px-4 py-2 rounded border bg-white hover:bg-slate-50">Back to Orders</Link>
-      </div>
+      {summary && (
+        <div className="bg-white rounded-lg p-4 border border-gray-300 mb-6 shadow-sm">
+          <h2 className="font-semibold text-md mb-3">Order Summary</h2>
+          <p className="mb-1">
+            <strong>Dealer:</strong> {summary.dealer?.name}
+          </p>
+          <p className="mb-1">
+            <strong>Model:</strong> {summary.poolModel?.name}
+          </p>
+          <p className="mb-1">
+            <strong>Color:</strong> {summary.color?.name}
+          </p>
 
-      {/* Timeline */}
-      <div className="mb-8">
-        <h3 className="text-lg font-bold text-slate-900 mb-3">Timeline</h3>
-        <div className="relative pl-6">
-          <div className="absolute left-2 top-0 bottom-0 w-[2px] bg-slate-200" />
-          {history.length === 0 ? (
-            <div className="text-slate-500">No history found.</div>
+          {editing ? (
+            <>
+              <div className="mb-2">
+                <label className="block text-sm font-semibold mb-1">Factory Location</label>
+                <select
+                  value={selectedFactoryId}
+                  onChange={(e) => setSelectedFactoryId(e.target.value)}
+                  className="w-full border border-gray-300 px-2 py-1 rounded"
+                >
+                  <option value="">Select a factory</option>
+                  {factoryList.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-2">
+                <label className="block text-sm font-semibold mb-1">Shipping Method</label>
+                <select
+                  value={selectedShippingMethod}
+                  onChange={(e) => setSelectedShippingMethod(e.target.value)}
+                  className="w-full border border-gray-300 px-2 py-1 rounded"
+                >
+                  <option value="">Select shipping method</option>
+                  <option value="PICK_UP">Pick Up</option>
+                  <option value="QUOTE">Send Me a Shipping Quote</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleSaveChanges}
+                className="bg-cyan-700 text-white px-4 py-2 mt-2 rounded hover:bg-cyan-800 transition"
+              >
+                Save Changes
+              </button>
+            </>
           ) : (
-            <ul className="space-y-4">
-              {history.map((h) => (
-                <li key={h.id} className="relative">
-                  <div className="absolute -left-1 top-1 w-3 h-3 rounded-full bg-white border-2 border-slate-300" />
-                  <div className="rounded-lg border bg-white p-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-slate-900">{STATUS_LABEL[h.status] ?? h.status}</div>
-                      <div className="text-xs text-slate-500">{new Date(h.createdAt).toLocaleString()}</div>
-                    </div>
-                    <div className="text-sm text-slate-700 mt-1">
-                      {h.comment?.trim() || <span className="text-slate-400">—</span>}
-                    </div>
-                    {h.user?.email && <div className="text-xs text-slate-500 mt-1">by {h.user.email}</div>}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="mb-1">
+                <strong>Factory Location:</strong>{' '}
+                {summary.factory?.name || <em>Not assigned</em>}
+              </p>
+              <p className="mb-2">
+                <strong>Shipping Method:</strong>{' '}
+                {summary.shippingMethod ? SHIPPING_METHOD_LABELS[summary.shippingMethod] : <em>Not set</em>}
+              </p>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-cyan-700 hover:underline text-sm font-semibold"
+              >
+                Edit
+              </button>
+            </>
           )}
+
+          <p className="mt-3 mb-1">
+            <strong>Delivery Address:</strong> {summary.deliveryAddress}
+          </p>
+          <p className="mb-1">
+            <strong>Hardware Selected:</strong>{' '}
+            {hardwareSelected.length ? hardwareSelected.join(', ') : 'None'}
+          </p>
         </div>
+      )}
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          + Manual Entry
+        </button>
+        <Link href={`/admin/orders/${orderId}/media`}>
+          <button className="bg-green-600 text-white px-4 py-2 rounded">Upload Media</button>
+        </Link>
+        <Link href="/admin/orders">
+          <button className="border border-gray-400 px-4 py-2 rounded">Back to Orders</button>
+        </Link>
       </div>
 
-      {/* Media */}
-      <div className="mb-2">
-        <h3 className="text-lg font-bold text-slate-900 mb-2">Uploaded Media</h3>
-        {mediaFiles.length === 0 ? (
-          <p className="text-slate-500">No media uploaded yet.</p>
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">Timeline</h3>
+        {history.length === 0 ? (
+          <p className="text-gray-500 text-sm">No history found.</p>
         ) : (
-          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mediaFiles.map((media) => (
-              <li key={media.id} className="border p-3 rounded bg-white shadow-sm">
-                <div className="text-xs text-slate-500 mb-1">
-                  {new Date(media.uploadedAt).toLocaleString()} • {media.type}
-                </div>
-                <a href={media.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">
-                  View File
-                </a>
+          <ul className="space-y-4">
+            {history.map((h) => (
+              <li key={h.id} className="border-l-4 pl-4 border-cyan-700">
+                <p className="text-sm font-semibold">{STATUS_LABEL[h.status]}</p>
+                <p className="text-sm">{h.comment}</p>
+                <p className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString()}</p>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      {/* Modal */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">Uploaded Media</h3>
+        {mediaFiles.length === 0 ? (
+          <p className="text-gray-500 text-sm">No media uploaded yet.</p>
+        ) : (
+          <ul className="grid gap-2">
+            {mediaFiles.map((m) => (
+              <li key={m.id} className="border border-gray-200 rounded p-2">
+                <p className="text-sm">{m.type.toUpperCase()}</p>
+                <a
+                  href={m.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline text-sm"
+                >
+                  View File
+                </a>
+                <p className="text-xs text-gray-400">
+                  {new Date(m.uploadedAt).toLocaleString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Add Manual Entry</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block mb-1 font-semibold">Status</label>
+            <h2 className="text-xl font-bold mb-4">Add History Entry</h2>
+            <form onSubmit={handleSubmit}>
+              <label className="block mb-2">
+                <span>Status:</span>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
+                  className="w-full border px-2 py-1 mt-1 rounded"
                   required
-                  className="w-full border px-3 py-2 rounded bg-white"
                 >
-                  <option value="">Select Status</option>
-                  <option value="PENDING_PAYMENT_APPROVAL">Pending Payment Approval</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="IN_PRODUCTION">In Production</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="CANCELED">Canceled</option>
+                  <option value="">Select status</option>
+                  {Object.entries(STATUS_LABEL).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="block mb-1 font-semibold">Comment</label>
+              </label>
+
+              <label className="block mb-2 mt-3">
+                <span>Comment (optional):</span>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="w-full border px-3 py-2 rounded bg-white"
                   rows={3}
+                  className="w-full border px-2 py-1 mt-1 rounded"
                 />
-              </div>
-              <div className="flex justify-end gap-2">
+              </label>
+
+              <div className="flex justify-end mt-4">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border rounded hover:bg-gray-100"
+                  className="mr-2 px-4 py-2 border rounded"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                <button type="submit" className="bg-cyan-700 text-white px-4 py-2 rounded">
                   Submit
                 </button>
               </div>
