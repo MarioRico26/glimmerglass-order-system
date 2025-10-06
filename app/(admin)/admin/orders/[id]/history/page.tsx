@@ -38,6 +38,8 @@ interface OrderSummary {
 interface FactoryLocation {
   id: string
   name: string
+  city?: string
+  state?: string
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,6 +64,7 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
     return null
   }
 }
+
 export default function OrderHistoryPage() {
   const [summary, setSummary] = useState<OrderSummary | null>(null)
   const [history, setHistory] = useState<OrderHistory[]>([])
@@ -126,11 +129,10 @@ export default function OrderHistoryPage() {
     fetchMedia()
     fetchFactories()
   }, [orderId])
-
   const handleFactoryUpdate = async () => {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
-        method: 'POST',
+        method: 'PATCH', // 🔁 CORREGIDO: antes estaba en POST
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ factoryLocationId: selectedFactoryId }),
       })
@@ -178,6 +180,7 @@ export default function OrderHistoryPage() {
     if (summary.hardwareAutocover) items.push('Autocover')
     return items
   }, [summary])
+
   return (
     <div className="p-4 sm:p-6 relative rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       <div className="flex items-center justify-between mb-4">
@@ -191,7 +194,7 @@ export default function OrderHistoryPage() {
       {error && <p className="text-red-600 mb-4">{error}</p>}
       {message && <p className="text-blue-600 mb-4">{message}</p>}
 
-      {/* Resumen de la orden */}
+      {/* Summary */}
       {summary && (
         <div className="mb-6 text-sm bg-slate-50 p-4 rounded-lg border">
           <h2 className="font-bold text-slate-800 mb-2">Order Summary</h2>
@@ -199,7 +202,6 @@ export default function OrderHistoryPage() {
           <p><b>Model:</b> {summary.poolModel?.name}</p>
           <p><b>Color:</b> {summary.color?.name}</p>
 
-          {/* Nuevo select para cambiar la fábrica */}
           <div className="mt-3">
             <label className="block mb-1 font-semibold text-slate-700">Factory Location</label>
             <div className="flex gap-2">
@@ -231,7 +233,7 @@ export default function OrderHistoryPage() {
         </div>
       )}
 
-      {/* Botones */}
+      {/* Actions */}
       <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={() => setShowModal(true)}
@@ -253,7 +255,7 @@ export default function OrderHistoryPage() {
         </Link>
       </div>
 
-      {/* Línea de tiempo */}
+      {/* Timeline */}
       <div className="mb-8">
         <h3 className="text-lg font-bold text-slate-900 mb-3">Timeline</h3>
         <div className="relative pl-6">
