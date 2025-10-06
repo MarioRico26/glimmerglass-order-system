@@ -28,6 +28,7 @@ interface OrderSummary {
   poolModel?: { name: string }
   color?: { name: string }
   factory?: { id: string; name: string }
+  shippingMethod?: string
 
   hardwareSkimmer: boolean
   hardwareReturns: boolean
@@ -48,6 +49,11 @@ const STATUS_LABEL: Record<string, string> = {
   IN_PRODUCTION: 'In Production',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
+}
+
+const SHIPPING_OPTIONS: Record<string, string> = {
+  PICK_UP: 'Pick Up',
+  QUOTE: 'Send me a shipping quote',
 }
 
 const aqua = '#00B2CA'
@@ -71,6 +77,7 @@ export default function OrderHistoryPage() {
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
   const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
   const [selectedFactoryId, setSelectedFactoryId] = useState('')
+  const [shippingMethod, setShippingMethod] = useState<string>('') 
   const [status, setStatus] = useState('')
   const [comment, setComment] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +95,7 @@ export default function OrderHistoryPage() {
       if (res.ok && data) {
         setSummary(data)
         setSelectedFactoryId(data.factory?.id || '')
+        setShippingMethod(data.shippingMethod || '')
       }
     }
 
@@ -129,16 +137,15 @@ export default function OrderHistoryPage() {
     fetchMedia()
     fetchFactories()
   }, [orderId])
+
   const handleFactoryUpdate = async () => {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
-        method: 'PATCH', // 🔁 CORREGIDO: antes estaba en POST
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ factoryLocationId: selectedFactoryId }),
       })
-
       if (!res.ok) throw new Error('Failed to update factory')
-
       const updated = await safeJson<OrderSummary>(res)
       if (updated) {
         setSummary(updated)
@@ -150,6 +157,25 @@ export default function OrderHistoryPage() {
     }
   }
 
+  const handleShippingUpdate = async () => {
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/shipping`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingMethod }),
+      })
+      if (!res.ok) throw new Error('Failed to update shipping method')
+      const updated = await safeJson<OrderSummary>(res)
+      if (updated) {
+        setSummary(updated)
+        setMessage('✅ Shipping method updated successfully.')
+      }
+    } catch (err: any) {
+      console.error(err)
+      setMessage('❌ Error updating shipping method.')
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const res = await fetch(`/api/admin/orders/${orderId}/history`, {
@@ -157,9 +183,7 @@ export default function OrderHistoryPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, comment }),
     })
-
     const payload = await safeJson<OrderHistory>(res)
-
     if (res.ok && payload) {
       setHistory((prev) => [payload, ...prev])
       setStatus('')
@@ -185,16 +209,12 @@ export default function OrderHistoryPage() {
     <div className="p-4 sm:p-6 relative rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-black text-slate-900">Order Details & History</h1>
-        <div
-          className="h-1 w-32 rounded-full"
-          style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-        />
+        <div className="h-1 w-32 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }} />
       </div>
 
       {error && <p className="text-red-600 mb-4">{error}</p>}
       {message && <p className="text-blue-600 mb-4">{message}</p>}
 
-      {/* Summary */}
       {summary && (
         <div className="mb-6 text-sm bg-slate-50 p-4 rounded-lg border">
           <h2 className="font-bold text-slate-800 mb-2">Order Summary</h2>
@@ -202,6 +222,7 @@ export default function OrderHistoryPage() {
           <p><b>Model:</b> {summary.poolModel?.name}</p>
           <p><b>Color:</b> {summary.color?.name}</p>
 
+          {/* Factory */}
           <div className="mt-3">
             <label className="block mb-1 font-semibold text-slate-700">Factory Location</label>
             <div className="flex gap-2">
@@ -217,42 +238,37 @@ export default function OrderHistoryPage() {
                   </option>
                 ))}
               </select>
-              <button
-                onClick={handleFactoryUpdate}
-                className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm"
+              <button onClick={handleFactoryUpdate} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm">Save</button>
+            </div>
+          </div>
+
+          {/* Shipping */}
+          <div className="mt-3">
+            <label className="block mb-1 font-semibold text-slate-700">Shipping Method</label>
+            <div className="flex gap-2">
+              <select
+                value={shippingMethod}
+                onChange={(e) => setShippingMethod(e.target.value)}
+                className="w-full border px-3 py-2 rounded bg-white text-sm"
               >
-                Save
-              </button>
+                <option value="">Select shipping method</option>
+                {Object.entries(SHIPPING_OPTIONS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+              <button onClick={handleShippingUpdate} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm">Save</button>
             </div>
           </div>
 
           <p className="mt-2"><b>Delivery Address:</b> {summary.deliveryAddress}</p>
-          {hardwareSelected.length > 0 && (
-            <p><b>Hardware Selected:</b> {hardwareSelected.join(', ')}</p>
-          )}
+          {hardwareSelected.length > 0 && <p><b>Hardware Selected:</b> {hardwareSelected.join(', ')}</p>}
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          + Manual Entry
-        </button>
-        <button
-          onClick={() => router.push(`/admin/orders/${orderId}/media`)}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          Upload Media
-        </button>
-        <Link
-          href="/admin/orders"
-          className="px-4 py-2 rounded border bg-white hover:bg-slate-50"
-        >
-          Back to Orders
-        </Link>
+        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ Manual Entry</button>
+        <button onClick={() => router.push(`/admin/orders/${orderId}/media`)} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Upload Media</button>
+        <Link href="/admin/orders" className="px-4 py-2 rounded border bg-white hover:bg-slate-50">Back to Orders</Link>
       </div>
 
       {/* Timeline */}
@@ -269,21 +285,13 @@ export default function OrderHistoryPage() {
                   <div className="absolute -left-1 top-1 w-3 h-3 rounded-full bg-white border-2 border-slate-300" />
                   <div className="rounded-lg border bg-white p-3 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <div className="font-semibold text-slate-900">
-                        {STATUS_LABEL[h.status] ?? h.status}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {new Date(h.createdAt).toLocaleString()}
-                      </div>
+                      <div className="font-semibold text-slate-900">{STATUS_LABEL[h.status] ?? h.status}</div>
+                      <div className="text-xs text-slate-500">{new Date(h.createdAt).toLocaleString()}</div>
                     </div>
                     <div className="text-sm text-slate-700 mt-1">
                       {h.comment?.trim() || <span className="text-slate-400">—</span>}
                     </div>
-                    {h.user?.email && (
-                      <div className="text-xs text-slate-500 mt-1">
-                        by {h.user.email}
-                      </div>
-                    )}
+                    {h.user?.email && <div className="text-xs text-slate-500 mt-1">by {h.user.email}</div>}
                   </div>
                 </li>
               ))}
@@ -304,12 +312,7 @@ export default function OrderHistoryPage() {
                 <div className="text-xs text-slate-500 mb-1">
                   {new Date(media.uploadedAt).toLocaleString()} • {media.type}
                 </div>
-                <a
-                  href={media.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline text-sm"
-                >
+                <a href={media.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">
                   View File
                 </a>
               </li>
@@ -357,10 +360,7 @@ export default function OrderHistoryPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                   Submit
                 </button>
               </div>
