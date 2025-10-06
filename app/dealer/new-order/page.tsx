@@ -1,301 +1,324 @@
+// app/(admin)/admin/orders/[id]/history/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Palette,
-  Truck,
-  Paperclip,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Ruler
-} from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 
-type PoolModel = {
+interface OrderHistory {
   id: string
-  name: string
-  lengthFt: number | null
-  widthFt: number | null
-  depthFt: number | null
+  status: string
+  comment?: string
+  createdAt: string
+  user?: { email: string }
 }
 
-type Color = {
+interface OrderMedia {
   id: string
-  name: string
-  swatchUrl?: string | null
+  fileUrl: string
+  type: string
+  uploadedAt: string
 }
 
-const aqua = '#00B2CA'
-const deep = '#007A99'
+interface OrderSummary {
+  id: string
+  deliveryAddress: string
+  status: string
+  paymentProofUrl?: string
+  dealer?: { name: string }
+  poolModel?: { name: string }
+  color?: { name: string }
+  factory?: { id: string; name: string }
+  shippingMethod?: string
+  hardwareSkimmer: boolean
+  hardwareReturns: boolean
+  hardwareAutocover: boolean
+  hardwareMainDrains: boolean
+}
 
-export default function NewOrderPage() {
-  // form
-  const [dealerId, setDealerId] = useState('')
-  const [poolModelId, setPoolModelId] = useState('')
-  const [colorId, setColorId] = useState('')
-  const [deliveryAddress, setDeliveryAddress] = useState('')
-  const [notes, setNotes] = useState('')
-  const [paymentProof, setPaymentProof] = useState<File | null>(null)
-  const [shippingMethod, setShippingMethod] = useState<'PICK_UP' | 'QUOTE' | ''>('')
+interface FactoryLocation {
+  id: string
+  name: string
+  city?: string
+  state?: string
+}
 
-  // Hardware checkboxes
-  const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
-  const [hardwareAutocover, setHardwareAutocover] = useState(false)
-  const [hardwareReturns, setHardwareReturns] = useState(false)
-  const [hardwareMainDrains, setHardwareMainDrains] = useState(false)
+const STATUS_LABEL: Record<string, string> = {
+  PENDING_PAYMENT_APPROVAL: 'Pending',
+  APPROVED: 'Approved',
+  IN_PRODUCTION: 'In Production',
+  COMPLETED: 'Completed',
+  CANCELED: 'Canceled',
+}
 
-  // data
-  const [models, setModels] = useState<PoolModel[]>([])
-  const [colors, setColors] = useState<Color[]>([])
-    // ui
-    const [loading, setLoading] = useState(true)
-    const [submitting, setSubmitting] = useState(false)
-    const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
-  
-    const selectedModel = useMemo(
-      () => models.find(m => m.id === poolModelId) ?? null,
-      [models, poolModelId]
-    )
-  
-    // fetch initial
-    useEffect(() => {
-      ;(async () => {
-        try {
-          setLoading(true)
-          const dealerRes = await fetch('/api/dealer/me')
-          const dealerJson = await dealerRes.json()
-          if (dealerRes.ok && dealerJson?.dealerId) setDealerId(dealerJson.dealerId)
-  
-          const [mRes, cRes] = await Promise.all([
-            fetch('/api/catalog/pool-models'),
-            fetch('/api/catalog/colors')
-          ])
-          const [mJson, cJson] = await Promise.all([
-            mRes.json(), cRes.json()
-          ])
-          if (!mRes.ok) throw new Error(mJson?.message || 'Error loading pool models')
-          if (!cRes.ok) throw new Error(cJson?.message || 'Error loading colors')
-  
-          setModels(mJson.items || [])
-          setColors(cJson.items || [])
-        } catch (e: any) {
-          setMsg({ type: 'err', text: e?.message || 'Error fetching data' })
-        } finally {
-          setLoading(false)
-        }
-      })()
-    }, [])
-    async function handleSubmit(e: React.FormEvent) {
-      e.preventDefault()
-      setMsg(null)
-  
-      if (!dealerId) return setMsg({ type: 'err', text: 'Dealer not detected. Please sign in again.' })
-      if (!poolModelId || !colorId || !deliveryAddress || !shippingMethod)
-        return setMsg({ type: 'err', text: 'Please complete all required fields.' })
-      if (!paymentProof) return setMsg({ type: 'err', text: 'Please attach the payment proof.' })
-  
-      try {
-        setSubmitting(true)
-        const formData = new FormData()
-        formData.append('dealerId', dealerId)
-        formData.append('poolModelId', poolModelId)
-        formData.append('colorId', colorId)
-        formData.append('deliveryAddress', deliveryAddress)
-        formData.append('notes', notes)
-        formData.append('paymentProof', paymentProof)
-        formData.append('shippingMethod', shippingMethod)
-  
-        // Append hardware checkboxes
-        formData.append('hardwareSkimmer', hardwareSkimmer ? 'true' : 'false')
-        formData.append('hardwareAutocover', hardwareAutocover ? 'true' : 'false')
-        formData.append('hardwareReturns', hardwareReturns ? 'true' : 'false')
-        formData.append('hardwareMainDrains', hardwareMainDrains ? 'true' : 'false')
-  
-        const res = await fetch('/api/orders', { method: 'POST', body: formData })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data?.message || 'Order creation failed')
-  
-        setMsg({ type: 'ok', text: 'Order created successfully' })
-        setPoolModelId('')
-        setColorId('')
-        setDeliveryAddress('')
-        setNotes('')
-        setPaymentProof(null)
-        setShippingMethod('')
-        setHardwareSkimmer(false)
-        setHardwareAutocover(false)
-        setHardwareReturns(false)
-        setHardwareMainDrains(false)
-      } catch (e: any) {
-        setMsg({ type: 'err', text: e?.message || 'Network error during order creation' })
-      } finally {
-        setSubmitting(false)
+const SHIPPING_LABELS: Record<string, string> = {
+  PICK_UP: 'Pick Up',
+  QUOTE: 'Shipping Quote',
+}
+
+async function safeJson<T = unknown>(res: Response): Promise<T | null> {
+  try {
+    const text = await res.text()
+    return text ? JSON.parse(text) : null
+  } catch {
+    return null
+  }
+}
+
+export default function OrderHistoryPage() {
+  const params = useParams()
+  const router = useRouter()
+  const orderId = params.id as string
+
+  const [summary, setSummary] = useState<OrderSummary | null>(null)
+  const [history, setHistory] = useState<OrderHistory[]>([])
+  const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
+  const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
+  const [selectedFactoryId, setSelectedFactoryId] = useState('')
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [status, setStatus] = useState('')
+  const [comment, setComment] = useState('')
+  const [showModal, setShowModal] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      const [s, h, m, f] = await Promise.all([
+        fetch(`/api/admin/orders/${orderId}/status`).then(safeJson),
+        fetch(`/api/admin/orders/${orderId}/history`).then(safeJson),
+        fetch(`/api/admin/orders/${orderId}/media`).then(safeJson),
+        fetch(`/api/factories`).then(safeJson),
+      ])
+
+      if (s) {
+        const order = s as OrderSummary
+        setSummary(order)
+        setSelectedFactoryId(order.factory?.id || '')
+        setSelectedShippingMethod(order.shippingMethod || '')
       }
+      if (Array.isArray(h)) setHistory(h)
+      else if (Array.isArray((h as any)?.items)) setHistory((h as any).items)
+
+      if (Array.isArray(m)) setMediaFiles(m)
+      else if (Array.isArray((m as any)?.items)) setMediaFiles((m as any).items)
+
+      if (Array.isArray(f)) setFactoryList(f)
     }
-    if (loading) {
-      return (
-        <div className="max-w-3xl mx-auto p-6">
-          <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
-            <div className="h-6 w-40 rounded bg-slate-100 mb-6" />
-            <div className="space-y-4">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-12 w-full rounded bg-slate-100" />
-              ))}
-            </div>
-          </div>
+
+    fetchAll()
+  }, [orderId])
+
+  const handleSaveChanges = async () => {
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          factoryLocationId: selectedFactoryId,
+          shippingMethod: selectedShippingMethod,
+        }),
+      })
+      const updated = await safeJson<OrderSummary>(res)
+      if (res.ok && updated) {
+        setSummary(updated)
+        setEditing(false)
+        setMessage('✅ Changes saved.')
+      } else {
+        setMessage('❌ Error saving changes.')
+      }
+    } catch {
+      setMessage('❌ Error saving changes.')
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const res = await fetch(`/api/admin/orders/${orderId}/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, comment }),
+    })
+    const payload = await safeJson<OrderHistory>(res)
+    if (res.ok && payload) {
+      setHistory((prev) => [payload, ...prev])
+      setStatus('')
+      setComment('')
+      setShowModal(false)
+      setMessage('✅ Entry added.')
+    } else {
+      setMessage(`❌ Failed to add history (${res.status})`)
+    }
+  }
+
+  const hardwareSelected = useMemo(() => {
+    if (!summary) return []
+    const parts = []
+    if (summary.hardwareSkimmer) parts.push('Skimmer')
+    if (summary.hardwareReturns) parts.push('Returns')
+    if (summary.hardwareAutocover) parts.push('Autocover')
+    if (summary.hardwareMainDrains) parts.push('Main Drains')
+    return parts
+  }, [summary])
+
+  return (
+    <div className="max-w-2xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Order History</h1>
+
+      {message && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded mb-4 text-sm">
+          {message}
         </div>
-      )
-    }
-    return (
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">New Order</h1>
-            <p className="text-slate-600">Create a new pool order with model, color, and hardware options.</p>
-          </div>
-  
-          {msg && (
-            <div
-              className={[
-                'mb-4 rounded-xl px-4 py-3 text-sm flex items-start gap-2',
-                msg.type === 'ok'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                  : 'bg-rose-50 text-rose-700 border border-rose-100',
-              ].join(' ')}
-            >
-              {msg.type === 'ok' ? <CheckCircle2 size={18}/> : <AlertCircle size={18}/>}
-              <span>{msg.text}</span>
+      )}
+
+      {summary && (
+        <div className="bg-white border rounded p-4 mb-6 shadow">
+          <h2 className="font-semibold text-lg mb-3">Order Summary</h2>
+          <p><strong>Dealer:</strong> {summary.dealer?.name}</p>
+          <p><strong>Model:</strong> {summary.poolModel?.name}</p>
+          <p><strong>Color:</strong> {summary.color?.name}</p>
+          <p><strong>Delivery Address:</strong> {summary.deliveryAddress}</p>
+          <p><strong>Hardware:</strong> {hardwareSelected.join(', ') || 'None'}</p>
+
+          {editing ? (
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="block text-sm font-semibold">Factory Location</label>
+                <select
+                  value={selectedFactoryId}
+                  onChange={(e) => setSelectedFactoryId(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  <option value="">Select factory</option>
+                  {factoryList.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold">Shipping Method</label>
+                <select
+                  value={selectedShippingMethod}
+                  onChange={(e) => setSelectedShippingMethod(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  <option value="">Select method</option>
+                  <option value="PICK_UP">Pick Up</option>
+                  <option value="QUOTE">Shipping Quote</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleSaveChanges}
+                className="bg-cyan-700 text-white px-4 py-2 rounded hover:bg-cyan-800"
+              >
+                Save Changes
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-1">
+              <p><strong>Factory Location:</strong> {summary.factory?.name || <em>Not assigned</em>}</p>
+              <p><strong>Shipping Method:</strong> {summary.shippingMethod ? SHIPPING_LABELS[summary.shippingMethod] : <em>Not set</em>}</p>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-sm text-cyan-700 hover:underline mt-1"
+              >
+                Edit
+              </button>
             </div>
           )}
-  
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Pool model */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Pool Model</label>
-              <select
-                value={poolModelId}
-                onChange={(e) => setPoolModelId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-              >
-                <option value="">Select a model</option>
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} {model.lengthFt && model.widthFt && model.depthFt ? `(${model.lengthFt}ft x ${model.widthFt}ft x ${model.depthFt}ft)` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-  
-            {/* Color */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Color</label>
-              <select
-                value={colorId}
-                onChange={(e) => setColorId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-              >
-                <option value="">Select a color</option>
-                {colors.map((color) => (
-                  <option key={color.id} value={color.id}>
-                    {color.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-  
-            {/* Shipping Method */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Shipping Method</label>
-              <select
-                value={shippingMethod}
-                onChange={(e) => setShippingMethod(e.target.value as 'PICK_UP' | 'QUOTE')}
-                className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-              >
-                <option value="">Select shipping option</option>
-                <option value="PICK_UP">Pick up</option>
-                <option value="QUOTE">Send me a shipping quote</option>
-              </select>
-            </div>
-                      {/* Delivery address */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Delivery Address</label>
-            <input
-              type="text"
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-              placeholder="Street, city, state, ZIP"
-            />
-          </div>
+        </div>
+      )}
 
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-              placeholder="Optional notes or instructions"
-            />
-          </div>
-
-          {/* Hardware checkboxes */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Pool Hardware (check all that apply)</label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareSkimmer} onChange={(e) => setHardwareSkimmer(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Skimmer</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareAutocover} onChange={(e) => setHardwareAutocover(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Autocover</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareReturns} onChange={(e) => setHardwareReturns(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Returns</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={hardwareMainDrains} onChange={(e) => setHardwareMainDrains(e.target.checked)} className="accent-sky-600"/>
-                <span className="text-slate-800 text-sm">Main Drains</span>
-              </label>
-            </div>
-          </div>
-          <div className="mt-2 rounded-md bg-gray-100 p-3 text-xs text-gray-700">
-            <strong>Hardware:</strong> Skimmer, Main Drain, Returns included and shipped loose.
-            <br />
-            <span className="text-red-600 font-semibold">
-              $125 per penetration if installed by Glimmerglass.
-            </span>
-          </div>
-
-          {/* Payment proof */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Payment Proof (PDF or Image)</label>
-            <input
-              type="file"
-              accept=".pdf,image/*"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  setPaymentProof(e.target.files[0])
-                }
-              }}
-              className="text-sm"
-            />
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-xl bg-sky-600 text-white py-2 px-4 text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? <Loader2 className="animate-spin w-4 h-4 inline-block" /> : 'Submit Order'}
-            </button>
-          </div>
-        </form>
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded">
+          + Manual Entry
+        </button>
+        <Link href={`/admin/orders/${orderId}/media`}>
+          <button className="bg-green-600 text-white px-4 py-2 rounded">Upload Media</button>
+        </Link>
+        <Link href="/admin/orders">
+          <button className="border border-gray-400 px-4 py-2 rounded">Back</button>
+        </Link>
       </div>
+
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">Timeline</h3>
+        {history.length === 0 ? (
+          <p className="text-sm text-gray-500">No history yet.</p>
+        ) : (
+          <ul className="space-y-4">
+            {history.map((h) => (
+              <li key={h.id} className="border-l-4 border-cyan-700 pl-4">
+                <p className="font-semibold text-sm">{STATUS_LABEL[h.status]}</p>
+                <p className="text-sm">{h.comment}</p>
+                <p className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString()}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">Uploaded Media</h3>
+        {mediaFiles.length === 0 ? (
+          <p className="text-sm text-gray-500">No media uploaded yet.</p>
+        ) : (
+          <ul className="grid gap-2">
+            {mediaFiles.map((m) => (
+              <li key={m.id} className="border rounded p-2">
+                <p className="text-sm font-medium">{m.type.toUpperCase()}</p>
+                <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-sm hover:underline">
+                  View File
+                </a>
+                <p className="text-xs text-gray-500">{new Date(m.uploadedAt).toLocaleString()}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Add History Entry</h2>
+            <form onSubmit={handleSubmit}>
+              <label className="block mb-2">
+                <span>Status:</span>
+                <select
+                  required
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full border px-2 py-1 mt-1 rounded"
+                >
+                  <option value="">Select status</option>
+                  {Object.entries(STATUS_LABEL).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block mb-4">
+                <span>Comment (optional):</span>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={3}
+                  className="w-full border px-2 py-1 mt-1 rounded"
+                />
+              </label>
+
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setShowModal(false)} className="mr-2 px-4 py-2 border rounded">
+                  Cancel
+                </button>
+                <button type="submit" className="bg-cyan-700 text-white px-4 py-2 rounded">Submit</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
