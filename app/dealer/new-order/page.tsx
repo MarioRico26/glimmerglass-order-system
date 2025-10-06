@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Palette,
-  Factory as FactoryIcon,
   Truck,
   Paperclip,
   CheckCircle2,
@@ -26,13 +25,6 @@ type Color = {
   swatchUrl?: string | null
 }
 
-type Factory = {
-  id: string
-  name: string
-  city?: string | null
-  state?: string | null
-}
-
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
@@ -41,12 +33,11 @@ export default function NewOrderPage() {
   const [dealerId, setDealerId] = useState('')
   const [poolModelId, setPoolModelId] = useState('')
   const [colorId, setColorId] = useState('')
-  const [factoryLocationId, setFactoryLocationId] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [paymentProof, setPaymentProof] = useState<File | null>(null)
 
-  // NEW: Hardware checkboxes
+  // Hardware checkboxes
   const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
   const [hardwareAutocover, setHardwareAutocover] = useState(false)
   const [hardwareReturns, setHardwareReturns] = useState(false)
@@ -55,7 +46,6 @@ export default function NewOrderPage() {
   // data
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
-  const [factories, setFactories] = useState<Factory[]>([])
 
   // ui
   const [loading, setLoading] = useState(true)
@@ -76,21 +66,18 @@ export default function NewOrderPage() {
         const dealerJson = await dealerRes.json()
         if (dealerRes.ok && dealerJson?.dealerId) setDealerId(dealerJson.dealerId)
 
-        const [mRes, cRes, fRes] = await Promise.all([
+        const [mRes, cRes] = await Promise.all([
           fetch('/api/catalog/pool-models'),
-          fetch('/api/catalog/colors'),
-          fetch('/api/catalog/factories')
+          fetch('/api/catalog/colors')
         ])
-        const [mJson, cJson, fJson] = await Promise.all([
-          mRes.json(), cRes.json(), fRes.json()
+        const [mJson, cJson] = await Promise.all([
+          mRes.json(), cRes.json()
         ])
         if (!mRes.ok) throw new Error(mJson?.message || 'Error loading pool models')
         if (!cRes.ok) throw new Error(cJson?.message || 'Error loading colors')
-        if (!fRes.ok) throw new Error(fJson?.message || 'Error loading factories')
 
         setModels(mJson.items || [])
         setColors(cJson.items || [])
-        setFactories(fJson.items || [])
       } catch (e: any) {
         setMsg({ type: 'err', text: e?.message || 'Error fetching data' })
       } finally {
@@ -98,12 +85,13 @@ export default function NewOrderPage() {
       }
     })()
   }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setMsg(null)
 
     if (!dealerId) return setMsg({ type: 'err', text: 'Dealer not detected. Please sign in again.' })
-    if (!poolModelId || !colorId || !factoryLocationId || !deliveryAddress)
+    if (!poolModelId || !colorId || !deliveryAddress)
       return setMsg({ type: 'err', text: 'Please complete all required fields.' })
     if (!paymentProof) return setMsg({ type: 'err', text: 'Please attach the payment proof.' })
 
@@ -113,7 +101,6 @@ export default function NewOrderPage() {
       formData.append('dealerId', dealerId)
       formData.append('poolModelId', poolModelId)
       formData.append('colorId', colorId)
-      formData.append('factoryLocationId', factoryLocationId)
       formData.append('deliveryAddress', deliveryAddress)
       formData.append('notes', notes)
       formData.append('paymentProof', paymentProof)
@@ -131,7 +118,6 @@ export default function NewOrderPage() {
       setMsg({ type: 'ok', text: 'Order created successfully' })
       setPoolModelId('')
       setColorId('')
-      setFactoryLocationId('')
       setDeliveryAddress('')
       setNotes('')
       setPaymentProof(null)
@@ -165,7 +151,7 @@ export default function NewOrderPage() {
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">New Order</h1>
-          <p className="text-slate-600">Create a new pool order with model, color, factory, and hardware options.</p>
+          <p className="text-slate-600">Create a new pool order with model, color, and hardware options.</p>
         </div>
 
         {msg && (
@@ -212,23 +198,6 @@ export default function NewOrderPage() {
               {colors.map((color) => (
                 <option key={color.id} value={color.id}>
                   {color.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Factory */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Factory Location</label>
-            <select
-              value={factoryLocationId}
-              onChange={(e) => setFactoryLocationId(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 p-2 text-sm"
-            >
-              <option value="">Select a factory</option>
-              {factories.map((factory) => (
-                <option key={factory.id} value={factory.id}>
-                  {factory.name} {factory.city ? `(${factory.city}, ${factory.state})` : ''}
                 </option>
               ))}
             </select>
