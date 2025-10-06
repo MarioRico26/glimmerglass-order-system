@@ -27,12 +27,17 @@ interface OrderSummary {
   dealer?: { name: string }
   poolModel?: { name: string }
   color?: { name: string }
-  factory?: { name: string }
+  factory?: { id: string; name: string }
 
   hardwareSkimmer: boolean
   hardwareReturns: boolean
   hardwareAutocover: boolean
   hardwareMainDrains: boolean
+}
+
+interface FactoryLocation {
+  id: string
+  name: string
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -57,11 +62,12 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
     return null
   }
 }
-
 export default function OrderHistoryPage() {
   const [summary, setSummary] = useState<OrderSummary | null>(null)
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
+  const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
+  const [selectedFactoryId, setSelectedFactoryId] = useState('')
   const [status, setStatus] = useState('')
   const [comment, setComment] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +82,10 @@ export default function OrderHistoryPage() {
     const fetchSummary = async () => {
       const res = await fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' })
       const data = await safeJson<OrderSummary>(res)
-      if (res.ok && data) setSummary(data)
+      if (res.ok && data) {
+        setSummary(data)
+        setSelectedFactoryId(data.factory?.id || '')
+      }
     }
 
     const fetchHistory = async () => {
@@ -102,10 +111,42 @@ export default function OrderHistoryPage() {
       }
     }
 
+    const fetchFactories = async () => {
+      try {
+        const res = await fetch('/api/factories', { cache: 'no-store' })
+        const data = await safeJson<FactoryLocation[]>(res)
+        if (Array.isArray(data)) setFactoryList(data)
+      } catch (err) {
+        console.error('Error loading factories', err)
+      }
+    }
+
     fetchSummary()
     fetchHistory()
     fetchMedia()
+    fetchFactories()
   }, [orderId])
+
+  const handleFactoryUpdate = async () => {
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ factoryLocationId: selectedFactoryId }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update factory')
+
+      const updated = await safeJson<OrderSummary>(res)
+      if (updated) {
+        setSummary(updated)
+        setMessage('✅ Factory updated successfully.')
+      }
+    } catch (err: any) {
+      console.error(err)
+      setMessage('❌ Error updating factory.')
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -137,7 +178,6 @@ export default function OrderHistoryPage() {
     if (summary.hardwareAutocover) items.push('Autocover')
     return items
   }, [summary])
-
   return (
     <div className="p-4 sm:p-6 relative rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       <div className="flex items-center justify-between mb-4">
@@ -158,8 +198,33 @@ export default function OrderHistoryPage() {
           <p><b>Dealer:</b> {summary.dealer?.name}</p>
           <p><b>Model:</b> {summary.poolModel?.name}</p>
           <p><b>Color:</b> {summary.color?.name}</p>
-          <p><b>Factory:</b> {summary.factory?.name}</p>
-          <p><b>Delivery Address:</b> {summary.deliveryAddress}</p>
+
+          {/* Nuevo select para cambiar la fábrica */}
+          <div className="mt-3">
+            <label className="block mb-1 font-semibold text-slate-700">Factory Location</label>
+            <div className="flex gap-2">
+              <select
+                value={selectedFactoryId}
+                onChange={(e) => setSelectedFactoryId(e.target.value)}
+                className="w-full border px-3 py-2 rounded bg-white text-sm"
+              >
+                <option value="">Select a factory</option>
+                {factoryList.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} {f.city ? `(${f.city}, ${f.state})` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleFactoryUpdate}
+                className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded text-sm"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-2"><b>Delivery Address:</b> {summary.deliveryAddress}</p>
           {hardwareSelected.length > 0 && (
             <p><b>Hardware Selected:</b> {hardwareSelected.join(', ')}</p>
           )}
