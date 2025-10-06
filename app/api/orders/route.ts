@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     const hardwareReturns    = formData.get('hardwareReturns') === 'true'
     const hardwareMainDrains = formData.get('hardwareMainDrains') === 'true'
 
+    // 🔽 nuevo campo: shipping method
+    const shippingMethod = formData.get('shippingMethod')?.toString() || '' // 'PICK_UP' o 'QUOTE'
+
     // ⚠️ Ahora NO se pide factoryLocationId desde el front
     if (!dealerId || !file || !poolModelId || !colorId || !deliveryAddress) {
       return NextResponse.json({ message: 'Missing required fields.' }, { status: 400 })
@@ -69,6 +72,9 @@ export async function POST(req: NextRequest) {
         hardwareAutocover,
         hardwareReturns,
         hardwareMainDrains,
+
+        // ✅ nuevo campo shipping
+        shippingMethod,
       },
       include: {
         poolModel: { select: { name: true } },

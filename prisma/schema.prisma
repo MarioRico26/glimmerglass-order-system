@@ -72,6 +72,8 @@ model Order {
   histories     OrderHistory[]
   media         OrderMedia[]
   notifications Notification[]
+
+  shippingMethod String? // 'PICK_UP' o 'QUOTE'
 }
 
 model OrderHistory {
