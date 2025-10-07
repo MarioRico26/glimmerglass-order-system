@@ -83,13 +83,14 @@ export default function OrderHistoryPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  
+  // 🔥 NUEVO: Estado para debugging visual
+  const [debugInfo, setDebugInfo] = useState<any>(null)
 
-  // Cargar datos iniciales con debugging detallado
   useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true)
-        console.log('🔄 [1] Iniciando fetch para order:', orderId)
         
         const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
           fetch(`/api/admin/orders/${orderId}/status`),
@@ -98,40 +99,26 @@ export default function OrderHistoryPage() {
           fetch(`/api/factories`)
         ])
 
-        console.log('📥 [2] Respuestas recibidas, procesando JSON...')
-
         const orderData = await safeJson<OrderSummary>(orderRes)
         const historyData = await safeJson<OrderHistory[]>(historyRes)
         const mediaData = await safeJson<OrderMedia[]>(mediaRes)
         const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
 
-        // 🔥 DEBUG CRÍTICO: Ver EXACTAMENTE qué viene del API
-        console.log('🔍 [3] DEBUG - Datos del order API:', {
-          rawOrderData: orderData,
+        // 🔥 DEBUGGING VISUAL: Guardar información para mostrar
+        setDebugInfo({
+          orderData: orderData,
           factory: orderData?.factory,
           shippingMethod: orderData?.shippingMethod,
           hasShippingMethod: !!orderData?.shippingMethod,
-          shippingMethodValue: orderData?.shippingMethod || 'UNDEFINED_OR_NULL'
+          shippingMethodValue: orderData?.shippingMethod || 'UNDEFINED_OR_NULL',
+          factoriesCount: factoriesData?.length
         })
 
         if (orderData) {
-          console.log('✅ [4] Setting summary con datos:', {
-            factoryId: orderData.factory?.id,
-            shippingMethod: orderData.shippingMethod
-          })
           setSummary(orderData)
-          
-          // 🔥 ESTABLECER VALORES INICIALES INMEDIATAMENTE después de setSummary
-          setTimeout(() => {
-            setSelectedFactoryId(orderData.factory?.id || '')
-            setSelectedShippingMethod(orderData.shippingMethod || '')
-            console.log('🎯 [5] Estados locales establecidos:', {
-              selectedFactoryId: orderData.factory?.id || '',
-              selectedShippingMethod: orderData.shippingMethod || ''
-            })
-          }, 0)
+          setSelectedFactoryId(orderData.factory?.id || '')
+          setSelectedShippingMethod(orderData.shippingMethod || '')
         } else {
-          console.error('❌ [4] No order data received')
           setMessage('❌ Failed to load order data')
         }
         
@@ -149,48 +136,25 @@ export default function OrderHistoryPage() {
 
         if (Array.isArray(factoriesData)) {
           setFactoryList(factoriesData)
-          console.log('🏭 Factories cargadas:', factoriesData.length)
         } else {
           setMessage('❌ Failed to load factories list')
         }
 
       } catch (error) {
-        console.error('❌ Error fetching data:', error)
+        console.error('Error fetching data:', error)
         setMessage('❌ Error loading order data')
       } finally {
         setLoading(false)
-        console.log('🏁 [6] Loading completado')
       }
     }
 
     fetchAll()
   }, [orderId])
 
-  // Sincronizar estados cuando summary cambia
-  useEffect(() => {
-    console.log('🔄 [7] useEffect summary cambiado:', {
-      summaryFactory: summary?.factory,
-      summaryShipping: summary?.shippingMethod,
-      currentSelectedFactory: selectedFactoryId,
-      currentSelectedShipping: selectedShippingMethod
-    })
-    
-    if (summary) {
-      console.log('🔄 [8] Sincronizando estados con summary...')
-      setSelectedFactoryId(summary.factory?.id || '')
-      setSelectedShippingMethod(summary.shippingMethod || '')
-    }
-  }, [summary])
-
   const handleSaveChanges = async () => {
     try {
       setSaving(true)
       setMessage('🔄 Saving changes...')
-
-      console.log('💾 [9] Guardando cambios:', {
-        factoryLocationId: selectedFactoryId,
-        shippingMethod: selectedShippingMethod
-      })
 
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
         method: 'PATCH',
@@ -201,15 +165,12 @@ export default function OrderHistoryPage() {
         }),
       })
       
-      console.log('📨 [10] Save response status:', res.status)
-
       if (res.ok) {
         const updated = await safeJson<OrderSummary>(res)
-        console.log('✅ [11] Save successful, updated data:', updated)
-        
         if (updated) {
           setSummary(updated)
-          // Los estados se actualizarán automáticamente por el useEffect
+          setSelectedFactoryId(updated.factory?.id || '')
+          setSelectedShippingMethod(updated.shippingMethod || '')
         }
         
         setEditing(false)
@@ -217,36 +178,14 @@ export default function OrderHistoryPage() {
         
         setTimeout(() => setMessage(''), 3000)
       } else {
-        const errorText = await res.text()
-        console.error('❌ [11] Save failed:', errorText)
         setMessage('❌ Error saving changes. Please try again.')
       }
     } catch (error) {
-      console.error('❌ Save error:', error)
+      console.error('Save error:', error)
       setMessage('❌ Network error. Please check your connection.')
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleCancelEdit = () => {
-    console.log('❌ [12] Cancelando edición')
-    if (summary) {
-      setSelectedFactoryId(summary.factory?.id || '')
-      setSelectedShippingMethod(summary.shippingMethod || '')
-    }
-    setEditing(false)
-    setMessage('')
-  }
-
-  const handleStartEdit = () => {
-    console.log('✏️ [13] Iniciando edición con valores actuales:', {
-      summaryFactory: summary?.factory,
-      summaryShipping: summary?.shippingMethod,
-      selectedFactoryId,
-      selectedShippingMethod
-    })
-    setEditing(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -288,14 +227,6 @@ export default function OrderHistoryPage() {
     return parts
   }, [summary])
 
-  // Debug del render
-  console.log('🎨 [14] Renderizando con:', {
-    summary,
-    selectedFactoryId,
-    selectedShippingMethod,
-    editing
-  })
-
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4">
@@ -319,6 +250,21 @@ export default function OrderHistoryPage() {
             : 'bg-red-50 border border-red-200 text-red-800'
         }`}>
           {message}
+        </div>
+      )}
+
+      {/* 🔥 SECCIÓN DE DEBUGGING VISUAL - TEMPORAL */}
+      {debugInfo && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h3 className="font-bold text-yellow-800 mb-2">🔍 DEBUG Info (Quitar después):</h3>
+          <div className="text-sm text-yellow-700 space-y-1">
+            <p><strong>Shipping Method from API:</strong> "{debugInfo.shippingMethodValue}"</p>
+            <p><strong>Has Shipping Method:</strong> {debugInfo.hasShippingMethod ? 'YES' : 'NO'}</p>
+            <p><strong>Factory from API:</strong> {debugInfo.factory?.name || 'None'}</p>
+            <p><strong>Factories loaded:</strong> {debugInfo.factoriesCount}</p>
+            <p><strong>Current Selected Factory:</strong> {selectedFactoryId}</p>
+            <p><strong>Current Selected Shipping:</strong> {selectedShippingMethod}</p>
+          </div>
         </div>
       )}
 
@@ -363,7 +309,7 @@ export default function OrderHistoryPage() {
               </span>
             </p>
             <button
-              onClick={handleStartEdit}
+              onClick={() => setEditing(true)}
               className="text-cyan-700 hover:text-cyan-800 font-medium text-sm mt-2 flex items-center gap-1 transition-colors"
             >
               <span>✏️ Edit Factory & Shipping</span>
@@ -372,7 +318,7 @@ export default function OrderHistoryPage() {
         </div>
       )}
 
-      {/* Modal de Edición */}
+      {/* Modal de Edición con más debugging */}
       {editing && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
@@ -420,15 +366,18 @@ export default function OrderHistoryPage() {
                 <p className="text-xs text-gray-400 mt-1">
                   Selected: {selectedShippingMethod || 'None'}
                 </p>
-                <p className="text-xs text-blue-500 mt-1">
-                  Debug: summary.shippingMethod = "{summary?.shippingMethod}"
-                </p>
+                {/* 🔥 DEBUG EXTRA */}
+                <div className="text-xs bg-red-50 p-2 mt-2 rounded border border-red-200">
+                  <p className="text-red-700 font-semibold">DEBUG Shipping:</p>
+                  <p>summary.shippingMethod = "{summary?.shippingMethod}"</p>
+                  <p>selectedShippingMethod = "{selectedShippingMethod}"</p>
+                </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-2">
               <button 
-                onClick={handleCancelEdit}
+                onClick={() => setEditing(false)}
                 disabled={saving}
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:bg-gray-100"
               >
@@ -446,7 +395,7 @@ export default function OrderHistoryPage() {
         </div>
       )}
 
-      {/* Resto del código (botones, timeline, media) se mantiene igual */}
+      {/* Botones de Acción */}
       <div className="flex gap-2 mb-8">
         <button 
           onClick={() => setShowModal(true)} 
