@@ -84,39 +84,27 @@ export default function OrderHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Sincronizar estados cuando summary cambia
+  // DEBUG: Ver el estado actual
   useEffect(() => {
-    if (summary) {
-      console.log('🔄 Sincronizando estados con summary:', {
-        factoryId: summary.factory?.id,
-        shippingMethod: summary.shippingMethod
-      })
-      
-      setSelectedFactoryId(summary.factory?.id || '')
-      setSelectedShippingMethod(summary.shippingMethod || '')
-    }
-  }, [summary])
+    console.log('=== DEBUG ORDER HISTORY ===')
+    console.log('Summary:', summary)
+    console.log('Selected Factory:', selectedFactoryId)
+    console.log('Selected Shipping:', selectedShippingMethod)
+    console.log('Editing:', editing)
+  }, [summary, selectedFactoryId, selectedShippingMethod, editing])
 
-  // Sincronizar también cuando empieza la edición
-  useEffect(() => {
-    if (editing && summary) {
-      console.log('🎯 Iniciando edición - estableciendo valores:', {
-        factoryId: summary.factory?.id,
-        shippingMethod: summary.shippingMethod
-      })
-      
-      setSelectedFactoryId(summary.factory?.id || '')
-      setSelectedShippingMethod(summary.shippingMethod || '')
-    }
-  }, [editing, summary])
-
+  // Cargar datos iniciales
   useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true)
+        console.log('🔄 Fetching data for order:', orderId)
         
         const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
-          fetch(`/api/admin/orders/${orderId}/status`),
+          fetch(`/api/admin/orders/${orderId}/status`).then(res => {
+            console.log('Order status response:', res.status)
+            return res
+          }),
           fetch(`/api/admin/orders/${orderId}/history`),
           fetch(`/api/admin/orders/${orderId}/media`),
           fetch(`/api/factories`)
@@ -127,8 +115,14 @@ export default function OrderHistoryPage() {
         const mediaData = await safeJson<OrderMedia[]>(mediaRes)
         const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
 
+        console.log('📦 Order data received:', orderData)
+        console.log('🏭 Factories received:', factoriesData)
+
         if (orderData) {
           setSummary(orderData)
+          // 🔥 ESTABLECER VALORES INICIALES INMEDIATAMENTE
+          setSelectedFactoryId(orderData.factory?.id || '')
+          setSelectedShippingMethod(orderData.shippingMethod || '')
         } else {
           setMessage('❌ Failed to load order data')
         }
@@ -152,7 +146,7 @@ export default function OrderHistoryPage() {
         }
 
       } catch (error) {
-        console.error('Error fetching data:', error)
+        console.error('❌ Error fetching data:', error)
         setMessage('❌ Error loading order data')
       } finally {
         setLoading(false)
@@ -162,10 +156,24 @@ export default function OrderHistoryPage() {
     fetchAll()
   }, [orderId])
 
+  // 🔥 Sincronizar cuando el summary cambia (por si acaso)
+  useEffect(() => {
+    if (summary) {
+      console.log('🔄 Summary changed, syncing states')
+      setSelectedFactoryId(summary.factory?.id || '')
+      setSelectedShippingMethod(summary.shippingMethod || '')
+    }
+  }, [summary])
+
   const handleSaveChanges = async () => {
     try {
       setSaving(true)
       setMessage('🔄 Saving changes...')
+
+      console.log('💾 Saving changes:', {
+        factoryLocationId: selectedFactoryId,
+        shippingMethod: selectedShippingMethod
+      })
 
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
         method: 'PATCH',
@@ -176,18 +184,29 @@ export default function OrderHistoryPage() {
         }),
       })
       
-      const updated = await safeJson<OrderSummary>(res)
-      if (res.ok && updated) {
-        setSummary(updated)
+      console.log('📨 Save response:', res.status, res.statusText)
+
+      if (res.ok) {
+        const updated = await safeJson<OrderSummary>(res)
+        console.log('✅ Save successful:', updated)
+        
+        if (updated) {
+          setSummary(updated)
+          setSelectedFactoryId(updated.factory?.id || '')
+          setSelectedShippingMethod(updated.shippingMethod || '')
+        }
+        
         setEditing(false)
         setMessage('✅ Changes saved successfully!')
         
         setTimeout(() => setMessage(''), 3000)
       } else {
+        const errorText = await res.text()
+        console.error('❌ Save failed:', errorText)
         setMessage('❌ Error saving changes. Please try again.')
       }
     } catch (error) {
-      console.error('Save error:', error)
+      console.error('❌ Save error:', error)
       setMessage('❌ Network error. Please check your connection.')
     } finally {
       setSaving(false)
@@ -195,6 +214,7 @@ export default function OrderHistoryPage() {
   }
 
   const handleCancelEdit = () => {
+    console.log('❌ Canceling edit, restoring values')
     if (summary) {
       setSelectedFactoryId(summary.factory?.id || '')
       setSelectedShippingMethod(summary.shippingMethod || '')
@@ -204,6 +224,10 @@ export default function OrderHistoryPage() {
   }
 
   const handleStartEdit = () => {
+    console.log('✏️ Starting edit with current values:', {
+      factory: summary?.factory,
+      shipping: summary?.shippingMethod
+    })
     setEditing(true)
   }
 
@@ -347,6 +371,9 @@ export default function OrderHistoryPage() {
                 <p className="text-xs text-gray-500 mt-1">
                   Current: {summary?.factory?.name || 'Not assigned'}
                 </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Selected ID: {selectedFactoryId || 'None'}
+                </p>
               </div>
 
               <div>
@@ -363,6 +390,9 @@ export default function OrderHistoryPage() {
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   Current: {summary?.shippingMethod ? SHIPPING_LABELS[summary.shippingMethod] : 'Not set'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Selected: {selectedShippingMethod || 'None'}
                 </p>
               </div>
             </div>
