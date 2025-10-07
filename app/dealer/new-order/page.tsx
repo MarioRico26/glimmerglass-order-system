@@ -84,26 +84,37 @@ export default function OrderHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // 🔥 CORRECCIÓN CRÍTICA: Sincronizar estados cuando summary cambia
+  // Sincronizar estados cuando summary cambia
   useEffect(() => {
     if (summary) {
-      console.log('Summary updated:', {
-        factory: summary.factory,
-        shippingMethod: summary.shippingMethod,
-        selectedFactoryId,
-        selectedShippingMethod
+      console.log('🔄 Sincronizando estados con summary:', {
+        factoryId: summary.factory?.id,
+        shippingMethod: summary.shippingMethod
       })
       
-      // 🔥 Asegurar que los estados reflejen los valores actuales del summary
       setSelectedFactoryId(summary.factory?.id || '')
       setSelectedShippingMethod(summary.shippingMethod || '')
     }
-  }, [summary]) // 🔥 Solo depende de summary
+  }, [summary])
+
+  // Sincronizar también cuando empieza la edición
+  useEffect(() => {
+    if (editing && summary) {
+      console.log('🎯 Iniciando edición - estableciendo valores:', {
+        factoryId: summary.factory?.id,
+        shippingMethod: summary.shippingMethod
+      })
+      
+      setSelectedFactoryId(summary.factory?.id || '')
+      setSelectedShippingMethod(summary.shippingMethod || '')
+    }
+  }, [editing, summary])
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true)
+        
         const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
           fetch(`/api/admin/orders/${orderId}/status`),
           fetch(`/api/admin/orders/${orderId}/history`),
@@ -118,20 +129,19 @@ export default function OrderHistoryPage() {
 
         if (orderData) {
           setSummary(orderData)
-          // 🔥 Los estados se actualizarán en el useEffect de arriba
         } else {
           setMessage('❌ Failed to load order data')
         }
         
         if (Array.isArray(historyData)) {
           setHistory(historyData)
-        } else if (historyData && Array.isArray((historyData as any).items)) {
+        } else if (historyData && Array.isArray((historyData as any)?.items)) {
           setHistory((historyData as any).items)
         }
 
         if (Array.isArray(mediaData)) {
           setMediaFiles(mediaData)
-        } else if (mediaData && Array.isArray((mediaData as any).items)) {
+        } else if (mediaData && Array.isArray((mediaData as any)?.items)) {
           setMediaFiles((mediaData as any).items)
         }
 
@@ -156,11 +166,6 @@ export default function OrderHistoryPage() {
     try {
       setSaving(true)
       setMessage('🔄 Saving changes...')
-      
-      console.log('Saving:', {
-        factoryLocationId: selectedFactoryId,
-        shippingMethod: selectedShippingMethod
-      })
 
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
         method: 'PATCH',
@@ -173,14 +178,12 @@ export default function OrderHistoryPage() {
       
       const updated = await safeJson<OrderSummary>(res)
       if (res.ok && updated) {
-        setSummary(updated) // 🔥 Esto activará el useEffect que sincroniza los estados
+        setSummary(updated)
         setEditing(false)
         setMessage('✅ Changes saved successfully!')
         
         setTimeout(() => setMessage(''), 3000)
       } else {
-        const errorText = await res.text()
-        console.error('Save failed:', errorText)
         setMessage('❌ Error saving changes. Please try again.')
       }
     } catch (error) {
@@ -192,13 +195,16 @@ export default function OrderHistoryPage() {
   }
 
   const handleCancelEdit = () => {
-    // 🔥 Restaurar valores originales del summary actual
     if (summary) {
       setSelectedFactoryId(summary.factory?.id || '')
       setSelectedShippingMethod(summary.shippingMethod || '')
     }
     setEditing(false)
     setMessage('')
+  }
+
+  const handleStartEdit = () => {
+    setEditing(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -239,18 +245,6 @@ export default function OrderHistoryPage() {
     if (summary.hardwareMainDrains) parts.push('Main Drains')
     return parts
   }, [summary])
-
-  // 🔥 Función helper para mostrar valores
-  const displayFactoryName = () => {
-    if (!summary?.factory) return <em className="text-gray-500">Not assigned</em>
-    const factory = factoryList.find(f => f.id === summary.factory?.id)
-    return factory?.name || summary.factory.name
-  }
-
-  const displayShippingMethod = () => {
-    if (!summary?.shippingMethod) return <em className="text-gray-500">Not set</em>
-    return SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod
-  }
 
   if (loading) {
     return (
@@ -304,8 +298,37 @@ export default function OrderHistoryPage() {
             <span className="text-gray-900">{summary.deliveryAddress}</span>
           </div>
 
-          {editing ? (
-            <div className="space-y-4 mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          {/* Sección de Factory & Shipping */}
+          <div className="mt-4 space-y-3 p-4 bg-gray-50 rounded-lg border">
+            <p>
+              <strong className="text-gray-700">Factory Location:</strong> 
+              <span className="ml-2 text-gray-900">
+                {summary.factory?.name || <em className="text-gray-500">Not assigned</em>}
+              </span>
+            </p>
+            <p>
+              <strong className="text-gray-700">Shipping Method:</strong> 
+              <span className="ml-2 text-gray-900">
+                {summary.shippingMethod ? SHIPPING_LABELS[summary.shippingMethod] : <em className="text-gray-500">Not set</em>}
+              </span>
+            </p>
+            <button
+              onClick={handleStartEdit}
+              className="text-cyan-700 hover:text-cyan-800 font-medium text-sm mt-2 flex items-center gap-1 transition-colors"
+            >
+              <span>✏️ Edit Factory & Shipping</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edición */}
+      {editing && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Edit Factory & Shipping</h2>
+            
+            <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-semibold mb-2 text-gray-700">Factory Location</label>
                 <select
@@ -321,6 +344,9 @@ export default function OrderHistoryPage() {
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: {summary?.factory?.name || 'Not assigned'}
+                </p>
               </div>
 
               <div>
@@ -335,51 +361,33 @@ export default function OrderHistoryPage() {
                   <option value="PICK_UP">Pick Up</option>
                   <option value="QUOTE">Shipping Quote</option>
                 </select>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={handleSaveChanges}
-                  disabled={saving}
-                  className="bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-800 transition-colors font-medium disabled:bg-cyan-400 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={handleCancelEdit}
-                  disabled={saving}
-                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors font-medium disabled:bg-gray-400"
-                >
-                  Cancel
-                </button>
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: {summary?.shippingMethod ? SHIPPING_LABELS[summary.shippingMethod] : 'Not set'}
+                </p>
               </div>
             </div>
-          ) : (
-            <div className="mt-4 space-y-3 p-4 bg-gray-50 rounded-lg border">
-              <p>
-                <strong className="text-gray-700">Factory Location:</strong> 
-                <span className="ml-2 text-gray-900">
-                  {displayFactoryName()}
-                </span>
-              </p>
-              <p>
-                <strong className="text-gray-700">Shipping Method:</strong> 
-                <span className="ml-2 text-gray-900">
-                  {displayShippingMethod()}
-                </span>
-              </p>
-              <button
-                onClick={() => setEditing(true)}
-                className="text-cyan-700 hover:text-cyan-800 font-medium text-sm mt-2 flex items-center gap-1 transition-colors"
+
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={handleCancelEdit}
+                disabled={saving}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:bg-gray-100"
               >
-                <span>✏️ Edit Factory & Shipping</span>
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveChanges}
+                disabled={saving}
+                className="bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-800 transition-colors font-medium disabled:bg-cyan-400"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* El resto del código permanece igual */}
+      {/* Botones de Acción */}
       <div className="flex gap-2 mb-8">
         <button 
           onClick={() => setShowModal(true)} 
@@ -399,7 +407,7 @@ export default function OrderHistoryPage() {
         </Link>
       </div>
 
-      {/* Timeline y Media sections permanecen igual */}
+      {/* Timeline */}
       <div className="mb-8">
         <h3 className="text-lg font-semibold mb-4 text-gray-800">Timeline</h3>
         {history.length === 0 ? (
@@ -426,6 +434,7 @@ export default function OrderHistoryPage() {
         )}
       </div>
 
+      {/* Media Files */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-800">Uploaded Media</h3>
         {mediaFiles.length === 0 ? (
@@ -456,6 +465,7 @@ export default function OrderHistoryPage() {
         )}
       </div>
 
+      {/* Modal para agregar entrada manual */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
