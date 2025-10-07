@@ -1,3 +1,4 @@
+// app/(admin)/admin/orders/[id]/history/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -29,7 +30,6 @@ interface OrderSummary {
   color?: { name: string }
   factory?: { id: string; name: string }
   shippingMethod?: string
-
   hardwareSkimmer: boolean
   hardwareReturns: boolean
   hardwareAutocover: boolean
@@ -39,34 +39,37 @@ interface OrderSummary {
 interface FactoryLocation {
   id: string
   name: string
+  city?: string
+  state?: string
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending',
+  PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
   APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
 }
 
-const SHIPPING_METHOD_LABELS: Record<string, string> = {
+const SHIPPING_LABELS: Record<string, string> = {
   PICK_UP: 'Pick Up',
-  QUOTE: 'Quote',
+  QUOTE: 'Shipping Quote',
 }
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.includes('application/json')) return null
     const text = await res.text()
-    if (!text) return null
-    return JSON.parse(text) as T
+    return text ? JSON.parse(text) : null
   } catch {
     return null
   }
 }
 
 export default function OrderHistoryPage() {
+  const params = useParams()
+  const router = useRouter()
+  const orderId = params.id as string
+
   const [summary, setSummary] = useState<OrderSummary | null>(null)
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
@@ -76,248 +79,378 @@ export default function OrderHistoryPage() {
   const [editing, setEditing] = useState(false)
   const [status, setStatus] = useState('')
   const [comment, setComment] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  const params = useParams()
-  const router = useRouter()
-  const orderId = params.id as string
+  // Actualizar estados cuando summary cambia
+  useEffect(() => {
+    if (summary) {
+      setSelectedFactoryId(summary.factory?.id || '')
+      setSelectedShippingMethod(summary.shippingMethod || '')
+    }
+  }, [summary])
 
   useEffect(() => {
-    const fetchSummary = async () => {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' })
-      const data = await safeJson<OrderSummary>(res)
-      if (res.ok && data) {
-        setSummary(data)
-        setSelectedFactoryId(data.factory?.id || '')
-        setSelectedShippingMethod(data.shippingMethod || '')
+    const fetchAll = async () => {
+      try {
+        setLoading(true)
+        const [s, h, m, f] = await Promise.all([
+          fetch(`/api/admin/orders/${orderId}/status`).then(safeJson),
+          fetch(`/api/admin/orders/${orderId}/history`).then(safeJson),
+          fetch(`/api/admin/orders/${orderId}/media`).then(safeJson),
+          fetch(`/api/factories`).then(safeJson),
+        ])
+
+        if (s) {
+          const order = s as OrderSummary
+          setSummary(order)
+        }
+        
+        if (Array.isArray(h)) setHistory(h)
+        else if (Array.isArray((h as any)?.items)) setHistory((h as any).items)
+
+        if (Array.isArray(m)) setMediaFiles(m)
+        else if (Array.isArray((m as any)?.items)) setMediaFiles((m as any).items)
+
+        if (Array.isArray(f)) setFactoryList(f)
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        setMessage('❌ Error loading order data')
+      } finally {
+        setLoading(false)
       }
     }
 
-    const fetchHistory = async () => {
-      const res = await fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' })
-      const data = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(res)
-      const list = Array.isArray(data) ? data : (data as any)?.items || []
-      setHistory(list)
-    }
-
-    const fetchMedia = async () => {
-      const res = await fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' })
-      const data = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(res)
-      const list = Array.isArray(data) ? data : (data as any)?.items || []
-      setMediaFiles(list)
-    }
-
-    const fetchFactories = async () => {
-      const res = await fetch('/api/factories', { cache: 'no-store' })
-      const data = await safeJson<FactoryLocation[]>(res)
-      if (Array.isArray(data)) setFactoryList(data)
-    }
-
-    fetchSummary()
-    fetchHistory()
-    fetchMedia()
-    fetchFactories()
+    fetchAll()
   }, [orderId])
+
   const handleSaveChanges = async () => {
-    if (!selectedFactoryId && !selectedShippingMethod) return
-
-    const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        factoryId: selectedFactoryId || null,
-        shippingMethod: selectedShippingMethod || null,
-      }),
-    })
-
-    if (!res.ok) {
-      const err = await res.json()
-      setError(err.message || 'Error saving changes')
-      return
+    try {
+      setMessage('🔄 Saving changes...')
+      
+      const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          factoryLocationId: selectedFactoryId || null,
+          shippingMethod: selectedShippingMethod || null,
+        }),
+      })
+      
+      const updated = await safeJson<OrderSummary>(res)
+      if (res.ok && updated) {
+        setSummary(updated)
+        setEditing(false)
+        setMessage('✅ Changes saved successfully!')
+        
+        setTimeout(() => setMessage(''), 3000)
+      } else {
+        setMessage('❌ Error saving changes. Please try again.')
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      setMessage('❌ Network error. Please check your connection.')
     }
-
-    setMessage('Changes saved.')
-    setEditing(false)
-    router.refresh()
   }
 
-  const hardwareList = useMemo(() => {
+  const handleCancelEdit = () => {
+    if (summary) {
+      setSelectedFactoryId(summary.factory?.id || '')
+      setSelectedShippingMethod(summary.shippingMethod || '')
+    }
+    setEditing(false)
+    setMessage('')
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setMessage('🔄 Adding history entry...')
+      
+      const res = await fetch(`/api/admin/orders/${orderId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, comment }),
+      })
+      
+      const payload = await safeJson<OrderHistory>(res)
+      if (res.ok && payload) {
+        setHistory((prev) => [payload, ...prev])
+        setStatus('')
+        setComment('')
+        setShowModal(false)
+        setMessage('✅ History entry added successfully!')
+        
+        setTimeout(() => setMessage(''), 3000)
+      } else {
+        setMessage(`❌ Failed to add history entry (${res.status})`)
+      }
+    } catch (error) {
+      console.error('Submit error:', error)
+      setMessage('❌ Network error. Please try again.')
+    }
+  }
+
+  const hardwareSelected = useMemo(() => {
     if (!summary) return []
-    const list = []
-    if (summary.hardwareSkimmer) list.push('Skimmer')
-    if (summary.hardwareReturns) list.push('Returns')
-    if (summary.hardwareAutocover) list.push('Autocover')
-    if (summary.hardwareMainDrains) list.push('Main Drains')
-    return list.join(', ') || 'None'
+    const parts = []
+    if (summary.hardwareSkimmer) parts.push('Skimmer')
+    if (summary.hardwareReturns) parts.push('Returns')
+    if (summary.hardwareAutocover) parts.push('Autocover')
+    if (summary.hardwareMainDrains) parts.push('Main Drains')
+    return parts
   }, [summary])
 
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto p-4">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-lg">Loading order data...</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="p-6 max-w-4xl mx-auto bg-white shadow rounded-md">
-      <h1 className="text-2xl font-bold border-b pb-2 mb-4">Order Details & History</h1>
+    <div className="max-w-2xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Order History</h1>
 
       {message && (
-        <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded mb-4">
-          ✅ {message}
-        </div>
-      )}
-      {error && (
-        <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4">
-          ❌ {error}
+        <div className={`px-4 py-2 rounded mb-4 text-sm ${
+          message.includes('✅') 
+            ? 'bg-green-50 border border-green-200 text-green-800' 
+            : message.includes('🔄') 
+            ? 'bg-blue-50 border border-blue-200 text-blue-800'
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          {message}
         </div>
       )}
 
-      <div className="border rounded p-4 mb-4">
-        <h2 className="font-semibold mb-2">Order Summary</h2>
+      {summary && (
+        <div className="bg-white border rounded-lg p-6 mb-6 shadow-sm">
+          <h2 className="font-semibold text-lg mb-4 border-b pb-2">Order Summary</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="space-y-2">
+              <p><strong className="text-gray-700">Dealer:</strong> {summary.dealer?.name || 'N/A'}</p>
+              <p><strong className="text-gray-700">Model:</strong> {summary.poolModel?.name || 'N/A'}</p>
+              <p><strong className="text-gray-700">Color:</strong> {summary.color?.name || 'N/A'}</p>
+            </div>
+            <div className="space-y-2">
+              <p>
+                <strong className="text-gray-700">Status:</strong> 
+                <span className="ml-2 capitalize px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                  {STATUS_LABEL[summary.status] || summary.status}
+                </span>
+              </p>
+              <p><strong className="text-gray-700">Hardware:</strong> {hardwareSelected.join(', ') || 'None'}</p>
+            </div>
+          </div>
+          
+          <p className="mb-4 p-3 bg-gray-50 rounded border">
+            <strong className="text-gray-700">Delivery Address:</strong> 
+            <br />
+            <span className="text-sm mt-1 block">{summary.deliveryAddress}</span>
+          </p>
 
-        {summary ? (
-          editing ? (
-            <>
-              <div className="mb-2">
-                <label className="block font-medium mb-1">Factory Location</label>
+          {editing ? (
+            <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-lg border">
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Factory Location</label>
                 <select
                   value={selectedFactoryId}
                   onChange={(e) => setSelectedFactoryId(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                 >
-                  <option value="">Select a factory</option>
-                  {factoryList.map((factory) => (
-                    <option key={factory.id} value={factory.id}>
-                      {factory.name}
+                  <option value="">Select factory</option>
+                  {factoryList.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} {f.city && `- ${f.city}, ${f.state}`}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="mb-2">
-                <label className="block font-medium mb-1">Shipping Method</label>
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Shipping Method</label>
                 <select
                   value={selectedShippingMethod}
                   onChange={(e) => setSelectedShippingMethod(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                 >
-                  <option value="">Select shipping method</option>
+                  <option value="">Select method</option>
                   <option value="PICK_UP">Pick Up</option>
-                  <option value="QUOTE">Quote</option>
+                  <option value="QUOTE">Shipping Quote</option>
                 </select>
               </div>
 
-              <button
-                onClick={handleSaveChanges}
-                className="mt-2 bg-cyan-800 text-white px-4 py-2 rounded hover:bg-cyan-700"
-              >
-                Save Changes
-              </button>
-            </>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSaveChanges}
+                  className="bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-800 transition-colors font-medium"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
-            <>
-              <p><strong>Dealer:</strong> {summary.dealer?.name || ''}</p>
-              <p><strong>Model:</strong> {summary.poolModel?.name || ''}</p>
-              <p><strong>Color:</strong> {summary.color?.name || ''}</p>
+            <div className="mt-4 space-y-3 p-4 bg-gray-50 rounded-lg border">
               <p>
-                <strong>Factory Location:</strong>{' '}
-                {summary.factory?.name || <em>Not assigned</em>}
+                <strong className="text-gray-700">Factory Location:</strong> 
+                <span className="ml-2">
+                  {summary.factory?.name || <em className="text-gray-500">Not assigned</em>}
+                </span>
               </p>
               <p>
-                <strong>Shipping Method:</strong>{' '}
-                {summary.shippingMethod
-                  ? SHIPPING_METHOD_LABELS[summary.shippingMethod] || summary.shippingMethod
-                  : <em>Not set</em>}
+                <strong className="text-gray-700">Shipping Method:</strong> 
+                <span className="ml-2">
+                  {summary.shippingMethod ? SHIPPING_LABELS[summary.shippingMethod] : <em className="text-gray-500">Not set</em>}
+                </span>
               </p>
               <button
                 onClick={() => setEditing(true)}
-                className="text-sm text-cyan-800 mt-1 underline"
+                className="text-cyan-700 hover:text-cyan-800 font-medium text-sm mt-2 flex items-center gap-1 transition-colors"
               >
-                Edit
+                <span>✏️ Edit Factory & Shipping</span>
               </button>
-            </>
-          )
-        ) : (
-          <p>Loading...</p>
-        )}
+            </div>
+          )}
+        </div>
+      )}
 
-        {summary && (
-          <>
-            <p className="mt-2"><strong>Delivery Address:</strong> {summary.deliveryAddress}</p>
-            <p><strong>Hardware Selected:</strong> {hardwareList}</p>
-          </>
-        )}
-      </div>
       <div className="flex gap-2 mb-6">
-        <Link
-          href={`/admin/orders/${orderId}/history/manual`}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+        <button 
+          onClick={() => setShowModal(true)} 
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
         >
-          + Manual Entry
+          + Add Manual Entry
+        </button>
+        <Link href={`/admin/orders/${orderId}/media`}>
+          <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium">
+            Upload Media
+          </button>
         </Link>
-        <Link
-          href={`/admin/orders/${orderId}/media`}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-        >
-          Upload Media
-        </Link>
-        <Link
-          href="/admin/orders"
-          className="border px-4 py-2 rounded text-gray-800 hover:bg-gray-100"
-        >
-          Back to Orders
+        <Link href="/admin/orders">
+          <button className="border border-gray-400 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+            Back to Orders
+          </button>
         </Link>
       </div>
 
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-2">Timeline</h2>
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold mb-4 text-gray-800">Order Timeline</h3>
         {history.length === 0 ? (
-          <p className="text-gray-500">No history found.</p>
+          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border">
+            No history entries yet.
+          </div>
         ) : (
           <ul className="space-y-4">
-            {history.map((entry) => (
-              <li key={entry.id} className="border-l-4 border-cyan-800 pl-4">
-                <div className="text-sm text-gray-600">
-                  {format(new Date(entry.createdAt), 'MMM d, yyyy hh:mm a')}
+            {history.map((h) => (
+              <li key={h.id} className="border-l-4 border-cyan-700 pl-4 py-2 bg-white rounded-r-lg shadow-sm">
+                <div className="flex justify-between items-start">
+                  <p className="font-semibold text-sm text-gray-800">{STATUS_LABEL[h.status] || h.status}</p>
+                  <p className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString()}</p>
                 </div>
-                <div className="font-medium">{entry.status}</div>
-                {entry.comment && <div className="text-gray-700">{entry.comment}</div>}
+                {h.comment && (
+                  <p className="text-sm text-gray-600 mt-1">{h.comment}</p>
+                )}
+                {h.user && (
+                  <p className="text-xs text-gray-400 mt-1">By: {h.user.email}</p>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-2">Uploaded Media</h2>
-        {media.length === 0 ? (
-          <p className="text-gray-500">No media uploaded yet.</p>
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-4 text-gray-800">Uploaded Media</h3>
+        {mediaFiles.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border">
+            No media files uploaded yet.
+          </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {media.map((item) => (
-              <div key={item.id} className="border rounded p-2">
-                {item.mediaType.startsWith('image') ? (
-                  <Image
-                    src={item.url}
-                    alt="Uploaded"
-                    width={300}
-                    height={200}
-                    className="rounded w-full object-cover"
-                  />
-                ) : (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 underline"
-                  >
-                    View File
-                  </a>
-                )}
-                <div className="text-xs text-gray-500 mt-1">
-                  {format(new Date(item.uploadedAt), 'MMM d, yyyy hh:mm a')}
+          <div className="grid gap-3">
+            {mediaFiles.map((m) => (
+              <div key={m.id} className="border rounded-lg p-3 bg-white shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 capitalize">{m.type}</p>
+                    <a 
+                      href={m.fileUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-600 text-sm hover:underline inline-block mt-1"
+                    >
+                      View File
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500">{new Date(m.uploadedAt).toLocaleString()}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Add History Entry</h2>
+            <form onSubmit={handleSubmit}>
+              <label className="block mb-4">
+                <span className="block text-sm font-semibold mb-2 text-gray-700">Status</span>
+                <select
+                  required
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                >
+                  <option value="">Select status</option>
+                  {Object.entries(STATUS_LABEL).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block mb-6">
+                <span className="block text-sm font-semibold mb-2 text-gray-700">Comment (optional)</span>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  placeholder="Add any comments or notes..."
+                />
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowModal(false)} 
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-800 transition-colors font-medium"
+                >
+                  Add Entry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
