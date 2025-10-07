@@ -84,46 +84,54 @@ export default function OrderHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // DEBUG: Ver el estado actual
-  useEffect(() => {
-    console.log('=== DEBUG ORDER HISTORY ===')
-    console.log('Summary:', summary)
-    console.log('Selected Factory:', selectedFactoryId)
-    console.log('Selected Shipping:', selectedShippingMethod)
-    console.log('Editing:', editing)
-  }, [summary, selectedFactoryId, selectedShippingMethod, editing])
-
-  // Cargar datos iniciales
+  // Cargar datos iniciales con debugging detallado
   useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true)
-        console.log('🔄 Fetching data for order:', orderId)
+        console.log('🔄 [1] Iniciando fetch para order:', orderId)
         
         const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
-          fetch(`/api/admin/orders/${orderId}/status`).then(res => {
-            console.log('Order status response:', res.status)
-            return res
-          }),
+          fetch(`/api/admin/orders/${orderId}/status`),
           fetch(`/api/admin/orders/${orderId}/history`),
           fetch(`/api/admin/orders/${orderId}/media`),
           fetch(`/api/factories`)
         ])
+
+        console.log('📥 [2] Respuestas recibidas, procesando JSON...')
 
         const orderData = await safeJson<OrderSummary>(orderRes)
         const historyData = await safeJson<OrderHistory[]>(historyRes)
         const mediaData = await safeJson<OrderMedia[]>(mediaRes)
         const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
 
-        console.log('📦 Order data received:', orderData)
-        console.log('🏭 Factories received:', factoriesData)
+        // 🔥 DEBUG CRÍTICO: Ver EXACTAMENTE qué viene del API
+        console.log('🔍 [3] DEBUG - Datos del order API:', {
+          rawOrderData: orderData,
+          factory: orderData?.factory,
+          shippingMethod: orderData?.shippingMethod,
+          hasShippingMethod: !!orderData?.shippingMethod,
+          shippingMethodValue: orderData?.shippingMethod || 'UNDEFINED_OR_NULL'
+        })
 
         if (orderData) {
+          console.log('✅ [4] Setting summary con datos:', {
+            factoryId: orderData.factory?.id,
+            shippingMethod: orderData.shippingMethod
+          })
           setSummary(orderData)
-          // 🔥 ESTABLECER VALORES INICIALES INMEDIATAMENTE
-          setSelectedFactoryId(orderData.factory?.id || '')
-          setSelectedShippingMethod(orderData.shippingMethod || '')
+          
+          // 🔥 ESTABLECER VALORES INICIALES INMEDIATAMENTE después de setSummary
+          setTimeout(() => {
+            setSelectedFactoryId(orderData.factory?.id || '')
+            setSelectedShippingMethod(orderData.shippingMethod || '')
+            console.log('🎯 [5] Estados locales establecidos:', {
+              selectedFactoryId: orderData.factory?.id || '',
+              selectedShippingMethod: orderData.shippingMethod || ''
+            })
+          }, 0)
         } else {
+          console.error('❌ [4] No order data received')
           setMessage('❌ Failed to load order data')
         }
         
@@ -141,6 +149,7 @@ export default function OrderHistoryPage() {
 
         if (Array.isArray(factoriesData)) {
           setFactoryList(factoriesData)
+          console.log('🏭 Factories cargadas:', factoriesData.length)
         } else {
           setMessage('❌ Failed to load factories list')
         }
@@ -150,16 +159,24 @@ export default function OrderHistoryPage() {
         setMessage('❌ Error loading order data')
       } finally {
         setLoading(false)
+        console.log('🏁 [6] Loading completado')
       }
     }
 
     fetchAll()
   }, [orderId])
 
-  // 🔥 Sincronizar cuando el summary cambia (por si acaso)
+  // Sincronizar estados cuando summary cambia
   useEffect(() => {
+    console.log('🔄 [7] useEffect summary cambiado:', {
+      summaryFactory: summary?.factory,
+      summaryShipping: summary?.shippingMethod,
+      currentSelectedFactory: selectedFactoryId,
+      currentSelectedShipping: selectedShippingMethod
+    })
+    
     if (summary) {
-      console.log('🔄 Summary changed, syncing states')
+      console.log('🔄 [8] Sincronizando estados con summary...')
       setSelectedFactoryId(summary.factory?.id || '')
       setSelectedShippingMethod(summary.shippingMethod || '')
     }
@@ -170,7 +187,7 @@ export default function OrderHistoryPage() {
       setSaving(true)
       setMessage('🔄 Saving changes...')
 
-      console.log('💾 Saving changes:', {
+      console.log('💾 [9] Guardando cambios:', {
         factoryLocationId: selectedFactoryId,
         shippingMethod: selectedShippingMethod
       })
@@ -184,16 +201,15 @@ export default function OrderHistoryPage() {
         }),
       })
       
-      console.log('📨 Save response:', res.status, res.statusText)
+      console.log('📨 [10] Save response status:', res.status)
 
       if (res.ok) {
         const updated = await safeJson<OrderSummary>(res)
-        console.log('✅ Save successful:', updated)
+        console.log('✅ [11] Save successful, updated data:', updated)
         
         if (updated) {
           setSummary(updated)
-          setSelectedFactoryId(updated.factory?.id || '')
-          setSelectedShippingMethod(updated.shippingMethod || '')
+          // Los estados se actualizarán automáticamente por el useEffect
         }
         
         setEditing(false)
@@ -202,7 +218,7 @@ export default function OrderHistoryPage() {
         setTimeout(() => setMessage(''), 3000)
       } else {
         const errorText = await res.text()
-        console.error('❌ Save failed:', errorText)
+        console.error('❌ [11] Save failed:', errorText)
         setMessage('❌ Error saving changes. Please try again.')
       }
     } catch (error) {
@@ -214,7 +230,7 @@ export default function OrderHistoryPage() {
   }
 
   const handleCancelEdit = () => {
-    console.log('❌ Canceling edit, restoring values')
+    console.log('❌ [12] Cancelando edición')
     if (summary) {
       setSelectedFactoryId(summary.factory?.id || '')
       setSelectedShippingMethod(summary.shippingMethod || '')
@@ -224,9 +240,11 @@ export default function OrderHistoryPage() {
   }
 
   const handleStartEdit = () => {
-    console.log('✏️ Starting edit with current values:', {
-      factory: summary?.factory,
-      shipping: summary?.shippingMethod
+    console.log('✏️ [13] Iniciando edición con valores actuales:', {
+      summaryFactory: summary?.factory,
+      summaryShipping: summary?.shippingMethod,
+      selectedFactoryId,
+      selectedShippingMethod
     })
     setEditing(true)
   }
@@ -269,6 +287,14 @@ export default function OrderHistoryPage() {
     if (summary.hardwareMainDrains) parts.push('Main Drains')
     return parts
   }, [summary])
+
+  // Debug del render
+  console.log('🎨 [14] Renderizando con:', {
+    summary,
+    selectedFactoryId,
+    selectedShippingMethod,
+    editing
+  })
 
   if (loading) {
     return (
@@ -394,6 +420,9 @@ export default function OrderHistoryPage() {
                 <p className="text-xs text-gray-400 mt-1">
                   Selected: {selectedShippingMethod || 'None'}
                 </p>
+                <p className="text-xs text-blue-500 mt-1">
+                  Debug: summary.shippingMethod = "{summary?.shippingMethod}"
+                </p>
               </div>
             </div>
 
@@ -417,7 +446,7 @@ export default function OrderHistoryPage() {
         </div>
       )}
 
-      {/* Botones de Acción */}
+      {/* Resto del código (botones, timeline, media) se mantiene igual */}
       <div className="flex gap-2 mb-8">
         <button 
           onClick={() => setShowModal(true)} 
