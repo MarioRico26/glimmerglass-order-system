@@ -1,3 +1,4 @@
+// app/api/admin/orders/[id]/status/route.ts
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
@@ -5,20 +6,44 @@ import { auditLog } from '@/lib/audit'
 import { AuditAction } from '@prisma/client'
 import { sendEmail } from '@/lib/mailer'
 
-// ✅ DTO para retornar orden
+// ✅ DTO para retornar orden (usado por GET y PATCH)
 function toOrderDTO(o: any) {
   return {
     id: o.id,
     deliveryAddress: o.deliveryAddress,
     status: o.status,
     paymentProofUrl: o.paymentProofUrl ?? null,
+
     poolModel: o.poolModel ? { name: o.poolModel.name } : null,
     color: o.color ? { name: o.color.name } : null,
-    dealer: o.dealer ? { name: o.dealer.name } : null,
-    factory: o.factoryLocation ? { name: o.factoryLocation.name } : null,
+
+    // 🔹 Dealer con datos completos para el admin
+    dealer: o.dealer
+      ? {
+          name: o.dealer.name,
+          email: o.dealer.email ?? null,
+          phone: o.dealer.phone ?? null,
+          city: o.dealer.city ?? null,
+          state: o.dealer.state ?? null,
+          // si tu modelo tiene address, street, etc, lo agregas aquí:
+          // address: o.dealer.address ?? null,
+        }
+      : null,
+
+    // 🔹 Factory con id + nombre (para editar / mostrar)
+    factory: o.factoryLocation
+      ? {
+          id: o.factoryLocation.id,
+          name: o.factoryLocation.name,
+        }
+      : null,
+
+    // 🔹 Shipping method visible
+    shippingMethod: o.shippingMethod ?? null,
+
     createdAt: o.createdAt,
 
-    // ✅ Nuevos campos visibles
+    // ✅ Hardware visible
     hardwareSkimmer: o.hardwareSkimmer,
     hardwareAutocover: o.hardwareAutocover,
     hardwareReturns: o.hardwareReturns,
@@ -38,10 +63,25 @@ export async function GET(
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
-        dealer: { select: { name: true } },
+        dealer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            city: true,
+            state: true,
+            // address: true, // si lo tienes en el schema
+          },
+        },
         poolModel: { select: { name: true } },
         color: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
+        factoryLocation: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     })
 
@@ -52,7 +92,10 @@ export async function GET(
     return NextResponse.json(toOrderDTO(order))
   } catch (e) {
     console.error('GET /api/admin/orders/[id]/status error:', e)
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json(
+      { message: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
 
@@ -82,10 +125,19 @@ export async function PATCH(
     const current = await prisma.order.findUnique({
       where: { id },
       include: {
-        dealer: { select: { id: true, name: true, email: true } },
+        dealer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            city: true,
+            state: true,
+          },
+        },
         poolModel: { select: { name: true } },
         color: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
+        factoryLocation: { select: { id: true, name: true } },
       },
     })
 
@@ -97,10 +149,19 @@ export async function PATCH(
       where: { id },
       data: { status },
       include: {
-        dealer: { select: { id: true, name: true, email: true } },
+        dealer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            city: true,
+            state: true,
+          },
+        },
         poolModel: { select: { name: true } },
         color: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
+        factoryLocation: { select: { id: true, name: true } },
       },
     })
 
@@ -162,6 +223,9 @@ export async function PATCH(
     return NextResponse.json(toOrderDTO(updated), { status: 200 })
   } catch (e: any) {
     console.error('PATCH /api/admin/orders/[id]/status error:', e)
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json(
+      { message: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
