@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 
-// GET: obtener lista de pedidos con shippingMethod y todos los campos necesarios
+// GET: obtener lista de pedidos con filtros, paginación y relaciones
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -13,70 +13,62 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '20')
-    const sort = searchParams.get('sort') || 'createdAt'
-    const dir = searchParams.get('dir') || 'desc'
+    const page     = parseInt(searchParams.get('page')     || '1', 10)
+    const pageSize = parseInt(searchParams.get('pageSize') || '20', 10)
+    const sort     = searchParams.get('sort') || 'createdAt'
+    const dir      = searchParams.get('dir')  || 'desc'
 
-    // Validar parámetros
+    const q            = searchParams.get('q') || ''
+    const statusFilter = searchParams.get('status') || 'ALL'
+    const dealerFilter = searchParams.get('dealer') || 'ALL'
+    const factoryFilter= searchParams.get('factory') || 'ALL'
+
     if (page < 1 || pageSize < 1 || pageSize > 100) {
       return NextResponse.json({ message: 'Invalid pagination parameters' }, { status: 400 })
     }
 
-    // Construir orderBy
-    const orderBy: any = {}
-    orderBy[sort] = dir
+    // ----- filtros -----
+    const where: any = {}
 
-    // Obtener pedidos con todas las relaciones según tu schema
+    if (statusFilter !== 'ALL') {
+      where.status = statusFilter
+    }
+
+    if (dealerFilter !== 'ALL') {
+      where.dealer = { name: dealerFilter }
+    }
+
+    if (factoryFilter !== 'ALL') {
+      where.factoryLocation = { name: factoryFilter }
+    }
+
+    if (q) {
+      where.OR = [
+        { deliveryAddress: { contains: q, mode: 'insensitive' } },
+        { dealer:          { name: { contains: q, mode: 'insensitive' } } },
+        { poolModel:       { name: { contains: q, mode: 'insensitive' } } },
+        { color:           { name: { contains: q, mode: 'insensitive' } } },
+        { factoryLocation: { name: { contains: q, mode: 'insensitive' } } },
+      ]
+    }
+
+    // orderBy
+    const orderBy: any = {}
+    orderBy[sort] = dir === 'asc' ? 'asc' : 'desc'
+
+    // **IMPORTANTE**: usar SOLO `select` (con anidados), nada de `include`
     const orders = await prisma.order.findMany({
+      where,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: {
-        poolModel: { 
-          select: { 
-            id: true,
-            name: true,
-            lengthFt: true,
-            widthFt: true,
-            depthFt: true,
-            shape: true
-          } 
-        },
-        color: { 
-          select: { 
-            id: true,
-            name: true,
-            swatchUrl: true
-          } 
-        },
-        dealer: { 
-          select: { 
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            city: true,
-            state: true
-          } 
-        },
-        factoryLocation: { 
-          select: { 
-            id: true,
-            name: true,
-            address: true,
-            city: true,
-            state: true,
-            active: true
-          } 
-        },
-      },
+      orderBy,
       select: {
         id: true,
         deliveryAddress: true,
         status: true,
         paymentProofUrl: true,
         notes: true,
-        shippingMethod: true,  // ← CAMPO CLAVE AÑADIDO
+        shippingMethod: true,
         hardwareSkimmer: true,
         hardwareAutocover: true,
         hardwareReturns: true,
@@ -86,27 +78,62 @@ export async function GET(req: NextRequest) {
         poolModelId: true,
         colorId: true,
         factoryLocationId: true,
+
+        poolModel: {
+          select: {
+            id: true,
+            name: true,
+            lengthFt: true,
+            widthFt: true,
+            depthFt: true,
+            shape: true,
+          },
+        },
+        color: {
+          select: {
+            id: true,
+            name: true,
+            swatchUrl: true,
+          },
+        },
+        dealer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            city: true,
+            state: true,
+          },
+        },
+        factoryLocation: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: true,
+            state: true,
+            active: true,
+          },
+        },
       },
-      orderBy: orderBy
     })
 
-    // Obtener total count para paginación
-    const total = await prisma.order.count()
+    const total = await prisma.order.count({ where })
 
     return NextResponse.json({
       items: orders,
       page,
       pageSize,
-      total
+      total,
     })
-
   } catch (err: any) {
     console.error('GET /api/admin/orders error:', err)
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }
 }
 
-// POST: crear nuevo pedido
+// POST: crear nuevo pedido (tu código estaba bien, lo dejo igual)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -115,8 +142,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    
-    // Validaciones básicas
+
     const requiredFields = ['deliveryAddress', 'dealerId', 'poolModelId', 'colorId', 'factoryLocationId']
     for (const field of requiredFields) {
       if (!body[field]) {
@@ -124,7 +150,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Crear nuevo pedido
     const newOrder = await prisma.order.create({
       data: {
         deliveryAddress: body.deliveryAddress,
@@ -146,25 +171,26 @@ export async function POST(req: NextRequest) {
         color: { select: { name: true } },
         dealer: { select: { name: true } },
         factoryLocation: { select: { name: true } },
-      }
+      },
     })
 
-    return NextResponse.json({
-      message: 'Order created successfully',
-      order: newOrder
-    }, { status: 201 })
-
+    return NextResponse.json(
+      {
+        message: 'Order created successfully',
+        order: newOrder,
+      },
+      { status: 201 },
+    )
   } catch (err: any) {
     console.error('POST /api/admin/orders error:', err)
-    
-    // Manejar errores de constraint de base de datos
+
     if (err.code === 'P2002') {
       return NextResponse.json({ message: 'Duplicate order data' }, { status: 400 })
     }
     if (err.code === 'P2003') {
       return NextResponse.json({ message: 'Invalid reference ID' }, { status: 400 })
     }
-    
+
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }
 }
