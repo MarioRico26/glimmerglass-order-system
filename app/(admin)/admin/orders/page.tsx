@@ -20,7 +20,7 @@ interface Order {
   poolModel: Maybe<{ name: string }>
   color: Maybe<{ name: string }>
   dealer: Maybe<{ name: string }>
-  factory: Maybe<{ name: string }>
+  factoryLocation: Maybe<{ name: string }>
   createdAt?: string
 }
 
@@ -213,7 +213,7 @@ function AdminOrdersInner() {
 
   const factories = useMemo(() => {
     const s = new Set<string>()
-    orders.forEach(o => s.add(o.factory?.name || 'Unknown Factory'))
+    orders.forEach(o => s.add(o.factoryLocation?.name || 'Unknown Factory'))
     return Array.from(s).sort()
   }, [orders])
 
@@ -231,7 +231,7 @@ function AdminOrdersInner() {
     const keyer =
       groupBy === 'DEALER'
         ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
-        : (o: Order) => o.factory?.name || 'Unknown Factory'
+        : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
     return orders.reduce((acc, o) => {
       const k = keyer(o); (acc[k] ||= []).push(o); return acc
     }, {} as Record<string, Order[]>)
@@ -242,7 +242,7 @@ function AdminOrdersInner() {
     const keyer =
       g === 'DEALER'
         ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
-        : (o: Order) => o.factory?.name || 'Unknown Factory'
+        : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
     list.forEach(o => s.add(keyer(o)))
     return Array.from(s).sort()
   }
@@ -491,7 +491,7 @@ function AdminOrdersInner() {
 
                               <td className="py-2 px-3">{order.color?.name || '-'}</td>
                               <td className="py-2 px-3">{order.dealer?.name || 'Unknown Dealer'}</td>
-                              <td className="py-2 px-3">{order.factory?.name || 'Unknown Factory'}</td>
+                              <td className="py-2 px-3">{order.factoryLocation?.name || 'Unknown Factory'}</td>
                               <td className="py-2 px-3 max-w-[320px] truncate" title={order.deliveryAddress}>
                                 {order.deliveryAddress}
                               </td>
