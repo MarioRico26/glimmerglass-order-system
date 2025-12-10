@@ -405,7 +405,6 @@ export default function NewOrderPage() {
               </label>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              These flags se muestran luego en el resumen de la orden para admin y dealer.
             </p>
           </div>
 

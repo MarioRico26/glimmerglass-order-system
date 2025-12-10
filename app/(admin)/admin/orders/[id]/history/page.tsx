@@ -24,12 +24,22 @@ interface OrderSummary {
   id: string
   deliveryAddress: string
   status: string
-  paymentProofUrl?: string
-  dealer?: { name: string }
+  paymentProofUrl?: string | null
+
+  dealer?: {
+    name: string
+    email?: string | null
+    phone?: string | null
+    city?: string | null
+    state?: string | null
+  }
   poolModel?: { name: string }
   color?: { name: string }
-  factoryLocation?: { id: string; name: string }
-  shippingMethod?: string
+
+  // viene de factoryLocation en el backend
+  factory?: { id: string; name: string }
+
+  shippingMethod?: 'PICK_UP' | 'QUOTE' | null
 
   hardwareSkimmer: boolean
   hardwareReturns: boolean
@@ -40,324 +50,501 @@ interface OrderSummary {
 interface FactoryLocation {
   id: string
   name: string
-  city?: string
-  state?: string
+  city?: string | null
+  state?: string | null
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending',
+  PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
   APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
 }
 
-const SHIPPING_METHOD_LABELS: Record<string, string> = {
+const SHIPPING_LABELS: Record<string, string> = {
   PICK_UP: 'Pick Up',
-  QUOTE: 'Quote',
+  QUOTE: 'Shipping Quote',
 }
-
-const aqua = '#00B2CA'
-const deep = '#007A99'
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.includes('application/json')) return null
     const text = await res.text()
-    if (!text) return null
-    return JSON.parse(text) as T
+    return text ? (JSON.parse(text) as T) : null
   } catch {
     return null
   }
 }
 
 export default function OrderHistoryPage() {
-  const [summary, setSummary] = useState<OrderSummary | null>(null)
-  const [history, setHistory] = useState<OrderHistory[]>([])
-  const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
-  const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
-  const [selectedFactoryId, setSelectedFactoryId] = useState('')
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState('')
-  const [editing, setEditing] = useState(false)
-  const [status, setStatus] = useState('')
-  const [comment, setComment] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState('')
-  const [showModal, setShowModal] = useState(false)
-
   const params = useParams()
   const router = useRouter()
   const orderId = params.id as string
 
+  const [summary, setSummary] = useState<OrderSummary | null>(null)
+  const [history, setHistory] = useState<OrderHistory[]>([])
+  const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
+  const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
+  const [selectedFactoryId, setSelectedFactoryId] = useState<string>('')
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState<string>('')
+  const [editing, setEditing] = useState(false)
+  const [status, setStatus] = useState('')
+  const [comment, setComment] = useState('')
+  const [showModal, setShowModal] = useState(false)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
-    const fetchSummary = async () => {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' })
-      const data = await safeJson<OrderSummary>(res)
-      if (res.ok && data) {
-        setSummary(data)
-        setSelectedFactoryId(data.factoryLocation?.id || '')
-        setSelectedShippingMethod(data.shippingMethod || '')
-      }
-    }
-
-    const fetchHistory = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' })
-        const data = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(res)
-        const list = Array.isArray(data) ? data : Array.isArray((data as any)?.items) ? (data as any).items : []
-        setHistory(list)
-      } catch (error: any) {
-        console.error('Error fetching order history:', error?.message)
-        setError('Failed to load order history.')
+        setLoading(true)
+
+        const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
+          fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' }),
+          fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' }),
+          fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' }),
+          fetch('/api/factories', { cache: 'no-store' }),
+        ])
+
+        const orderData = await safeJson<OrderSummary>(orderRes)
+        const historyData = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(historyRes)
+        const mediaData = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(mediaRes)
+        const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
+
+        if (orderData) {
+          setSummary(orderData)
+          setSelectedFactoryId(orderData.factory?.id || '')
+          setSelectedShippingMethod(orderData.shippingMethod || '')
+        } else {
+          setMessage('❌ Failed to load order data.')
+        }
+
+        if (Array.isArray(historyData)) {
+          setHistory(historyData)
+        } else if (historyData && Array.isArray((historyData as any).items)) {
+          setHistory((historyData as any).items)
+        }
+
+        if (Array.isArray(mediaData)) {
+          setMediaFiles(mediaData)
+        } else if (mediaData && Array.isArray((mediaData as any).items)) {
+          setMediaFiles((mediaData as any).items)
+        }
+
+        if (Array.isArray(factoriesData)) {
+          setFactoryList(factoriesData)
+        }
+      } catch (error) {
+        console.error('Error fetching order details:', error)
+        setMessage('❌ Error loading order data.')
+      } finally {
+        setLoading(false)
       }
     }
 
-    const fetchMedia = async () => {
-      try {
-        const res = await fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' })
-        const data = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(res)
-        const list = Array.isArray(data) ? data : Array.isArray((data as any)?.items) ? (data as any).items : []
-        setMediaFiles(list)
-      } catch (err) {
-        console.error('Error fetching media files:', err)
-      }
-    }
-
-    const fetchFactories = async () => {
-      try {
-        const res = await fetch('/api/factories', { cache: 'no-store' })
-        const data = await safeJson<FactoryLocation[]>(res)
-        if (Array.isArray(data)) setFactoryList(data)
-      } catch (err) {
-        console.error('Error loading factories', err)
-      }
-    }
-
-    fetchSummary()
-    fetchHistory()
-    fetchMedia()
-    fetchFactories()
+    fetchAll()
   }, [orderId])
+
+  const hardwareSelected = useMemo(() => {
+    if (!summary) return []
+    const parts: string[] = []
+    if (summary.hardwareSkimmer) parts.push('Skimmer')
+    if (summary.hardwareReturns) parts.push('Returns')
+    if (summary.hardwareMainDrains) parts.push('Main Drains')
+    if (summary.hardwareAutocover) parts.push('Autocover')
+    return parts
+  }, [summary])
 
   const handleSaveChanges = async () => {
     try {
+      setSaving(true)
+      setMessage('🔄 Saving changes...')
+
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          factoryLocationId: selectedFactoryId,
-          shippingMethod: selectedShippingMethod,
+          factoryLocationId: selectedFactoryId || null,
+          shippingMethod: selectedShippingMethod || null,
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to update')
+      if (!res.ok) {
+        setMessage('❌ Error saving changes.')
+        return
+      }
 
       const updated = await safeJson<OrderSummary>(res)
       if (updated) {
         setSummary(updated)
-        setEditing(false)
-        setMessage('✅ Changes saved.')
+        setSelectedFactoryId(updated.factory?.id || '')
+        setSelectedShippingMethod(updated.shippingMethod || '')
       }
-    } catch (err: any) {
-      console.error(err)
-      setMessage('❌ Error saving changes.')
+
+      setEditing(false)
+      setMessage('✅ Changes saved successfully.')
+
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      console.error('Save error:', error)
+      setMessage('❌ Network error while saving.')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitHistory = async (e: React.FormEvent) => {
     e.preventDefault()
-    const res = await fetch(`/api/admin/orders/${orderId}/history`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, comment }),
-    })
+    try {
+      setMessage('🔄 Adding history entry...')
 
-    const payload = await safeJson<OrderHistory>(res)
+      const res = await fetch(`/api/admin/orders/${orderId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, comment }),
+      })
 
-    if (res.ok && payload) {
-      setHistory((prev) => [payload, ...prev])
-      setStatus('')
-      setComment('')
-      setShowModal(false)
-      setMessage('Entry added successfully.')
-    } else {
-      setMessage(`Failed to add history (${res.status})`)
+      const payload = await safeJson<OrderHistory>(res)
+      if (res.ok && payload) {
+        setHistory((prev) => [payload, ...prev])
+        setStatus('')
+        setComment('')
+        setShowModal(false)
+        setMessage('✅ History entry added.')
+        setTimeout(() => setMessage(''), 3000)
+      } else {
+        setMessage(`❌ Failed to add history entry (${res.status}).`)
+      }
+    } catch (error) {
+      console.error('History error:', error)
+      setMessage('❌ Network error while adding history.')
     }
   }
 
-  const hardwareSelected = useMemo(() => {
-    if (!summary) return []
-    const items = []
-    if (summary.hardwareSkimmer) items.push('Skimmer')
-    if (summary.hardwareReturns) items.push('Returns')
-    if (summary.hardwareMainDrains) items.push('Main Drains')
-    if (summary.hardwareAutocover) items.push('Autocover')
-    return items
-  }, [summary])
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto p-6">
+        <div className="flex justify-center items-center h-64 text-gray-600">
+          Loading order data…
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4 border-b pb-1 border-cyan-700 flex justify-between items-center">
-        Order Details & History
-        <span className="h-1 w-20 bg-cyan-600 block rounded-full"></span>
-      </h1>
+    <div className="max-w-5xl mx-auto p-6 space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">
+            Order Details & History
+          </h1>
+          {summary && (
+            <p className="text-slate-600 text-sm mt-1">Order ID: {summary.id}</p>
+          )}
+        </div>
+        <Link
+          href="/admin/orders"
+          className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-medium"
+        >
+          Back to Orders
+        </Link>
+      </div>
 
       {message && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded mb-4 text-sm">
+        <div
+          className={`px-4 py-3 rounded-lg text-sm font-medium ${
+            message.startsWith('✅')
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : message.startsWith('🔄')
+              ? 'bg-blue-50 border border-blue-200 text-blue-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
           {message}
         </div>
       )}
 
+      {/* Summary card */}
       {summary && (
-        <div className="bg-white rounded-lg p-4 border border-gray-300 mb-6 shadow-sm">
-          <h2 className="font-semibold text-md mb-3">Order Summary</h2>
-          <p className="mb-1">
-            <strong>Dealer:</strong> {summary.dealer?.name}
-          </p>
-          <p className="mb-1">
-            <strong>Model:</strong> {summary.poolModel?.name}
-          </p>
-          <p className="mb-1">
-            <strong>Color:</strong> {summary.color?.name}
-          </p>
-
-          {editing ? (
-            <>
-              <div className="mb-2">
-                <label className="block text-sm font-semibold mb-1">Factory Location</label>
-                <select
-                  value={selectedFactoryId}
-                  onChange={(e) => setSelectedFactoryId(e.target.value)}
-                  className="w-full border border-gray-300 px-2 py-1 rounded"
-                >
-                  <option value="">Select a factory</option>
-                  {factoryList.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-2">
-                <label className="block text-sm font-semibold mb-1">Shipping Method</label>
-                <select
-                  value={selectedShippingMethod}
-                  onChange={(e) => setSelectedShippingMethod(e.target.value)}
-                  className="w-full border border-gray-300 px-2 py-1 rounded"
-                >
-                  <option value="">Select shipping method</option>
-                  <option value="PICK_UP">Pick Up</option>
-                  <option value="QUOTE">Send Me a Shipping Quote</option>
-                </select>
-              </div>
-
-              <button
-                onClick={handleSaveChanges}
-                className="bg-cyan-700 text-white px-4 py-2 mt-2 rounded hover:bg-cyan-800 transition"
-              >
-                Save Changes
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="mb-1">
-                <strong>Factory Location:</strong>{' '}
-                {summary.factoryLocation?.name || <em>Not assigned</em>}
+        <div className="rounded-2xl border border-white bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,23,42,0.10)] p-6 space-y-6">
+          {/* 3-column summary */}
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Order info */}
+            <div>
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Order
+              </h2>
+              <p className="text-sm">
+                <span className="font-semibold text-slate-800">Model:</span>{' '}
+                {summary.poolModel?.name || 'N/A'}
               </p>
-              <p className="mb-2">
-                <strong>Shipping Method:</strong>{' '}
-                {summary.shippingMethod ? SHIPPING_METHOD_LABELS[summary.shippingMethod] : <em>Not set</em>}
+              <p className="text-sm">
+                <span className="font-semibold text-slate-800">Color:</span>{' '}
+                {summary.color?.name || 'N/A'}
               </p>
+              <p className="mt-2 text-sm flex items-center gap-2">
+                <span className="font-semibold text-slate-800">Status:</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800">
+                  {STATUS_LABEL[summary.status] || summary.status.replace(/_/g, ' ')}
+                </span>
+              </p>
+            </div>
+
+            {/* Dealer info */}
+            <div>
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Dealer
+              </h2>
+              <p className="text-sm font-semibold text-slate-900">
+                {summary.dealer?.name || 'Unknown dealer'}
+              </p>
+              <p className="text-sm text-slate-700">
+                {summary.dealer?.email && (
+                  <>
+                    <span className="font-medium">Email:</span>{' '}
+                    {summary.dealer.email}
+                    <br />
+                  </>
+                )}
+                {summary.dealer?.phone && (
+                  <>
+                    <span className="font-medium">Phone:</span>{' '}
+                    {summary.dealer.phone}
+                    <br />
+                  </>
+                )}
+                {(summary.dealer?.city || summary.dealer?.state) && (
+                  <>
+                    <span className="font-medium">Location:</span>{' '}
+                    {[summary.dealer?.city, summary.dealer?.state].filter(Boolean).join(', ')}
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Logistics (factory + shipping) */}
+            <div>
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Logistics
+              </h2>
+              <p className="text-sm">
+                <span className="font-semibold text-slate-800">Factory:</span>{' '}
+                {summary.factory?.name || <em className="text-slate-500">Not assigned</em>}
+              </p>
+              <p className="text-sm mt-1">
+                <span className="font-semibold text-slate-800">Shipping:</span>{' '}
+                {summary.shippingMethod
+                  ? SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod
+                  : <em className="text-slate-500">Not set</em>}
+              </p>
+
               <button
                 onClick={() => setEditing(true)}
-                className="text-cyan-700 hover:underline text-sm font-semibold"
+                className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-700 hover:text-cyan-800"
               >
-                Edit
+                ✏️ Edit factory & shipping
               </button>
-            </>
-          )}
+            </div>
+          </div>
 
-          <p className="mt-3 mb-1">
-            <strong>Delivery Address:</strong> {summary.deliveryAddress}
-          </p>
-          <p className="mb-1">
-            <strong>Hardware Selected:</strong>{' '}
-            {hardwareSelected.length ? hardwareSelected.join(', ') : 'None'}
-          </p>
+          {/* Delivery + hardware */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-700 mb-1">
+                Delivery Address
+              </h3>
+              <p className="text-sm text-slate-900 whitespace-pre-line">
+                {summary.deliveryAddress}
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-700 mb-1">
+                Hardware Selected
+              </h3>
+              <p className="text-sm text-slate-900">
+                {hardwareSelected.length ? hardwareSelected.join(', ') : 'None'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="flex gap-2 mb-4">
+      {/* Edit block (inline, no modal pantalla completa) */}
+      {editing && (
+        <div className="rounded-2xl border border-cyan-100 bg-cyan-50/80 p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-cyan-900 uppercase tracking-wide">
+            Edit Factory & Shipping
+          </h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">
+                Factory Location
+              </label>
+              <select
+                value={selectedFactoryId}
+                onChange={(e) => setSelectedFactoryId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                disabled={saving}
+              >
+                <option value="">Select a factory</option>
+                {factoryList.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                    {f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">
+                Shipping Method
+              </label>
+              <select
+                value={selectedShippingMethod}
+                onChange={(e) => setSelectedShippingMethod(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                disabled={saving}
+              >
+                <option value="">Select shipping method</option>
+                <option value="PICK_UP">Pick Up</option>
+                <option value="QUOTE">Shipping Quote</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setEditing(false)}
+              disabled={saving}
+              className="px-4 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveChanges}
+              disabled={saving}
+              className="px-4 py-2 text-sm rounded-lg bg-cyan-700 text-white font-semibold hover:bg-cyan-800 disabled:bg-cyan-400"
+            >
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-3">
         <button
           onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"
         >
           + Manual Entry
         </button>
+        {summary && summary.paymentProofUrl && (
+          <a
+            href={summary.paymentProofUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50"
+          >
+            View Payment Proof
+          </a>
+        )}
         <Link href={`/admin/orders/${orderId}/media`}>
-          <button className="bg-green-600 text-white px-4 py-2 rounded">Upload Media</button>
-        </Link>
-        <Link href="/admin/orders">
-          <button className="border border-gray-400 px-4 py-2 rounded">Back to Orders</button>
+          <button className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700">
+            Upload Media
+          </button>
         </Link>
       </div>
 
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Timeline</h3>
+      {/* Timeline */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">Timeline</h2>
         {history.length === 0 ? (
-          <p className="text-gray-500 text-sm">No history found.</p>
+          <div className="text-center py-6 text-sm text-slate-500 bg-white border border-dashed border-slate-200 rounded-xl">
+            No history found.
+          </div>
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {history.map((h) => (
-              <li key={h.id} className="border-l-4 pl-4 border-cyan-700">
-                <p className="text-sm font-semibold">{STATUS_LABEL[h.status]}</p>
-                <p className="text-sm">{h.comment}</p>
-                <p className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString()}</p>
+              <li
+                key={h.id}
+                className="border-l-4 border-cyan-700 pl-4 py-3 bg-white rounded-r-xl shadow-sm"
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {STATUS_LABEL[h.status] || h.status}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(h.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                {h.comment && (
+                  <p className="text-sm text-slate-700 mt-1">{h.comment}</p>
+                )}
+                {h.user && (
+                  <p className="text-xs text-slate-400 mt-1">By: {h.user.email}</p>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Uploaded Media</h3>
+      {/* Media */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">Uploaded Media</h2>
         {mediaFiles.length === 0 ? (
-          <p className="text-gray-500 text-sm">No media uploaded yet.</p>
+          <div className="text-center py-6 text-sm text-slate-500 bg-white border border-dashed border-slate-200 rounded-xl">
+            No media uploaded yet.
+          </div>
         ) : (
-          <ul className="grid gap-2">
+          <div className="grid gap-3">
             {mediaFiles.map((m) => (
-              <li key={m.id} className="border border-gray-200 rounded p-2">
-                <p className="text-sm">{m.type.toUpperCase()}</p>
-                <a
-                  href={m.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm"
-                >
-                  View File
-                </a>
-                <p className="text-xs text-gray-400">
+              <div
+                key={m.id}
+                className="border border-slate-200 rounded-xl bg-white p-3 flex items-center justify-between"
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-900 capitalize">
+                    {m.type}
+                  </p>
+                  <a
+                    href={m.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    View File
+                  </a>
+                </div>
+                <p className="text-xs text-slate-500">
                   {new Date(m.uploadedAt).toLocaleString()}
                 </p>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
+      {/* Modal manual history */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Add History Entry</h2>
-            <form onSubmit={handleSubmit}>
-              <label className="block mb-2">
-                <span>Status:</span>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Add History Entry
+            </h2>
+            <form onSubmit={handleSubmitHistory}>
+              <label className="block mb-4">
+                <span className="block text-sm font-medium text-slate-700 mb-1">
+                  Status
+                </span>
                 <select
+                  required
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full border px-2 py-1 mt-1 rounded"
-                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="">Select status</option>
                   {Object.entries(STATUS_LABEL).map(([key, label]) => (
@@ -368,26 +555,32 @@ export default function OrderHistoryPage() {
                 </select>
               </label>
 
-              <label className="block mb-2 mt-3">
-                <span>Comment (optional):</span>
+              <label className="block mb-6">
+                <span className="block text-sm font-medium text-slate-700 mb-1">
+                  Comment (optional)
+                </span>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   rows={3}
-                  className="w-full border px-2 py-1 mt-1 rounded"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Add any notes for this status change…"
                 />
               </label>
 
-              <div className="flex justify-end mt-4">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="mr-2 px-4 py-2 border rounded"
+                  className="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="bg-cyan-700 text-white px-4 py-2 rounded">
-                  Submit
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-semibold hover:bg-cyan-800"
+                >
+                  Add Entry
                 </button>
               </div>
             </form>
