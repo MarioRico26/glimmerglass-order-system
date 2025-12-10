@@ -1,3 +1,4 @@
+//glimmerglass-order-system/app/(admin)/admin/orders/[id]/history/page.tsx:
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -27,7 +28,7 @@ interface OrderSummary {
   dealer?: { name: string }
   poolModel?: { name: string }
   color?: { name: string }
-  factory?: { id: string; name: string }
+  factoryLocation?: { id: string; name: string }
   shippingMethod?: string
 
   hardwareSkimmer: boolean
@@ -95,7 +96,7 @@ export default function OrderHistoryPage() {
       const data = await safeJson<OrderSummary>(res)
       if (res.ok && data) {
         setSummary(data)
-        setSelectedFactoryId(data.factory?.id || '')
+        setSelectedFactoryId(data.factoryLocation?.id || '')
         setSelectedShippingMethod(data.shippingMethod || '')
       }
     }
@@ -262,7 +263,7 @@ export default function OrderHistoryPage() {
             <>
               <p className="mb-1">
                 <strong>Factory Location:</strong>{' '}
-                {summary.factory?.name || <em>Not assigned</em>}
+                {summary.factoryLocation?.name || <em>Not assigned</em>}
               </p>
               <p className="mb-2">
                 <strong>Shipping Method:</strong>{' '}

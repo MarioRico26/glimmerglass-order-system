@@ -1,11 +1,10 @@
-//glimmerglass-order-system/app/api/admin/orders/[id]/factory/route.ts
+// app/api/admin/orders/[id]/factory/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import { prisma } from '@/lib/prisma'
 
-// PATCH: cambiar la fábrica asignada a la orden
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -21,54 +20,43 @@ export async function PATCH(
 
     const orderId = params.id
     const body = await req.json()
-    const factoryLocationId = (body.factoryLocationId ?? '').toString()
 
-    if (!factoryLocationId) {
-      return NextResponse.json({ message: 'Missing factoryLocationId' }, { status: 400 })
-    }
+    const factoryLocationId =
+      typeof body.factoryLocationId === 'string' && body.factoryLocationId.trim()
+        ? body.factoryLocationId
+        : null
 
-    // Validar orden y fábrica
-    const [order, factory] = await Promise.all([
-      prisma.order.findUnique({ where: { id: orderId } }),
-      prisma.factoryLocation.findUnique({ where: { id: factoryLocationId } }),
-    ])
+    const shippingMethod =
+      typeof body.shippingMethod === 'string' && body.shippingMethod.trim()
+        ? body.shippingMethod
+        : null
 
-    if (!order) {
-      return NextResponse.json({ message: 'Order not found' }, { status: 404 })
-    }
-    if (!factory) {
-      return NextResponse.json({ message: 'Factory not found' }, { status: 404 })
-    }
-
-    // Actualizar orden
     const updated = await prisma.order.update({
       where: { id: orderId },
-      data: { factoryLocationId },
-      include: {
+      data: {
+        factoryLocationId,
+        shippingMethod,
+      },
+      select: {
+        id: true,
+        deliveryAddress: true,
+        status: true,
+        paymentProofUrl: true,
+        shippingMethod: true,
+        hardwareSkimmer: true,
+        hardwareReturns: true,
+        hardwareAutocover: true,
+        hardwareMainDrains: true,
+        dealer: { select: { name: true } },
         poolModel: { select: { name: true } },
         color: { select: { name: true } },
-        dealer: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
+        factoryLocation: { select: { id: true, name: true } },
       },
     })
 
-    return NextResponse.json({
-      message: '✅ Factory updated successfully',
-      order: {
-        id: updated.id,
-        deliveryAddress: updated.deliveryAddress,
-        status: updated.status,
-        poolModel: updated.poolModel,
-        color: updated.color,
-        dealer: updated.dealer,
-        factory: updated.factoryLocation, // alias en la respuesta
-      },
-    })
-  } catch (err: any) {
-    console.error('PATCH /factory error:', err)
-    return NextResponse.json(
-      { message: '❌ Internal Server Error' },
-      { status: 500 }
-    )
+    return NextResponse.json(updated)
+  } catch (err) {
+    console.error('PATCH /api/admin/orders/[id]/factory error:', err)
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }
 }
