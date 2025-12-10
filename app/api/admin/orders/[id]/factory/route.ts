@@ -1,3 +1,5 @@
+//glimmerglass-order-system/app/api/admin/orders/[id]/factory/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'

@@ -1,22 +1,22 @@
-// glimmerglass-order-system/app/api/register/route.ts
+// app/api/register/route.ts
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import fs from 'fs/promises'
-import path from 'path'
 import { hash } from 'bcryptjs'
 import { Prisma } from '@prisma/client'
+import { put } from '@vercel/blob'
 
-async function saveFileToPublicUploads(file: File, prefix: string) {
-  const bytes = Buffer.from(await file.arrayBuffer())
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-  await fs.mkdir(uploadsDir, { recursive: true })
-  const safeName = `${prefix}-${Date.now()}-${file.name.replace(/\s+/g, '_')}`
-  const full = path.join(uploadsDir, safeName)
-  await fs.writeFile(full, bytes)
-  return `/uploads/${safeName}`
+async function uploadAgreementToBlob(file: File) {
+  const safeName = file.name.replace(/\s+/g, '_')
+  const fileName = `dealer-agreements/dealer-agreement-${Date.now()}-${safeName}`
+
+  const blob = await put(fileName, file, {
+    access: 'public', // igual que en el resto de tu sistema
+  })
+
+  return blob.url // URL pública que guardas en la BD
 }
 
 export async function POST(req: NextRequest) {
@@ -47,10 +47,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'This email is already registered' }, { status: 409 })
     }
 
-    // Guardar PDF si vino (opcional)
+    // Subir PDF a @vercel/blob si vino (opcional)
     let agreementUrl: string | null = null
     if (agreement && typeof agreement.name === 'string' && agreement.size > 0) {
-      agreementUrl = await saveFileToPublicUploads(agreement, 'dealer-agreement')
+      agreementUrl = await uploadAgreementToBlob(agreement)
     }
 
     const hashedPassword = await hash(rawPassword, 10)
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           email,
           password: hashedPassword,
           role: 'DEALER',
-          approved: false, // 🔒 queda pendiente de aprobación del admin
+          approved: false, // pendiente de aprobación del admin
           dealerId: dealer.id,
         },
       })
