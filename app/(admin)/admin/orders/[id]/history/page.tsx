@@ -24,22 +24,32 @@ interface OrderSummary {
   id: string
   deliveryAddress: string
   status: string
-  paymentProofUrl?: string | null
+  paymentProofUrl?: string
 
   dealer?: {
+    id: string
     name: string
-    email?: string | null
-    phone?: string | null
-    city?: string | null
-    state?: string | null
+    email?: string
+    phone?: string
+    address?: string
+    city?: string
+    state?: string
   }
+
   poolModel?: { name: string }
   color?: { name: string }
 
-  // viene de factoryLocation en el backend
-  factory?: { id: string; name: string }
+  factory?: {
+    id: string
+    name: string
+    city?: string
+    state?: string
+  }
 
-  shippingMethod?: 'PICK_UP' | 'QUOTE' | null
+  shippingMethod?: string | null
+  requestedShipDate?: string | null
+  serialNumber?: string | null
+  productionPriority?: number | null
 
   hardwareSkimmer: boolean
   hardwareReturns: boolean
@@ -293,36 +303,95 @@ export default function OrderHistoryPage() {
             </div>
 
             {/* Dealer info */}
-            <div>
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Dealer
-              </h2>
-              <p className="text-sm font-semibold text-slate-900">
-                {summary.dealer?.name || 'Unknown dealer'}
-              </p>
-              <p className="text-sm text-slate-700">
-                {summary.dealer?.email && (
-                  <>
-                    <span className="font-medium">Email:</span>{' '}
-                    {summary.dealer.email}
-                    <br />
-                  </>
-                )}
-                {summary.dealer?.phone && (
-                  <>
-                    <span className="font-medium">Phone:</span>{' '}
-                    {summary.dealer.phone}
-                    <br />
-                  </>
-                )}
-                {(summary.dealer?.city || summary.dealer?.state) && (
-                  <>
-                    <span className="font-medium">Location:</span>{' '}
-                    {[summary.dealer?.city, summary.dealer?.state].filter(Boolean).join(', ')}
-                  </>
-                )}
-              </p>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+  {/* Dealer info */}
+  <div className="space-y-2">
+    <p>
+      <strong className="block text-sm text-gray-600">Dealer</strong>
+      <span className="text-gray-900">{summary.dealer?.name ?? 'N/A'}</span>
+    </p>
+
+    {summary.dealer?.email && (
+      <p className="text-sm text-gray-700">
+        <strong className="text-gray-600">Email: </strong>
+        <a
+          href={`mailto:${summary.dealer.email}`}
+          className="text-cyan-700 hover:underline"
+        >
+          {summary.dealer.email}
+        </a>
+      </p>
+    )}
+
+    {summary.dealer?.phone && (
+      <p className="text-sm text-gray-700">
+        <strong className="text-gray-600">Phone: </strong>
+        <a
+          href={`tel:${summary.dealer.phone}`}
+          className="text-cyan-700 hover:underline"
+        >
+          {summary.dealer.phone}
+        </a>
+      </p>
+    )}
+
+    {(summary.dealer?.address || summary.dealer?.city || summary.dealer?.state) && (
+      <p className="text-sm text-gray-700">
+        <strong className="block text-gray-600">Dealer Address</strong>
+        <span className="text-gray-900">
+          {summary.dealer?.address && <>{summary.dealer.address}<br /></>}
+          {(summary.dealer?.city || summary.dealer?.state) && (
+            <>
+              {summary.dealer?.city}
+              {summary.dealer?.city && summary.dealer?.state ? ', ' : ''}
+              {summary.dealer?.state}
+            </>
+          )}
+        </span>
+      </p>
+    )}
+  </div>
+
+  {/* Order meta */}
+  <div className="space-y-2">
+    <p>
+      <strong className="block text-sm text-gray-600">Pool Model</strong>
+      <span className="text-gray-900">{summary.poolModel?.name ?? 'N/A'}</span>
+    </p>
+    <p>
+      <strong className="block text-sm text-gray-600">Color</strong>
+      <span className="text-gray-900">{summary.color?.name ?? 'N/A'}</span>
+    </p>
+    <p>
+      <strong className="block text-sm text-gray-600">Status</strong>
+      <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 text-xs font-semibold text-blue-800">
+        {STATUS_LABEL[summary.status] ?? summary.status}
+      </span>
+    </p>
+    <p>
+      <strong className="block text-sm text-gray-600">Requested Ship Date</strong>
+      <span className="text-gray-900">
+        {summary.requestedShipDate
+          ? new Date(summary.requestedShipDate).toLocaleDateString()
+          : <em className="text-gray-500">Not set</em>}
+      </span>
+    </p>
+    <p>
+      <strong className="block text-sm text-gray-600">Serial Number</strong>
+      <span className="text-gray-900">
+        {summary.serialNumber || <em className="text-gray-500">Not set</em>}
+      </span>
+    </p>
+    <p>
+      <strong className="block text-sm text-gray-600">Production Priority</strong>
+      <span className="text-gray-900">
+        {typeof summary.productionPriority === 'number'
+          ? `#${summary.productionPriority}`
+          : <em className="text-gray-500">Not assigned</em>}
+      </span>
+    </p>
+  </div>
+</div>
 
             {/* Logistics (factory + shipping) */}
             <div>

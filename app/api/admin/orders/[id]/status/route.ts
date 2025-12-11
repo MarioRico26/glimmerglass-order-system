@@ -6,44 +6,49 @@ import { auditLog } from '@/lib/audit'
 import { AuditAction } from '@prisma/client'
 import { sendEmail } from '@/lib/mailer'
 
-// ✅ DTO para retornar orden (usado por GET y PATCH)
+// ✅ DTO para retornar orden al frontend admin
 function toOrderDTO(o: any) {
   return {
     id: o.id,
     deliveryAddress: o.deliveryAddress,
     status: o.status,
     paymentProofUrl: o.paymentProofUrl ?? null,
+    createdAt: o.createdAt,
 
+    // Pool & color
     poolModel: o.poolModel ? { name: o.poolModel.name } : null,
     color: o.color ? { name: o.color.name } : null,
 
-    // 🔹 Dealer con datos completos para el admin
+    // Dealer con info extendida
     dealer: o.dealer
       ? {
+          id: o.dealer.id,
           name: o.dealer.name,
-          email: o.dealer.email ?? null,
-          phone: o.dealer.phone ?? null,
-          city: o.dealer.city ?? null,
-          state: o.dealer.state ?? null,
-          // si tu modelo tiene address, street, etc, lo agregas aquí:
-          // address: o.dealer.address ?? null,
+          email: o.dealer.email,
+          phone: o.dealer.phone,
+          address: o.dealer.address,
+          city: o.dealer.city,
+          state: o.dealer.state,
         }
       : null,
 
-    // 🔹 Factory con id + nombre (para editar / mostrar)
+    // Factory
     factory: o.factoryLocation
       ? {
           id: o.factoryLocation.id,
           name: o.factoryLocation.name,
+          city: o.factoryLocation.city,
+          state: o.factoryLocation.state,
         }
       : null,
 
-    // 🔹 Shipping method visible
-    shippingMethod: o.shippingMethod ?? null,
+    // Campos nuevos del RFC
+    shippingMethod: o.shippingMethod,
+    requestedShipDate: o.requestedShipDate,
+    serialNumber: o.serialNumber,
+    productionPriority: o.productionPriority,
 
-    createdAt: o.createdAt,
-
-    // ✅ Hardware visible
+    // Hardware
     hardwareSkimmer: o.hardwareSkimmer,
     hardwareAutocover: o.hardwareAutocover,
     hardwareReturns: o.hardwareReturns,
@@ -69,9 +74,9 @@ export async function GET(
             name: true,
             email: true,
             phone: true,
+            address: true,
             city: true,
             state: true,
-            // address: true, // si lo tienes en el schema
           },
         },
         poolModel: { select: { name: true } },
@@ -80,6 +85,8 @@ export async function GET(
           select: {
             id: true,
             name: true,
+            city: true,
+            state: true,
           },
         },
       },
@@ -92,10 +99,7 @@ export async function GET(
     return NextResponse.json(toOrderDTO(order))
   } catch (e) {
     console.error('GET /api/admin/orders/[id]/status error:', e)
-    return NextResponse.json(
-      { message: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }
 }
 
@@ -114,6 +118,7 @@ export async function PATCH(
       | 'PENDING_PAYMENT_APPROVAL'
       | 'APPROVED'
       | 'IN_PRODUCTION'
+      | 'PRE_SHIPPING'
       | 'COMPLETED'
       | 'CANCELED'
     const note: string | undefined = body?.note
@@ -130,9 +135,6 @@ export async function PATCH(
             id: true,
             name: true,
             email: true,
-            phone: true,
-            city: true,
-            state: true,
           },
         },
         poolModel: { select: { name: true } },
@@ -155,33 +157,39 @@ export async function PATCH(
             name: true,
             email: true,
             phone: true,
+            address: true,
             city: true,
             state: true,
           },
         },
         poolModel: { select: { name: true } },
         color: { select: { name: true } },
-        factoryLocation: { select: { id: true, name: true } },
+        factoryLocation: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            state: true,
+          },
+        },
       },
     })
 
+    // Historial (dejamos tu lógica original, solo limpiando un poco)
     try {
       await prisma.orderHistory.create({
-        // @ts-ignore
         data: {
           orderId: id,
-          // @ts-ignore
           status,
-          // @ts-ignore
-          note: note ?? `Status changed to ${status}`,
-          // @ts-ignore
-          userId: actor?.id ?? null,
+          comment: note ?? `Status changed to ${status}`,
+          userId: actor?.id ?? current.id, // fallback cutre si actor.id no existe
         },
       })
     } catch (e) {
       console.warn('orderHistory create skipped:', (e as any)?.message)
     }
 
+    // Notificación al dealer
     try {
       if (updated.dealer?.id) {
         await prisma.notification.create({
@@ -197,6 +205,7 @@ export async function PATCH(
       console.warn('notification create skipped:', (e as any)?.message)
     }
 
+    // Audit log
     await auditLog({
       action: AuditAction.ORDER_STATUS_CHANGED,
       message: `Status of order ${updated.id} → ${status}`,
@@ -206,6 +215,7 @@ export async function PATCH(
       meta: { prev: current.status, next: status, note: note || null },
     })
 
+    // Email al dealer
     if (updated.dealer?.email) {
       await sendEmail({
         to: updated.dealer.email,
@@ -223,9 +233,6 @@ export async function PATCH(
     return NextResponse.json(toOrderDTO(updated), { status: 200 })
   } catch (e: any) {
     console.error('PATCH /api/admin/orders/[id]/status error:', e)
-    return NextResponse.json(
-      { message: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }
 }
