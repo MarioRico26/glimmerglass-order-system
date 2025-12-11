@@ -1,4 +1,3 @@
-//glimmerglass-order-system/app/dealer/new-order/page.tsx:
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -10,7 +9,8 @@ import {
   AlertCircle,
   Loader2,
   Ruler,
-  CheckSquare
+  CalendarDays,
+  Settings2,
 } from 'lucide-react'
 
 type PoolModel = {
@@ -27,8 +27,6 @@ type Color = {
   swatchUrl?: string | null
 }
 
-type ShippingMethod = 'PICK_UP' | 'QUOTE' | ''
-
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
@@ -38,15 +36,18 @@ export default function NewOrderPage() {
   const [poolModelId, setPoolModelId] = useState('')
   const [colorId, setColorId] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
-  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>('')
   const [notes, setNotes] = useState('')
   const [paymentProof, setPaymentProof] = useState<File | null>(null)
 
-  // hardware checkboxes (se guardan como booleans)
+  // nuevos campos
+  const [shippingMethod, setShippingMethod] = useState<'PICK_UP' | 'QUOTE' | ''>('')
+  const [requestedShipDate, setRequestedShipDate] = useState('')
+
+  // hardware
   const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
   const [hardwareReturns, setHardwareReturns] = useState(false)
   const [hardwareMainDrains, setHardwareMainDrains] = useState(false)
-  const [hardwareAutocover, setHardwareAutocover] = useState(false)
+  const [hardwareAutocover, setHardwareAutocover] = useState<boolean | null>(null)
 
   // data
   const [models, setModels] = useState<PoolModel[]>([])
@@ -62,15 +63,34 @@ export default function NewOrderPage() {
     [models, poolModelId]
   )
 
-  // fetch initial (dealer + catálogos)
+  // fecha mínima: hoy + 28 días
+  const minRequestedDate = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 28)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
+  // fetch initial
   useEffect(() => {
     ;(async () => {
       try {
         setLoading(true)
+        setMsg(null)
 
-        const dealerRes = await fetch('/api/dealer/me')
+        // dealer actual
+        const dealerRes = await fetch('/api/dealer/me', { cache: 'no-store' })
         const dealerJson = await dealerRes.json()
-        if (dealerRes.ok && dealerJson?.dealerId) setDealerId(dealerJson.dealerId)
+        if (dealerRes.ok && dealerJson?.dealerId) {
+          setDealerId(dealerJson.dealerId)
+        } else {
+          setMsg({
+            type: 'err',
+            text: 'Could not detect dealer account. Please sign in again.',
+          })
+        }
 
         const [mRes, cRes] = await Promise.all([
           fetch('/api/catalog/pool-models'),
@@ -92,27 +112,66 @@ export default function NewOrderPage() {
     })()
   }, [])
 
+  function validateRequestedDate(value: string): string | null {
+    if (!value) return 'Please select a requested ship date.'
+    const chosen = new Date(value)
+    const min = new Date(minRequestedDate)
+    if (isNaN(chosen.getTime())) return 'Invalid requested ship date.'
+    if (chosen < min) {
+      return 'Requested ship date must be at least 4 weeks in the future.'
+    }
+    return null
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setMsg(null)
 
-    if (!dealerId)
-      return setMsg({
+    if (!dealerId) {
+      setMsg({
         type: 'err',
         text: 'Dealer not detected. Please sign in again.',
       })
+      return
+    }
 
-    if (!poolModelId || !colorId || !deliveryAddress)
-      return setMsg({
+    if (!poolModelId || !colorId || !deliveryAddress) {
+      setMsg({
         type: 'err',
-        text: 'Please complete model, color and delivery address.',
+        text: 'Please complete all required fields.',
       })
+      return
+    }
 
-    if (!shippingMethod)
-      return setMsg({
+    if (!paymentProof) {
+      setMsg({
+        type: 'err',
+        text: 'Please attach the payment proof.',
+      })
+      return
+    }
+
+    if (!shippingMethod) {
+      setMsg({
         type: 'err',
         text: 'Please select a shipping method.',
       })
+      return
+    }
+
+    const dateError = validateRequestedDate(requestedShipDate)
+    if (dateError) {
+      setMsg({ type: 'err', text: dateError })
+      return
+    }
+
+    if (hardwareAutocover === null) {
+      setMsg({
+        type: 'err',
+        text: 'Please answer whether an autocover is required (Yes / No).',
+      })
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -123,7 +182,11 @@ export default function NewOrderPage() {
       formData.append('colorId', colorId)
       formData.append('deliveryAddress', deliveryAddress)
       formData.append('notes', notes)
+      formData.append('paymentProof', paymentProof)
       formData.append('shippingMethod', shippingMethod)
+
+      // nuevo campo (como string ISO de date sin hora)
+      formData.append('requestedShipDate', requestedShipDate)
 
       // hardware flags
       formData.append('hardwareSkimmer', String(hardwareSkimmer))
@@ -131,33 +194,34 @@ export default function NewOrderPage() {
       formData.append('hardwareMainDrains', String(hardwareMainDrains))
       formData.append('hardwareAutocover', String(hardwareAutocover))
 
-      // payment proof opcional
-      if (paymentProof) {
-        formData.append('paymentProof', paymentProof)
-      }
+      // Importante: ya no mandamos factoryLocationId desde el dealer
+      // el admin la asigna después en el panel de administración
 
       const res = await fetch('/api/orders', { method: 'POST', body: formData })
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json()
 
-      if (!res.ok) throw new Error(data?.message || 'Order creation failed')
+      if (!res.ok) {
+        throw new Error(data?.message || 'Order creation failed')
+      }
 
       setMsg({ type: 'ok', text: 'Order created successfully.' })
 
-      // reset básico
+      // reset parcial
       setPoolModelId('')
       setColorId('')
       setDeliveryAddress('')
       setNotes('')
+      setPaymentProof(null)
       setShippingMethod('')
+      setRequestedShipDate('')
       setHardwareSkimmer(false)
       setHardwareReturns(false)
       setHardwareMainDrains(false)
-      setHardwareAutocover(false)
-      setPaymentProof(null)
+      setHardwareAutocover(null)
     } catch (e: any) {
       setMsg({
         type: 'err',
-        text: e?.message || 'Network error during order creation',
+        text: e?.message || 'Network error during order creation.',
       })
     } finally {
       setSubmitting(false)
@@ -170,7 +234,7 @@ export default function NewOrderPage() {
         <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
           <div className="h-6 w-40 rounded bg-slate-100 mb-6" />
           <div className="space-y-4">
-            {[...Array(6)].map((_, i) => (
+            {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="h-12 w-full rounded bg-slate-100" />
             ))}
           </div>
@@ -183,9 +247,12 @@ export default function NewOrderPage() {
     <div className="max-w-3xl mx-auto p-6">
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">New Order</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
+            New Order
+          </h1>
           <p className="text-slate-600">
-            Create a new pool order with model, color, hardware and delivery details.
+            Create a new pool order with model, color, requested ship date and
+            delivery details.
           </p>
         </div>
 
@@ -198,13 +265,17 @@ export default function NewOrderPage() {
                 : 'bg-rose-50 text-rose-700 border border-rose-100',
             ].join(' ')}
           >
-            {msg.type === 'ok' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            {msg.type === 'ok' ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <AlertCircle size={18} />
+            )}
             <span>{msg.text}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Model */}
+          {/* Pool Model */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Pool Model
@@ -299,21 +370,68 @@ export default function NewOrderPage() {
             </div>
           </div>
 
-          {/* Delivery address (muy específico) */}
+          {/* Shipping Method + Requested Ship Date */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Shipping Method
+              </label>
+              <div className="relative">
+                <select
+                  value={shippingMethod}
+                  onChange={(e) =>
+                    setShippingMethod(e.target.value as 'PICK_UP' | 'QUOTE' | '')
+                  }
+                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                  required
+                >
+                  <option value="">Select shipping method</option>
+                  <option value="PICK_UP">Pick Up at Factory</option>
+                  <option value="QUOTE">Request Shipping Quote</option>
+                </select>
+                <Settings2
+                  className="pointer-events-none absolute right-3 top-2.5 text-slate-400"
+                  size={18}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Requested Ship Date
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={requestedShipDate}
+                  min={minRequestedDate}
+                  onChange={(e) => setRequestedShipDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                  required
+                />
+                <CalendarDays
+                  className="pointer-events-none absolute right-3 top-2.5 text-slate-400"
+                  size={18}
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Must be at least 4 weeks from today.
+              </p>
+            </div>
+          </div>
+
+          {/* Delivery Address */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Delivery Address (be very specific)
+              Delivery Address
             </label>
             <div className="relative">
               <textarea
                 value={deliveryAddress}
                 onChange={(e) => setDeliveryAddress(e.target.value)}
-                rows={4}
+                rows={3}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                placeholder={
-                  'Street address, city, state, ZIP.\n' +
-                  'Include site details: gate width, overhead wires, steep driveway, limited truck access, etc.'
-                }
+                placeholder="Street address, city, state, ZIP, and any access notes (gate codes, tight streets, etc.)"
                 required
               />
               <Truck
@@ -321,91 +439,78 @@ export default function NewOrderPage() {
                 size={18}
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              This is what logistics will use. If it’s vague, they’ll call you… and you hate those calls.
-            </p>
           </div>
 
-          {/* Shipping method */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Shipping Method
-            </label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2 text-sm">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="shippingMethod"
-                  value="PICK_UP"
-                  checked={shippingMethod === 'PICK_UP'}
-                  onChange={(e) => setShippingMethod(e.target.value as ShippingMethod)}
-                />
-                <span>
-                  <span className="font-semibold text-slate-900">Pick Up</span>{' '}
-                  <span className="text-slate-600">
-                    Dealer will arrange pickup at the assigned factory.
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="shippingMethod"
-                  value="QUOTE"
-                  checked={shippingMethod === 'QUOTE'}
-                  onChange={(e) => setShippingMethod(e.target.value as ShippingMethod)}
-                />
-                <span>
-                  <span className="font-semibold text-slate-900">Shipping Quote</span>{' '}
-                  <span className="text-slate-600">
-                    Request Kline to provide a freight quote for delivery.
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Hardware */}
+          {/* Hardware selection */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Hardware Included
             </label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 grid sm:grid-cols-2 gap-2 text-sm text-slate-800">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={hardwareSkimmer}
                   onChange={(e) => setHardwareSkimmer(e.target.checked)}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
                 />
                 <span>Skimmer</span>
               </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={hardwareReturns}
                   onChange={(e) => setHardwareReturns(e.target.checked)}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
                 />
                 <span>Returns</span>
               </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={hardwareMainDrains}
                   onChange={(e) => setHardwareMainDrains(e.target.checked)}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
                 />
                 <span>Main Drains</span>
               </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hardwareAutocover}
-                  onChange={(e) => setHardwareAutocover(e.target.checked)}
-                />
-                <span>Autocover</span>
-              </label>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-            </p>
+
+            {/* Autocover en otra línea con Yes / No */}
+            <div className="mt-4">
+              <p className="text-sm font-medium text-slate-700 mb-2">
+                Autocover Required?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setHardwareAutocover(true)}
+                  className={[
+                    'flex-1 inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium',
+                    hardwareAutocover === true
+                      ? 'border-sky-400 bg-sky-50 text-sky-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHardwareAutocover(false)}
+                  className={[
+                    'flex-1 inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium',
+                    hardwareAutocover === false
+                      ? 'border-slate-400 bg-slate-50 text-slate-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  No
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                This helps production plan hardware and lead times correctly.
+              </p>
+            </div>
           </div>
 
           {/* Notes */}
@@ -418,14 +523,14 @@ export default function NewOrderPage() {
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-              placeholder="Any special instructions, crane info, timing constraints, etc."
+              placeholder="Any special instructions, site constraints, or comments for Glimmerglass…"
             />
           </div>
 
-          {/* Payment proof (opcional) */}
+          {/* Payment proof */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Payment Proof (image or PDF, optional)
+              Payment Proof (image or PDF)
             </label>
             <div className="flex items-center gap-3">
               <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50">
@@ -436,8 +541,11 @@ export default function NewOrderPage() {
                 <input
                   type="file"
                   accept="application/pdf,image/*"
-                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                  onChange={(e) =>
+                    setPaymentProof(e.target.files?.[0] || null)
+                  }
                   className="hidden"
+                  required
                 />
               </label>
               {paymentProof && (
@@ -447,8 +555,9 @@ export default function NewOrderPage() {
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              If you skip this, accounting will mark the order as{' '}
-              <strong>Pending Payment Approval</strong> until proof is received.
+              Only certified checks or bank transfers are accepted. Your payment
+              will be reviewed by our accounting department before production
+              begins.
             </p>
           </div>
 
