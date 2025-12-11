@@ -1,91 +1,255 @@
-// glimmerglass-order-system/app/api/orders/route.ts
-import { prisma } from '@/lib/prisma'
+// app/api/orders/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/authOptions'
+import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
+import { AuditAction, Role } from '@prisma/client'
+import { auditLog } from '@/lib/audit'
 
-export async function POST(req: NextRequest) {
+export const dynamic = 'force-dynamic'
+
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ message }, { status })
+}
+
+/**
+ * GET /api/orders
+ * Devuelve las órdenes del dealer autenticado.
+ * (Admin usa /api/admin/orders, esto es solo lado dealer)
+ */
+export async function GET(req: NextRequest) {
   try {
-    const formData = await req.formData()
+    const session = await getServerSession(authOptions)
+    const user = session?.user as any
 
-    const poolModelId     = formData.get('poolModelId')?.toString() || ''
-    const colorId         = formData.get('colorId')?.toString() || ''
-    const dealerId        = formData.get('dealerId')?.toString() || ''
-    const notes           = formData.get('notes')?.toString() || ''
-    const deliveryAddress = formData.get('deliveryAddress')?.toString() || ''
-    const file            = formData.get('paymentProof') as File | null
-
-    // 🔽 nuevos campos booleanos (checkboxes)
-    const hardwareSkimmer    = formData.get('hardwareSkimmer') === 'true'
-    const hardwareAutocover  = formData.get('hardwareAutocover') === 'true'
-    const hardwareReturns    = formData.get('hardwareReturns') === 'true'
-    const hardwareMainDrains = formData.get('hardwareMainDrains') === 'true'
-
-    // 🔽 nuevo campo: shipping method
-    const shippingMethod = formData.get('shippingMethod')?.toString() || '' // 'PICK_UP' o 'QUOTE'
-
-    // ⚠️ Ahora NO se pide factoryLocationId desde el front
-    if (!dealerId || !file || !poolModelId || !colorId || !deliveryAddress) {
-      return NextResponse.json({ message: 'Missing required fields.' }, { status: 400 })
+    if (!user?.email) {
+      return jsonError('Unauthorized', 401)
     }
 
-    // Validaciones de existencia
-    const [dealer, poolModel, color] = await Promise.all([
-      prisma.dealer.findUnique({ where: { id: dealerId } }),
-      prisma.poolModel.findUnique({ where: { id: poolModelId } }),
-      prisma.color.findUnique({ where: { id: colorId } }),
-    ])
-    if (!dealer)    return NextResponse.json({ message: 'Dealer not found' }, { status: 404 })
-    if (!poolModel) return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
-    if (!color)     return NextResponse.json({ message: 'Color not found' }, { status: 404 })
-
-    // ✅ Buscar factory en backend (por ejemplo la primera o una lógica tuya)
-    const factory = await prisma.factoryLocation.findFirst()
-    if (!factory) {
-      return NextResponse.json({ message: 'No default factory configured' }, { status: 500 })
-    }
-
-    // ✅ Subir el archivo a blob storage (no a disco)
-    const buf = await file.arrayBuffer()
-    const safeName = (file.name || 'payment-proof').replace(/[^a-zA-Z0-9_.-]/g, '_')
-    const key = `orders/payment-proofs/${Date.now()}-${safeName}`
-
-    const { url: paymentProofUrl } = await put(key, buf, {
-      access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-      contentType: file.type || 'application/octet-stream',
+    // Cargamos al usuario para saber su dealerId
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email },
+      include: { dealer: true },
     })
 
-    // Crear orden
-    const newOrder = await prisma.order.create({
+    if (!dbUser?.dealer) {
+      return jsonError('Dealer not found for this user', 403)
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { dealerId: dbUser.dealer.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        poolModel: { select: { name: true } },
+        color: { select: { name: true } },
+        factoryLocation: { select: { name: true } },
+      },
+    })
+
+    return NextResponse.json(
+      orders.map(o => ({
+        id: o.id,
+        deliveryAddress: o.deliveryAddress,
+        status: o.status,
+        createdAt: o.createdAt,
+        paymentProofUrl: o.paymentProofUrl ?? null,
+        poolModel: o.poolModel ? { name: o.poolModel.name } : null,
+        color: o.color ? { name: o.color.name } : null,
+        factory: o.factoryLocation ? { name: o.factoryLocation.name } : null,
+        shippingMethod: o.shippingMethod,
+        requestedShipDate: o.requestedShipDate,
+        serialNumber: o.serialNumber,
+        hardwareSkimmer: o.hardwareSkimmer,
+        hardwareAutocover: o.hardwareAutocover,
+        hardwareReturns: o.hardwareReturns,
+        hardwareMainDrains: o.hardwareMainDrains,
+      }))
+    )
+  } catch (err) {
+    console.error('GET /api/orders error:', err)
+    return jsonError('Internal Server Error', 500)
+  }
+}
+
+/**
+ * POST /api/orders
+ * Crear una nueva orden desde el lado del dealer.
+ * Campos esperados (FormData):
+ * - poolModelId (string, required)
+ * - colorId (string, required)
+ * - deliveryAddress (string, required)
+ * - notes (string, optional)
+ * - shippingMethod ('PICK_UP' | 'QUOTE' | '', optional)
+ * - requestedShipDate ('YYYY-MM-DD', opcional, pero si viene debe ser >= 4 semanas adelante)
+ * - hardwareSkimmer / hardwareAutocover / hardwareReturns / hardwareMainDrains (on/true/false)
+ * - paymentProof (File, required)
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    const user = session?.user as any
+
+    if (!user?.email) {
+      return jsonError('Unauthorized', 401)
+    }
+
+    // Solo dealers (o admins si quieres permitir pruebas)
+    if (user.role !== Role.DEALER && user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) {
+      return jsonError('Forbidden', 403)
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email },
+      include: { dealer: true },
+    })
+
+    if (!dbUser?.dealer) {
+      return jsonError('Dealer not found for this user', 403)
+    }
+
+    const formData = await req.formData()
+
+    const poolModelId = formData.get('poolModelId')?.toString().trim() || ''
+    const colorId = formData.get('colorId')?.toString().trim() || ''
+    const deliveryAddress = formData.get('deliveryAddress')?.toString().trim() || ''
+    const notes = formData.get('notes')?.toString().trim() || ''
+    const shippingMethodRaw = formData.get('shippingMethod')?.toString().trim() || ''
+    const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
+
+    const hardwareSkimmer = toBool(formData.get('hardwareSkimmer'))
+    const hardwareAutocover = toBool(formData.get('hardwareAutocover'))
+    const hardwareReturns = toBool(formData.get('hardwareReturns'))
+    const hardwareMainDrains = toBool(formData.get('hardwareMainDrains'))
+
+    const paymentProof = formData.get('paymentProof')
+
+    // Validaciones básicas
+    if (!poolModelId || !colorId || !deliveryAddress) {
+      return jsonError('Missing required fields (poolModelId, colorId, deliveryAddress)', 400)
+    }
+
+    if (!(paymentProof instanceof File) || paymentProof.size === 0) {
+      return jsonError('Payment proof file is required', 400)
+    }
+
+    // Validar shippingMethod si viene
+    let shippingMethod: string | null = null
+    if (shippingMethodRaw) {
+      if (shippingMethodRaw !== 'PICK_UP' && shippingMethodRaw !== 'QUOTE') {
+        return jsonError('Invalid shipping method', 400)
+      }
+      shippingMethod = shippingMethodRaw
+    }
+
+    // Validar requestedShipDate (mínimo 4 semanas en el futuro)
+    let requestedShipDate: Date | null = null
+    if (requestedShipDateRaw) {
+      const parsed = new Date(requestedShipDateRaw + 'T00:00:00Z')
+      if (Number.isNaN(parsed.getTime())) {
+        return jsonError('Invalid requested ship date format', 400)
+      }
+
+      const now = new Date()
+      const min = new Date(now.getTime() + 28 * 24 * 60 * 60 * 1000) // 4 semanas
+
+      if (parsed < min) {
+        return jsonError('Requested ship date must be at least 4 weeks in the future', 400)
+      }
+
+      requestedShipDate = parsed
+    }
+
+    // Subir comprobante de pago a Vercel Blob
+    let paymentProofUrl: string | null = null
+    if (paymentProof instanceof File && paymentProof.size > 0) {
+      const ext = paymentProof.name.split('.').pop() || 'dat'
+      const blob = await put(`orders/payment/${Date.now()}-${dbUser.dealer.id}.${ext}`, paymentProof, {
+        access: 'public',
+      })
+      paymentProofUrl = blob.url
+    }
+
+    // Crear orden con status inicial PENDING_PAYMENT_APPROVAL
+    const order = await prisma.order.create({
       data: {
+        dealerId: dbUser.dealer.id,
         poolModelId,
         colorId,
-        factoryLocationId: factory.id, // asignado en backend automáticamente
-        dealerId,
-        notes,
         deliveryAddress,
-        paymentProofUrl,
+        notes: notes || null,
         status: 'PENDING_PAYMENT_APPROVAL',
+        paymentProofUrl,
+        shippingMethod,
+        requestedShipDate,
+        // Factory la asigna el admin luego
+        factoryLocationId: null,
 
-        // ✅ nuevos campos booleanos
         hardwareSkimmer,
         hardwareAutocover,
         hardwareReturns,
         hardwareMainDrains,
-
-        // ✅ nuevo campo shipping
-        shippingMethod,
       },
       include: {
         poolModel: { select: { name: true } },
-        color:     { select: { name: true } },
-        dealer:    { select: { name: true } },
+        color: { select: { name: true } },
       },
     })
 
-    return NextResponse.json({ message: '✅ Order created', order: newOrder }, { status: 201 })
-  } catch (error) {
-    console.error('Order creation error:', error)
-    return NextResponse.json({ message: '❌ Internal server error' }, { status: 500 })
+    // Audit log
+    try {
+      await auditLog({
+        action: AuditAction.ORDER_CREATED,
+        message: `Order ${order.id} created by dealer`,
+        actor: {
+          id: dbUser.id,
+          email: dbUser.email,
+          role: user.role,
+        },
+        dealerId: dbUser.dealer.id,
+        orderId: order.id,
+        meta: {
+          shippingMethod,
+          requestedShipDate,
+          hasPaymentProof: !!paymentProofUrl,
+          hardwareSkimmer,
+          hardwareAutocover,
+          hardwareReturns,
+          hardwareMainDrains,
+        },
+      })
+    } catch (e) {
+      console.warn('Audit log ORDER_CREATED failed:', (e as any)?.message)
+    }
+
+    return NextResponse.json(
+      {
+        message: 'Order created successfully',
+        order: {
+          id: order.id,
+          status: order.status,
+          deliveryAddress: order.deliveryAddress,
+          paymentProofUrl: order.paymentProofUrl,
+          shippingMethod: order.shippingMethod,
+          requestedShipDate: order.requestedShipDate,
+          poolModel: order.poolModel ? { name: order.poolModel.name } : null,
+          color: order.color ? { name: order.color.name } : null,
+        },
+      },
+      { status: 201 }
+    )
+  } catch (err) {
+    console.error('POST /api/orders error:', err)
+    return jsonError('Internal Server Error', 500)
   }
+}
+
+/**
+ * Convierte valores de FormData en booleano
+ * soporta 'on', 'true', '1'
+ */
+function toBool(v: FormDataEntryValue | null): boolean {
+  if (!v) return false
+  const s = v.toString().toLowerCase()
+  return s === 'on' || s === 'true' || s === '1'
 }
