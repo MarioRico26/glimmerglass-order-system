@@ -199,16 +199,25 @@ enum AuditAction {
 }
 
 enum OrderDocType {
+  OTHER
+
+  // Payment / finance
   PROOF_OF_PAYMENT
   QUOTE
   INVOICE
+  PROOF_OF_FINAL_PAYMENT
+  PAID_INVOICE
+  BILL_OF_LADING
 
+  // Production
   BUILD_SHEET
   POST_PRODUCTION_MEDIA
 
+  // Pre-shipping
   SHIPPING_CHECKLIST
   PRE_SHIPPING_MEDIA
-  BILL_OF_LADING
-  PROOF_OF_FINAL_PAYMENT
-  PAID_INVOICE
+
+  // Dealer-facing docs
+  WARRANTY
+  MANUAL
 }

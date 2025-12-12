@@ -7,47 +7,39 @@ import { useParams } from 'next/navigation'
 type Media = {
   id: string
   type: string
+  docType: string | null
+  visibleToDealer?: boolean
   fileUrl: string
   uploadedAt: string
-  docType?: string | null
-  visibleToDealer: boolean
 }
 
-type DocGroup = { label: string; options: { value: string; label: string }[] }
+const DOC_TYPE_LABELS: Record<string, string> = {
+  OTHER: 'Other',
 
-const DOC_GROUPS: DocGroup[] = [
-  {
-    label: 'Pending Payment Approval',
-    options: [
-      { value: 'PROOF_OF_PAYMENT', label: 'Proof of Payment' },
-      { value: 'QUOTE', label: 'Quote' },
-      { value: 'INVOICE', label: 'Invoice' },
-    ],
-  },
-  {
-    label: 'In Production',
-    options: [
-      { value: 'BUILD_SHEET', label: 'Build Sheet' },
-      { value: 'POST_PRODUCTION_MEDIA', label: 'Post-production Photos/Video' },
-    ],
-  },
-  {
-    label: 'Pre-shipping',
-    options: [
-      { value: 'SHIPPING_CHECKLIST', label: 'Shipping Checklist' },
-      { value: 'PRE_SHIPPING_MEDIA', label: 'Pre-shipping Photos/Video' },
-      { value: 'BILL_OF_LADING', label: 'Bill of Lading' },
-      { value: 'PROOF_OF_FINAL_PAYMENT', label: 'Proof of Final Payment' },
-      { value: 'PAID_INVOICE', label: 'Paid Invoice' },
-    ],
-  },
+  PROOF_OF_PAYMENT: 'Proof of Payment',
+  QUOTE: 'Quote',
+  INVOICE: 'Invoice',
+  PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
+  PAID_INVOICE: 'Paid Invoice',
+  BILL_OF_LADING: 'Bill of Lading',
+
+  BUILD_SHEET: 'Build Sheet',
+  POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',
+
+  SHIPPING_CHECKLIST: 'Shipping Checklist',
+  PRE_SHIPPING_MEDIA: 'Pre-shipping Photos/Video',
+
+  WARRANTY: 'Warranty',
+  MANUAL: 'Manual',
+}
+
+const DOC_GROUPS: Array<{ title: string; items: string[] }> = [
+  { title: 'Payment / Finance', items: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'] },
+  { title: 'In Production', items: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'] },
+  { title: 'Pre-shipping', items: ['SHIPPING_CHECKLIST', 'PRE_SHIPPING_MEDIA', 'BILL_OF_LADING', 'PROOF_OF_FINAL_PAYMENT', 'PAID_INVOICE'] },
+  { title: 'Dealer Documents', items: ['WARRANTY', 'MANUAL'] },
+  { title: 'Other', items: ['OTHER'] },
 ]
-
-function toApiUrl(fileUrl: string) {
-  return fileUrl?.startsWith('/uploads/')
-    ? '/api/uploads/' + fileUrl.replace('/uploads/', '')
-    : fileUrl
-}
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -56,13 +48,6 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   } catch {
     return null
   }
-}
-
-function isImage(url: string) {
-  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url)
-}
-function isPdf(url: string) {
-  return /\.pdf$/i.test(url)
 }
 
 export default function OrderMediaPage() {
@@ -78,10 +63,8 @@ export default function OrderMediaPage() {
 
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-
   const [mediaList, setMediaList] = useState<Media[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
-
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const fetchMedia = async () => {
@@ -90,20 +73,16 @@ export default function OrderMediaPage() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' })
       if (!res.ok) {
-        setFetchError(`Failed to load media (${res.status}).`)
+        setFetchError(`Failed to load files (${res.status})`)
         setMediaList([])
         return
       }
       const data = await safeJson<Media[] | { items: Media[] }>(res)
-      const items = Array.isArray(data)
-        ? data
-        : Array.isArray((data as any)?.items)
-          ? (data as any).items
-          : []
+      const items = Array.isArray(data) ? data : (Array.isArray((data as any)?.items) ? (data as any).items : [])
       setMediaList(items)
     } catch (err) {
       console.error('Error fetching media:', err)
-      setFetchError('Failed to load media.')
+      setFetchError('Failed to load files.')
     }
   }
 
@@ -121,8 +100,8 @@ export default function OrderMediaPage() {
 
     const formData = new FormData()
     formData.append('file', file)
-    if (docType && docType !== 'OTHER') formData.append('docType', docType)
-    formData.append('visibleToDealer', visibleToDealer ? 'true' : 'false')
+    formData.append('docType', docType)
+    formData.append('visibleToDealer', String(visibleToDealer))
 
     setLoading(true)
     try {
@@ -133,16 +112,16 @@ export default function OrderMediaPage() {
       const payload = await safeJson<any>(res)
 
       if (res.ok) {
-        setMessage('✅ Uploaded successfully.')
+        setMessage('✅ File uploaded.')
         setFile(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
         await fetchMedia()
       } else {
-        setMessage(payload?.message || `Upload failed (${res.status}).`)
+        setMessage(payload?.message || '❌ Upload failed.')
       }
     } catch (err) {
       console.error('Upload error:', err)
-      setMessage('Network error during upload.')
+      setMessage('❌ Network error during upload.')
     } finally {
       setLoading(false)
       setTimeout(() => setMessage(''), 2500)
@@ -151,42 +130,42 @@ export default function OrderMediaPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-6 py-5 border-b border-slate-100">
           <h1 className="text-2xl font-black text-slate-900">Upload Media</h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 mt-1">
             Order: <span className="font-mono">{orderId}</span>
           </p>
         </div>
 
-        <div className="px-6 py-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Row 1: File + Doc Type */}
-            <div className="grid gap-4 lg:grid-cols-12">
-              <div className="lg:col-span-7">
-                <label className="block mb-1 text-sm font-semibold text-slate-700">File</label>
+        <div className="p-6">
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <div className="grid gap-4 lg:grid-cols-12 items-end">
+              {/* File */}
+              <div className="lg:col-span-5">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">File</label>
                 <input
                   ref={fileInputRef}
                   type="file"
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
                   required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 />
               </div>
 
-              <div className="lg:col-span-5">
-                <label className="block mb-1 text-sm font-semibold text-slate-700">Doc Type</label>
+              {/* Doc Type */}
+              <div className="lg:col-span-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Document Type</label>
                 <select
                   value={docType}
                   onChange={(e) => setDocType(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="OTHER">Other</option>
                   {DOC_GROUPS.map((g) => (
-                    <optgroup key={g.label} label={g.label}>
-                      {g.options.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
+                    <optgroup key={g.title} label={g.title}>
+                      {g.items.map((k) => (
+                        <option key={k} value={k}>
+                          {DOC_TYPE_LABELS[k] || k}
                         </option>
                       ))}
                     </optgroup>
@@ -196,41 +175,33 @@ export default function OrderMediaPage() {
                   Used later for required documents per status.
                 </p>
               </div>
-            </div>
 
-            {/* Row 2: Toggle + Upload (never overlaps) */}
-            <div className="grid gap-4 lg:grid-cols-12 lg:items-end">
-              <div className="lg:col-span-9">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Visibility</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        Control whether the dealer can access this file.
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setVisibleToDealer((v) => !v)}
-                      className={[
-                        'shrink-0 rounded-lg px-3 py-2 text-sm font-semibold border transition',
-                        visibleToDealer
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                          : 'bg-white border-slate-200 text-slate-700',
-                      ].join(' ')}
-                    >
-                      {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
-                    </button>
-                  </div>
-                </div>
+              {/* Visibility */}
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Visibility</label>
+                <button
+                  type="button"
+                  onClick={() => setVisibleToDealer((v) => !v)}
+                  className={[
+                    'w-full rounded-lg border px-3 py-2 text-sm font-semibold',
+                    visibleToDealer
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-200 bg-slate-50 text-slate-700',
+                  ].join(' ')}
+                >
+                  {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
+                </button>
+                <p className="text-xs text-slate-500 mt-1">
+                  {visibleToDealer ? 'Dealer will see this file.' : 'Hidden from dealer.'}
+                </p>
               </div>
 
-              <div className="lg:col-span-3 flex lg:justify-end">
+              {/* Upload */}
+              <div className="lg:col-span-1 flex lg:justify-end">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full lg:w-auto min-w-[140px] rounded-xl bg-sky-700 text-white text-sm font-bold px-5 py-3 hover:bg-sky-800 disabled:bg-sky-300"
+                  className="w-full lg:w-auto rounded-xl bg-sky-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-sky-800 disabled:opacity-60"
                 >
                   {loading ? 'Uploading…' : 'Upload'}
                 </button>
@@ -238,77 +209,56 @@ export default function OrderMediaPage() {
             </div>
 
             {message && (
-              <div
-                className={[
-                  'text-sm font-semibold',
-                  message.includes('✅') ? 'text-emerald-700' : 'text-rose-700',
-                ].join(' ')}
-              >
-                {message}
-              </div>
+              <div className="text-sm font-medium text-slate-700">{message}</div>
             )}
           </form>
 
           <div className="mt-8">
-            <h2 className="text-lg font-black text-slate-900 mb-3">Uploaded Files</h2>
+            <h2 className="text-lg font-bold text-slate-900 mb-3">Uploaded Files</h2>
 
             {fetchError ? (
-              <div className="text-sm text-rose-600">{fetchError}</div>
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {fetchError}
+              </div>
             ) : mediaList.length === 0 ? (
-              <div className="border border-dashed border-slate-200 rounded-xl py-10 text-center text-sm text-slate-500">
-                No media uploaded yet.
+              <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
+                No files uploaded yet.
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {mediaList.map((m) => {
-                  const url = toApiUrl(m.fileUrl)
-                  return (
-                    <div key={m.id} className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="text-xs text-slate-500">
-                          {new Date(m.uploadedAt).toLocaleString()}
-                        </div>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          {m.docType && (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-                              {m.docType.replaceAll('_', ' ')}
-                            </span>
-                          )}
-                          <span
-                            className={[
-                              'text-[11px] font-semibold px-2 py-0.5 rounded-full border',
-                              m.visibleToDealer
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                                : 'border-slate-200 bg-slate-50 text-slate-700',
-                            ].join(' ')}
-                          >
-                            {m.visibleToDealer ? 'Dealer' : 'Internal'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="aspect-video bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-                        {isImage(url) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt="media" className="object-cover w-full h-full" />
-                        ) : isPdf(url) ? (
-                          <div className="text-slate-500 text-sm font-semibold">PDF</div>
-                        ) : (
-                          <div className="text-slate-500 text-sm font-semibold">File</div>
-                        )}
+              <div className="grid gap-3">
+                {mediaList.map((m) => (
+                  <div
+                    key={m.id}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900">
+                          {m.docType ? (DOC_TYPE_LABELS[m.docType] || m.docType) : 'Uncategorized'}
+                        </span>
+                        <span className="text-xs rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600">
+                          {m.visibleToDealer ? 'Dealer' : 'Internal'}
+                        </span>
+                        <span className="text-xs rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-500">
+                          {m.type}
+                        </span>
                       </div>
 
                       <a
-                        href={url}
+                        href={m.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-2 inline-flex text-sky-700 hover:underline text-sm font-semibold"
+                        className="text-sm text-sky-700 hover:underline mt-1 inline-block truncate max-w-[52ch]"
                       >
                         View / Download
                       </a>
                     </div>
-                  )
-                })}
+
+                    <div className="text-xs text-slate-500 whitespace-nowrap">
+                      {new Date(m.uploadedAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

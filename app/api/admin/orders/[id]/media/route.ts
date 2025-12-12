@@ -3,10 +3,11 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextResponse, NextRequest } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { put } from '@vercel/blob'
-import { requireRole } from '@/lib/requireRole'
 import { MediaType, OrderDocType } from '@prisma/client'
+import { put } from '@vercel/blob'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
@@ -14,35 +15,26 @@ async function getOrderId(ctx: Ctx) {
   return ('then' in p ? (await p).id : p.id) as string
 }
 
-function toBool(v?: string | null) {
-  const s = (v ?? '').toLowerCase().trim()
-  return s === 'true' || s === '1' || s === 'on' || s === 'yes'
-}
-
-// MediaType automático: no más dropdown en UI.
-function inferMediaType(mime?: string, docType?: OrderDocType | null): MediaType {
+function toMediaTypeFromMime(mime?: string): MediaType {
   const m = (mime || '').toLowerCase()
   if (m.startsWith('image/')) return MediaType.photo
-
-  // si es un docType claramente “proof”, lo guardamos como proof
-  if (docType === OrderDocType.PROOF_OF_PAYMENT || docType === OrderDocType.PROOF_OF_FINAL_PAYMENT) {
-    return MediaType.proof
-  }
-
-  // todo lo demás es “update” (docs internos, checklists, invoices, etc.)
+  if (m === 'application/pdf') return MediaType.proof
   return MediaType.update
 }
 
-function parseDocType(raw?: string | null): OrderDocType | null {
-  if (!raw) return null
-  // Valida contra el enum real
-  const values = Object.values(OrderDocType) as string[]
-  return values.includes(raw) ? (raw as OrderDocType) : null
+function toBool(v: FormDataEntryValue | null, fallback = true) {
+  if (v == null) return fallback
+  const s = String(v).toLowerCase()
+  return s === 'true' || s === '1' || s === 'on' || s === 'yes'
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
+    }
+
     const orderId = await getOrderId(ctx)
 
     const items = await prisma.orderMedia.findMany({
@@ -52,40 +44,40 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: true,
         fileUrl: true,
         type: true,
-        uploadedAt: true,
         docType: true,
         visibleToDealer: true,
+        uploadedAt: true,
       },
     })
 
     return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
-    console.error('GET /api/admin/orders/[id]/media error:', e)
-    return NextResponse.json(
-      { message: 'Failed to fetch media' },
-      { status: 500, headers: { 'Cache-Control': 'no-store' } }
-    )
+    console.error('GET /orders/[id]/media error:', e)
+    return NextResponse.json({ message: 'Failed to fetch media' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
+    }
 
     const orderId = await getOrderId(ctx)
     const form = await req.formData()
 
     const file = form.get('file') as File | null
     if (!file) {
-      return NextResponse.json(
-        { message: 'file is required' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } }
-      )
+      return NextResponse.json({ message: 'file is required' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
     }
 
-    const docTypeRaw = form.get('docType')?.toString() ?? null
-    const docType = parseDocType(docTypeRaw) // si no matchea, null (OTHER)
-    const visibleToDealer = toBool(form.get('visibleToDealer')?.toString())
+    // ✅ IMPORTANT: this is the business category you care about
+    const docTypeRaw = (form.get('docType')?.toString() || '').trim()
+    const docType = docTypeRaw ? (docTypeRaw as OrderDocType) : null
+
+    // ✅ dealer visibility
+    const visibleToDealer = toBool(form.get('visibleToDealer'), true)
 
     const buf = await file.arrayBuffer()
     const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9_.-]/g, '_')
@@ -97,33 +89,27 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       contentType: file.type || 'application/octet-stream',
     })
 
-    const mediaType = inferMediaType(file.type, docType)
-
     const media = await prisma.orderMedia.create({
       data: {
         orderId,
         fileUrl: url,
-        type: mediaType,
-        docType,
+        type: toMediaTypeFromMime(file.type), // technical type
+        docType,                               // business type
         visibleToDealer,
-        uploadedAt: new Date(),
       },
       select: {
         id: true,
         fileUrl: true,
         type: true,
-        uploadedAt: true,
         docType: true,
         visibleToDealer: true,
+        uploadedAt: true,
       },
     })
 
     return NextResponse.json(media, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
-    console.error('POST /api/admin/orders/[id]/media error:', e)
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500, headers: { 'Cache-Control': 'no-store' } }
-    )
+    console.error('POST /orders/[id]/media error:', e)
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

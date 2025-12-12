@@ -17,6 +17,7 @@ interface OrderMedia {
   id: string
   fileUrl: string
   type: string
+  docType?: string | null
   uploadedAt: string
 }
 
@@ -561,7 +562,9 @@ export default function OrderHistoryPage() {
                 className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between"
               >
                 <div>
-                  <p className="text-sm font-medium text-slate-900 capitalize">{m.type}</p>
+                <p className="text-sm font-medium text-slate-900">
+  {m.docType ? m.docType.replaceAll('_', ' ') : m.type}
+</p>
                   <a
                     href={m.fileUrl}
                     target="_blank"

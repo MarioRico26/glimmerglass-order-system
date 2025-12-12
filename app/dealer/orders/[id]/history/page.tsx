@@ -1,3 +1,4 @@
+//glimmerglass-order-system/app/dealer/orders/[id]/history/page.tsx:
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -88,7 +89,7 @@ export default function DealerOrderHistoryPage() {
           else throw new Error(hJson?.message || 'Failed to load history')
         }
 
-        const mRes = await fetch(`/api/admin/orders/${orderId}/media`)
+        const mRes = await fetch(`/api/orders/${orderId}/media`)
         const mJson = await mRes.json()
         if (!abort) {
           if (mRes.ok) setMedia(Array.isArray(mJson) ? mJson : [])
