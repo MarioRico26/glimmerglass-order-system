@@ -41,21 +41,7 @@ const DOC_GROUPS: DocGroup[] = [
       { value: 'PAID_INVOICE', label: 'Paid Invoice' },
     ],
   },
-  {
-    label: 'Dealer Documents',
-    options: [
-      // No tienes estos en el enum; si los quieres, agrégalos al enum (WARRANTY, MANUAL).
-      // Por ahora usa “Other” y visibleToDealer = true para warranty/manual.
-      // { value: 'WARRANTY', label: 'Warranty' },
-      // { value: 'MANUAL', label: 'Manual' },
-      { value: 'OTHER', label: 'Other' },
-    ],
-  },
 ]
-
-const ALL_DOC_VALUES = new Set(
-  DOC_GROUPS.flatMap(g => g.options.map(o => o.value)).filter(v => v !== 'OTHER')
-)
 
 function toApiUrl(fileUrl: string) {
   return fileUrl?.startsWith('/uploads/')
@@ -104,7 +90,7 @@ export default function OrderMediaPage() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' })
       if (!res.ok) {
-        setFetchError(`Failed: ${res.status}`)
+        setFetchError(`Failed to load media (${res.status}).`)
         setMediaList([])
         return
       }
@@ -136,7 +122,7 @@ export default function OrderMediaPage() {
     const formData = new FormData()
     formData.append('file', file)
 
-    // docType: si no está en enum real, mandamos null (OTHER = null)
+    // If not a real enum value, we omit it (OTHER => null on backend)
     if (docType && docType !== 'OTHER') formData.append('docType', docType)
 
     formData.append('visibleToDealer', visibleToDealer ? 'true' : 'false')
@@ -150,7 +136,7 @@ export default function OrderMediaPage() {
       const payload = await safeJson<any>(res)
 
       if (res.ok) {
-        setMessage('✅ File uploaded!')
+        setMessage('✅ Uploaded successfully.')
         setFile(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
         await fetchMedia()
@@ -168,85 +154,96 @@ export default function OrderMediaPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900">Upload Media</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Order: <span className="font-mono">{orderId}</span>
-            </p>
-          </div>
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-100 px-6 py-4">
+          <h1 className="text-2xl font-black text-slate-900">Upload Media</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Order: <span className="font-mono">{orderId}</span>
+          </p>
         </div>
 
         <div className="px-6 py-5">
-          <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-12 items-end">
-            <div className="lg:col-span-5">
-              <label className="block mb-1 text-sm font-semibold text-slate-700">File</label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                required
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Responsive layout: stacks cleanly, never overlaps */}
+            <div className="grid gap-4 lg:grid-cols-12">
+              {/* File */}
+              <div className="lg:col-span-5">
+                <label className="block mb-1 text-sm font-semibold text-slate-700">File</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  required
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
+                />
+              </div>
 
-            <div className="lg:col-span-4">
-              <label className="block mb-1 text-sm font-semibold text-slate-700">Doc Type</label>
-              <select
-                value={docType}
-                onChange={(e) => setDocType(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
-              >
-                {DOC_GROUPS.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.options.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                {/* siempre deja OTHER como fallback */}
-                {!ALL_DOC_VALUES.has('OTHER') && <option value="OTHER">Other</option>}
-              </select>
-              <p className="text-xs text-slate-500 mt-1">
-                Esto es lo que vas a usar luego para “required documents per status”.
-              </p>
-            </div>
+              {/* Doc Type */}
+              <div className="lg:col-span-4">
+                <label className="block mb-1 text-sm font-semibold text-slate-700">Doc Type</label>
+                <select
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm"
+                >
+                  <option value="OTHER">Other</option>
+                  {DOC_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.options.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  Used later for required documents per status.
+                </p>
+              </div>
 
-            <div className="lg:col-span-2">
-              <label className="block mb-1 text-sm font-semibold text-slate-700">Dealer can view</label>
-              <button
-                type="button"
-                onClick={() => setVisibleToDealer(v => !v)}
-                className={[
-                  'w-full rounded-lg px-3 py-2 text-sm font-semibold border transition',
-                  visibleToDealer
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-700',
-                ].join(' ')}
-              >
-                {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
-              </button>
-              <p className="text-xs text-slate-500 mt-1">
-                {visibleToDealer ? 'Dealer lo verá.' : 'Oculto para dealers.'}
-              </p>
-            </div>
+              {/* Dealer can view */}
+              <div className="lg:col-span-2">
+                <label className="block mb-1 text-sm font-semibold text-slate-700">
+                  Dealer can view
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setVisibleToDealer(v => !v)}
+                  className={[
+                    'w-full rounded-lg px-3 py-2 text-sm font-semibold border transition',
+                    visibleToDealer
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-slate-50 border-slate-200 text-slate-700',
+                  ].join(' ')}
+                >
+                  {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
+                </button>
+                <p className="text-xs text-slate-500 mt-1">
+                  {visibleToDealer ? 'Dealer will see it.' : 'Hidden from dealers.'}
+                </p>
+              </div>
 
-            <div className="lg:col-span-1">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-lg bg-sky-700 text-white text-sm font-semibold px-4 py-2 hover:bg-sky-800 disabled:bg-sky-300"
-              >
-                {loading ? 'Uploading…' : 'Upload'}
-              </button>
+              {/* Upload button */}
+              <div className="lg:col-span-1 flex lg:justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full lg:w-auto min-w-[110px] rounded-lg bg-sky-700 text-white text-sm font-semibold px-4 py-2 hover:bg-sky-800 disabled:bg-sky-300"
+                >
+                  {loading ? 'Uploading…' : 'Upload'}
+                </button>
+              </div>
             </div>
 
             {message && (
-              <div className="lg:col-span-12">
-                <div className="text-sm font-semibold text-slate-700">{message}</div>
+              <div
+                className={[
+                  'text-sm font-semibold',
+                  message.includes('✅') ? 'text-emerald-700' : 'text-rose-700',
+                ].join(' ')}
+              >
+                {message}
               </div>
             )}
           </form>
@@ -255,7 +252,7 @@ export default function OrderMediaPage() {
             <h2 className="text-lg font-black text-slate-900 mb-3">Uploaded Files</h2>
 
             {fetchError ? (
-              <div className="text-sm text-red-600">{fetchError}</div>
+              <div className="text-sm text-rose-600">{fetchError}</div>
             ) : mediaList.length === 0 ? (
               <div className="border border-dashed border-slate-200 rounded-xl py-10 text-center text-sm text-slate-500">
                 No media uploaded yet.
@@ -266,11 +263,11 @@ export default function OrderMediaPage() {
                   const url = toApiUrl(m.fileUrl)
                   return (
                     <div key={m.id} className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm">
-                      <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="text-xs text-slate-500">
                           {new Date(m.uploadedAt).toLocaleString()}
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap justify-end gap-1">
                           {m.docType && (
                             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
                               {m.docType.replaceAll('_', ' ')}
