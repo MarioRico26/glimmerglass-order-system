@@ -262,12 +262,11 @@ export default function OrderHistoryPage() {
   }
 
   const hardwareSelected = useMemo(() => {
-    if (!summary) return []
     const parts: string[] = []
-    if (summary.hardwareSkimmer) parts.push('Skimmer')
-    if (summary.hardwareReturns) parts.push('Returns')
-    if (summary.hardwareMainDrains) parts.push('Main Drains')
-    if (summary.hardwareAutocover) parts.push('Autocover')
+    if (summary?.hardwareSkimmer) parts.push('Skimmer')
+    if (summary?.hardwareReturns) parts.push('Returns')
+    if (summary?.hardwareMainDrains) parts.push('Main Drains')
+    if (summary?.hardwareAutocover) parts.push('Autocover')
     return parts
   }, [summary])
 
