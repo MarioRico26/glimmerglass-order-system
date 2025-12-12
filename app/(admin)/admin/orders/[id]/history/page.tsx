@@ -1,8 +1,8 @@
-//glimmerglass-order-system/app/(admin)/admin/orders/[id]/history/page.tsx:
+//glimmerglass-order-system/app/(admin)/admin/orders/[id]/history/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 interface OrderHistory {
@@ -24,21 +24,21 @@ interface OrderSummary {
   id: string
   deliveryAddress: string
   status: string
-  paymentProofUrl?: string
+  paymentProofUrl?: string | null
 
   dealer?: {
     name: string
-    email?: string
-    phone?: string
-    address?: string
-    city?: string
-    state?: string
-  }
+    email?: string | null
+    phone?: string | null
+    address?: string | null
+    city?: string | null
+    state?: string | null
+  } | null
 
-  poolModel?: { name: string }
-  color?: { name: string }
-  factory?: { id: string; name: string }
-  shippingMethod?: string
+  poolModel?: { name: string } | null
+  color?: { name: string } | null
+  factory?: { id: string; name: string } | null
+  shippingMethod?: string | null
 
   hardwareSkimmer: boolean
   hardwareReturns: boolean
@@ -53,8 +53,8 @@ interface OrderSummary {
 interface FactoryLocation {
   id: string
   name: string
-  city?: string
-  state?: string
+  city?: string | null
+  state?: string | null
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -81,7 +81,6 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
 
 export default function OrderHistoryPage() {
   const params = useParams()
-  const router = useRouter()
   const orderId = params.id as string
 
   const [summary, setSummary] = useState<OrderSummary | null>(null)
@@ -94,7 +93,7 @@ export default function OrderHistoryPage() {
 
   const [editRequestedDate, setEditRequestedDate] = useState<string>('') // yyyy-mm-dd
   const [editSerialNumber, setEditSerialNumber] = useState<string>('')
-  const [editPriority, setEditPriority] = useState<string>('') // como string para permitir vacío
+  const [editPriority, setEditPriority] = useState<string>('') // string para permitir vacío
 
   const [editing, setEditing] = useState(false)
   const [status, setStatus] = useState('')
@@ -132,7 +131,11 @@ export default function OrderHistoryPage() {
             const d = new Date(orderData.requestedShipDate)
             if (!isNaN(d.getTime())) {
               setEditRequestedDate(d.toISOString().slice(0, 10))
+            } else {
+              setEditRequestedDate('')
             }
+          } else {
+            setEditRequestedDate('')
           }
 
           setEditSerialNumber(orderData.serialNumber || '')
@@ -209,11 +212,7 @@ export default function OrderHistoryPage() {
 
         if (updated.requestedShipDate) {
           const d = new Date(updated.requestedShipDate)
-          if (!isNaN(d.getTime())) {
-            setEditRequestedDate(d.toISOString().slice(0, 10))
-          } else {
-            setEditRequestedDate('')
-          }
+          setEditRequestedDate(!isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '')
         } else {
           setEditRequestedDate('')
         }
@@ -261,15 +260,6 @@ export default function OrderHistoryPage() {
     }
   }
 
-  const hardwareSelected = useMemo(() => {
-    const parts: string[] = []
-    if (summary?.hardwareSkimmer) parts.push('Skimmer')
-    if (summary?.hardwareReturns) parts.push('Returns')
-    if (summary?.hardwareMainDrains) parts.push('Main Drains')
-    if (summary?.hardwareAutocover) parts.push('Autocover')
-    return parts
-  }, [summary])
-
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -284,6 +274,12 @@ export default function OrderHistoryPage() {
     summary?.requestedShipDate && !isNaN(new Date(summary.requestedShipDate).getTime())
       ? new Date(summary.requestedShipDate).toLocaleDateString()
       : 'Not set'
+
+  const hardwareAllOff =
+    !summary?.hardwareSkimmer &&
+    !summary?.hardwareReturns &&
+    !summary?.hardwareMainDrains &&
+    !summary?.hardwareAutocover
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -320,169 +316,205 @@ export default function OrderHistoryPage() {
       )}
 
       {summary && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mb-8">
-          <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">Order Summary</span>
-          </div>
-
-          {/* GRID LIMPIO SIN TEXTO MONTADO */}
-          <div className="px-6 pt-4 pb-5 grid gap-6 md:grid-cols-4 text-sm text-slate-800">
-            {/* Columna 1: ORDER */}
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Order
-              </h3>
-              <p>
-                <span className="font-semibold">Model:</span>{' '}
-                {summary.poolModel?.name || 'Not set'}
-              </p>
-              <p>
-                <span className="font-semibold">Color:</span>{' '}
-                {summary.color?.name || 'Not set'}
-              </p>
-              <p className="mt-1">
-                <span className="font-semibold">Status:</span>{' '}
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800">
-                  {STATUS_LABEL[summary.status] || summary.status.replaceAll('_', ' ')}
-                </span>
-              </p>
+        <>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mb-8">
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-700">Order Summary</span>
             </div>
 
-            {/* Columna 2: DEALER */}
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Dealer
-              </h3>
-              <p className="font-semibold">{summary.dealer?.name || 'Not set'}</p>
-              {summary.dealer?.email && (
-                <p className="text-xs">
-                  <span className="font-semibold">Email:</span>{' '}
-                  <a
-                    href={`mailto:${summary.dealer.email}`}
-                    className="text-sky-700 hover:underline"
-                  >
-                    {summary.dealer.email}
-                  </a>
+            {/* GRID */}
+            <div className="px-6 pt-4 pb-5 grid gap-6 md:grid-cols-4 text-sm text-slate-800">
+              {/* Order */}
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Order
+                </h3>
+                <p>
+                  <span className="font-semibold">Model:</span>{' '}
+                  {summary.poolModel?.name || 'Not set'}
                 </p>
-              )}
-              {summary.dealer?.phone && (
-                <p className="text-xs">
-                  <span className="font-semibold">Phone:</span> {summary.dealer.phone}
+                <p>
+                  <span className="font-semibold">Color:</span>{' '}
+                  {summary.color?.name || 'Not set'}
                 </p>
-              )}
-              {(summary.dealer?.address ||
-                summary.dealer?.city ||
-                summary.dealer?.state) && (
-                <p className="text-xs">
-                  <span className="font-semibold">Dealer Address:</span>{' '}
+                <p className="mt-1">
+                  <span className="font-semibold">Status:</span>{' '}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800">
+                    {STATUS_LABEL[summary.status] || summary.status.replaceAll('_', ' ')}
+                  </span>
+                </p>
+              </div>
+
+              {/* Dealer */}
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Dealer
+                </h3>
+                <p className="font-semibold">{summary.dealer?.name || 'Not set'}</p>
+
+                {summary.dealer?.email && (
+                  <p className="text-xs">
+                    <span className="font-semibold">Email:</span>{' '}
+                    <a
+                      href={`mailto:${summary.dealer.email}`}
+                      className="text-sky-700 hover:underline"
+                    >
+                      {summary.dealer.email}
+                    </a>
+                  </p>
+                )}
+
+                {summary.dealer?.phone && (
+                  <p className="text-xs">
+                    <span className="font-semibold">Phone:</span> {summary.dealer.phone}
+                  </p>
+                )}
+
+                {(summary.dealer?.address || summary.dealer?.city || summary.dealer?.state) && (
+                  <p className="text-xs">
+                    <span className="font-semibold">Dealer Address:</span>{' '}
+                    {[summary.dealer?.address, summary.dealer?.city, summary.dealer?.state]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                )}
+              </div>
+
+              {/* Schedule */}
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Schedule
+                </h3>
+                <p>
+                  <span className="font-semibold">Requested Ship Date:</span> {requestedShipText}
+                </p>
+                <p>
+                  <span className="font-semibold">Serial Number:</span>{' '}
+                  {summary.serialNumber ? (
+                    summary.serialNumber
+                  ) : (
+                    <span className="italic text-slate-500">Not set</span>
+                  )}
+                </p>
+                <p>
+                  <span className="font-semibold">Production Priority:</span>{' '}
+                  {typeof summary.productionPriority === 'number' ? (
+                    <>#{summary.productionPriority}</>
+                  ) : (
+                    <span className="italic text-slate-500">Not assigned</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Logistics */}
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Logistics
+                </h3>
+                <p>
+                  <span className="font-semibold">Factory:</span>{' '}
+                  {summary.factory?.name ? (
+                    summary.factory.name
+                  ) : (
+                    <span className="italic text-slate-500">Not assigned</span>
+                  )}
+                </p>
+                <p>
+                  <span className="font-semibold">Shipping:</span>{' '}
+                  {summary.shippingMethod ? (
+                    SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod
+                  ) : (
+                    <span className="italic text-slate-500">Not set</span>
+                  )}
+                </p>
+
+                <button
+                  onClick={() => setEditing(true)}
+                  className="mt-2 text-xs font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                >
+                  ✏️ Edit factory, shipping &amp; production
+                </button>
+              </div>
+            </div>
+
+            {/* Subcards: delivery + hardware */}
+            <div className="px-6 pb-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Delivery Address
+                </div>
+                <div className="text-slate-800">{summary.deliveryAddress}</div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Hardware Selected
+                </div>
+
+                <div className="flex flex-wrap gap-2">
                   {[
-                    summary.dealer?.address,
-                    summary.dealer?.city,
-                    summary.dealer?.state,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                </p>
-              )}
-            </div>
+                    { label: 'Skimmer', on: summary.hardwareSkimmer },
+                    { label: 'Returns', on: summary.hardwareReturns },
+                    { label: 'Main Drains', on: summary.hardwareMainDrains },
+                    { label: 'Autocover', on: summary.hardwareAutocover },
+                  ].map((h) => (
+                    <span
+                      key={h.label}
+                      className={[
+                        'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border',
+                        h.on
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-white text-slate-500 border-slate-200',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black',
+                          h.on ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500',
+                        ].join(' ')}
+                      >
+                        ✓
+                      </span>
+                      {h.label}
+                    </span>
+                  ))}
+                </div>
 
-            {/* Columna 3: POOL MODEL / DATES */}
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Schedule
-              </h3>
-              <p>
-                <span className="font-semibold">Requested Ship Date:</span>{' '}
-                {requestedShipText}
-              </p>
-              <p>
-                <span className="font-semibold">Serial Number:</span>{' '}
-                {summary.serialNumber || <span className="italic text-slate-500">Not set</span>}
-              </p>
-              <p>
-                <span className="font-semibold">Production Priority:</span>{' '}
-                {typeof summary.productionPriority === 'number' ? (
-                  <>#{summary.productionPriority}</>
-                ) : (
-                  <span className="italic text-slate-500">Not assigned</span>
+                {hardwareAllOff && (
+                  <p className="mt-2 text-xs text-slate-500">None selected.</p>
                 )}
-              </p>
+              </div>
             </div>
+          </div>
 
-            {/* Columna 4: LOGISTICS */}
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Logistics
-              </h3>
-              <p>
-                <span className="font-semibold">Factory:</span>{' '}
-                {summary.factory?.name || <span className="italic text-slate-500">Not assigned</span>}
-              </p>
-              <p>
-                <span className="font-semibold">Shipping:</span>{' '}
-                {summary.shippingMethod ? (
-                  SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod
-                ) : (
-                  <span className="italic text-slate-500">Not set</span>
-                )}
-              </p>
+          {/* BOTONES */}
+          <div className="flex flex-wrap gap-2 mb-8">
+            <button
+              onClick={() => setShowModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
+            >
+              + Manual Entry
+            </button>
 
-              <button
-                onClick={() => setEditing(true)}
-                className="mt-2 text-xs font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+            {summary.paymentProofUrl && (
+              <a
+                href={summary.paymentProofUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                ✏️ Edit factory, shipping & production
-              </button>
-            </div>
-          </div>
+                View Payment Proof
+              </a>
+            )}
 
-          {/* Subcards: delivery + hardware */}
-          <div className="px-6 pb-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Delivery Address
-              </div>
-              <div className="text-slate-800">{summary.deliveryAddress}</div>
-            </div>
-
-            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Hardware Selected
-              </div>
-              <div className="text-slate-800">
-                {hardwareSelected.length ? hardwareSelected.join(', ') : 'None'}
-              </div>
-            </div>
+            <Link href={`/admin/orders/${orderId}/media`}>
+              <span className="inline-flex bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm cursor-pointer">
+                Upload Media
+              </span>
+            </Link>
           </div>
-        </div>
+        </>
       )}
-
-      {/* BOTONES PRINCIPALES */}
-      <div className="flex flex-wrap gap-2 mb-8">
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
-        >
-          + Manual Entry
-        </button>
-
-        {summary?.paymentProofUrl && (
-          <a
-            href={summary.paymentProofUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            View Payment Proof
-          </a>
-        )}
-
-        <Link href={`/admin/orders/${orderId}/media`}>
-          <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
-            Upload Media
-          </button>
-        </Link>
-      </div>
 
       {/* TIMELINE */}
       <div className="mb-8">
@@ -503,16 +535,10 @@ export default function OrderHistoryPage() {
                     <p className="text-sm font-semibold text-slate-900">
                       {STATUS_LABEL[h.status] || h.status.replaceAll('_', ' ')}
                     </p>
-                    {h.comment && (
-                      <p className="text-sm text-slate-700 mt-1">{h.comment}</p>
-                    )}
-                    {h.user && (
-                      <p className="text-xs text-slate-400 mt-1">By: {h.user.email}</p>
-                    )}
+                    {h.comment && <p className="text-sm text-slate-700 mt-1">{h.comment}</p>}
+                    {h.user && <p className="text-xs text-slate-400 mt-1">By: {h.user.email}</p>}
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {new Date(h.createdAt).toLocaleString()}
-                  </p>
+                  <p className="text-xs text-slate-500">{new Date(h.createdAt).toLocaleString()}</p>
                 </div>
               </li>
             ))}
@@ -535,9 +561,7 @@ export default function OrderHistoryPage() {
                 className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between"
               >
                 <div>
-                  <p className="text-sm font-medium text-slate-900 capitalize">
-                    {m.type}
-                  </p>
+                  <p className="text-sm font-medium text-slate-900 capitalize">{m.type}</p>
                   <a
                     href={m.fileUrl}
                     target="_blank"
@@ -547,9 +571,7 @@ export default function OrderHistoryPage() {
                     View File
                   </a>
                 </div>
-                <p className="text-xs text-slate-500">
-                  {new Date(m.uploadedAt).toLocaleString()}
-                </p>
+                <p className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -563,9 +585,7 @@ export default function OrderHistoryPage() {
             <h2 className="text-xl font-bold mb-4 text-slate-900">Add History Entry</h2>
             <form onSubmit={handleSubmit}>
               <label className="block mb-4">
-                <span className="block text-sm font-semibold mb-1 text-slate-700">
-                  Status
-                </span>
+                <span className="block text-sm font-semibold mb-1 text-slate-700">Status</span>
                 <select
                   required
                   value={status}
