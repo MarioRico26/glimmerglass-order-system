@@ -2,29 +2,17 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-import { NextResponse, NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { MediaType, OrderDocType } from '@prisma/client'
+import { requireRole } from '@/lib/requireRole'
 import { put } from '@vercel/blob'
+import { MediaType, OrderDocType } from '@prisma/client'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
+
 async function getOrderId(ctx: Ctx) {
-  const p: any = ctx.params
+  const p: any = (ctx as any).params
   return ('then' in p ? (await p).id : p.id) as string
-}
-
-function noStore() {
-  return { 'Cache-Control': 'no-store' }
-}
-
-function toBool(v: FormDataEntryValue | null, fallback = true) {
-  if (typeof v !== 'string') return fallback
-  const s = v.trim().toLowerCase()
-  if (s === 'true' || s === '1' || s === 'yes' || s === 'on') return true
-  if (s === 'false' || s === '0' || s === 'no' || s === 'off') return false
-  return fallback
 }
 
 function toMediaTypeFromMime(mime?: string): MediaType {
@@ -33,42 +21,42 @@ function toMediaTypeFromMime(mime?: string): MediaType {
   return MediaType.update
 }
 
-function parseMediaType(v: FormDataEntryValue | null, mimeFallback?: string): MediaType {
-  if (typeof v === 'string') {
-    const s = v.trim().toLowerCase()
-    if (s === 'update') return MediaType.update
-    if (s === 'proof') return MediaType.proof
-    if (s === 'photo') return MediaType.photo
-    if (s === 'note') return MediaType.note
-  }
-  return toMediaTypeFromMime(mimeFallback)
+function parseMediaType(input: unknown, fallback: MediaType): MediaType {
+  const v = (typeof input === 'string' ? input : '').trim().toLowerCase()
+  if (v === 'photo') return MediaType.photo
+  if (v === 'proof') return MediaType.proof
+  if (v === 'note') return MediaType.note
+  if (v === 'update') return MediaType.update
+  return fallback
 }
 
-function parseDocType(v: FormDataEntryValue | null): OrderDocType | null {
-  if (typeof v !== 'string') return null
-  const s = v.trim()
-  if (!s) return null
+function parseDocType(input: unknown): OrderDocType | null {
+  if (typeof input !== 'string') return null
+  const v = input.trim()
+  if (!v) return null
+  // valida contra enum runtime
+  return (Object.values(OrderDocType) as string[]).includes(v) ? (v as OrderDocType) : null
+}
 
-  // Validate against enum values
-  const values = Object.values(OrderDocType) as string[]
-  return values.includes(s) ? (s as OrderDocType) : null
+function parseVisible(input: unknown): boolean {
+  if (typeof input === 'boolean') return input
+  if (typeof input !== 'string') return true
+  const v = input.trim().toLowerCase()
+  if (v === 'true' || v === '1' || v === 'on' || v === 'yes') return true
+  if (v === 'false' || v === '0' || v === 'off' || v === 'no') return false
+  return true
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: noStore() })
-    }
+    await requireRole(['ADMIN', 'SUPERADMIN'])
 
     const orderId = await getOrderId(ctx)
-
     const items = await prisma.orderMedia.findMany({
       where: { orderId },
       orderBy: { uploadedAt: 'desc' },
       select: {
         id: true,
-        orderId: true,
         fileUrl: true,
         type: true,
         uploadedAt: true,
@@ -77,31 +65,39 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       },
     })
 
-    return NextResponse.json(items, { headers: noStore() })
+    return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('GET /api/admin/orders/[id]/media error:', e)
-    return NextResponse.json({ message: 'Failed to fetch media' }, { status: 500, headers: noStore() })
+    return NextResponse.json(
+      { message: 'Failed to fetch media' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: noStore() })
-    }
+    await requireRole(['ADMIN', 'SUPERADMIN'])
 
     const orderId = await getOrderId(ctx)
-    const form = await req.formData()
 
+    const form = await req.formData()
     const file = form.get('file') as File | null
     if (!file) {
-      return NextResponse.json({ message: 'file is required' }, { status: 400, headers: noStore() })
+      return NextResponse.json(
+        { message: 'file is required' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      )
     }
 
-    const type = parseMediaType(form.get('type'), file.type)
-    const docType = parseDocType(form.get('docType'))
-    const visibleToDealer = toBool(form.get('visibleToDealer'), true)
+    const formType = form.get('type')
+    const formDocType = form.get('docType')
+    const formVisible = form.get('visibleToDealer')
+
+    const fallbackType = toMediaTypeFromMime(file.type)
+    const mediaType = parseMediaType(formType, fallbackType)
+    const docType = parseDocType(formDocType)
+    const visibleToDealer = parseVisible(formVisible)
 
     const buf = await file.arrayBuffer()
     const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9_.-]/g, '_')
@@ -117,13 +113,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       data: {
         orderId,
         fileUrl: url,
-        type,
-        docType, // ✅ new
-        visibleToDealer, // ✅ new
+        type: mediaType,
+        docType,
+        visibleToDealer,
+        uploadedAt: new Date(),
       },
       select: {
         id: true,
-        orderId: true,
         fileUrl: true,
         type: true,
         uploadedAt: true,
@@ -132,9 +128,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       },
     })
 
-    return NextResponse.json(media, { status: 201, headers: noStore() })
+    return NextResponse.json(media, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('POST /api/admin/orders/[id]/media error:', e)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500, headers: noStore() })
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
 }

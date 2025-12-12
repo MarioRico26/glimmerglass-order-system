@@ -1,3 +1,4 @@
+//glimmerglass-order-system/app/api/admin/orders/[id]/shipping/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
@@ -23,7 +24,7 @@ export async function PATCH(
         shippingMethod,
       },
       include: {
-        factory: true,
+        factoryLocation: true,
         dealer: true,
         poolModel: true,
         color: true,
