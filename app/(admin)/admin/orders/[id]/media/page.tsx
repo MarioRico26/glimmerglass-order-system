@@ -121,10 +121,7 @@ export default function OrderMediaPage() {
 
     const formData = new FormData()
     formData.append('file', file)
-
-    // If not a real enum value, we omit it (OTHER => null on backend)
     if (docType && docType !== 'OTHER') formData.append('docType', docType)
-
     formData.append('visibleToDealer', visibleToDealer ? 'true' : 'false')
 
     setLoading(true)
@@ -162,12 +159,11 @@ export default function OrderMediaPage() {
           </p>
         </div>
 
-        <div className="px-6 py-5">
+        <div className="px-6 py-6">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Responsive layout: stacks cleanly, never overlaps */}
+            {/* Row 1: File + Doc Type */}
             <div className="grid gap-4 lg:grid-cols-12">
-              {/* File */}
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-7">
                 <label className="block mb-1 text-sm font-semibold text-slate-700">File</label>
                 <input
                   ref={fileInputRef}
@@ -178,8 +174,7 @@ export default function OrderMediaPage() {
                 />
               </div>
 
-              {/* Doc Type */}
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-5">
                 <label className="block mb-1 text-sm font-semibold text-slate-700">Doc Type</label>
                 <select
                   value={docType}
@@ -201,35 +196,41 @@ export default function OrderMediaPage() {
                   Used later for required documents per status.
                 </p>
               </div>
+            </div>
 
-              {/* Dealer can view */}
-              <div className="lg:col-span-2">
-                <label className="block mb-1 text-sm font-semibold text-slate-700">
-                  Dealer can view
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setVisibleToDealer(v => !v)}
-                  className={[
-                    'w-full rounded-lg px-3 py-2 text-sm font-semibold border transition',
-                    visibleToDealer
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : 'bg-slate-50 border-slate-200 text-slate-700',
-                  ].join(' ')}
-                >
-                  {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
-                </button>
-                <p className="text-xs text-slate-500 mt-1">
-                  {visibleToDealer ? 'Dealer will see it.' : 'Hidden from dealers.'}
-                </p>
+            {/* Row 2: Toggle + Upload (never overlaps) */}
+            <div className="grid gap-4 lg:grid-cols-12 lg:items-end">
+              <div className="lg:col-span-9">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Visibility</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Control whether the dealer can access this file.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setVisibleToDealer((v) => !v)}
+                      className={[
+                        'shrink-0 rounded-lg px-3 py-2 text-sm font-semibold border transition',
+                        visibleToDealer
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-white border-slate-200 text-slate-700',
+                      ].join(' ')}
+                    >
+                      {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Upload button */}
-              <div className="lg:col-span-1 flex lg:justify-end">
+              <div className="lg:col-span-3 flex lg:justify-end">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full lg:w-auto min-w-[110px] rounded-lg bg-sky-700 text-white text-sm font-semibold px-4 py-2 hover:bg-sky-800 disabled:bg-sky-300"
+                  className="w-full lg:w-auto min-w-[140px] rounded-xl bg-sky-700 text-white text-sm font-bold px-5 py-3 hover:bg-sky-800 disabled:bg-sky-300"
                 >
                   {loading ? 'Uploading…' : 'Upload'}
                 </button>
