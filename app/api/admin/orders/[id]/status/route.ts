@@ -8,12 +8,9 @@ import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { OrderDocType, Role } from '@prisma/client'
 
-/**
- * If your Prisma enum is named differently, replace these strings accordingly.
- */
 type FlowStatus =
   | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED'
+  | 'APPROVED' // (eventually removed)
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
@@ -27,11 +24,14 @@ const FLOW_ORDER: FlowStatus[] = [
   'COMPLETED',
 ]
 
-// Requirements per target status (to move INTO that status).
-// Example: to move to APPROVED, you must have payment docs uploaded.
 const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocType[]>> = {
+  // Pending -> Approved (Mike)
   APPROVED: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
+
+  // Approved -> In Production (Mike)
   IN_PRODUCTION: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'],
+
+  // In Production -> Pre-Shipping (Mike)
   PRE_SHIPPING: [
     'SHIPPING_CHECKLIST',
     'PRE_SHIPPING_MEDIA',
@@ -39,12 +39,11 @@ const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocType[]>> = {
     'PROOF_OF_FINAL_PAYMENT',
     'PAID_INVOICE',
   ],
-  // COMPLETED: optional (you can add here if you want)
 }
 
-// Required fields per status (example: serialNumber must exist before PRE_SHIPPING or COMPLETED)
-// Adjust this to match what Mike wants.
+// Mike: Serial Number required to move to In Production (and keep it for later stages too)
 const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, Array<'serialNumber'>>> = {
+  IN_PRODUCTION: ['serialNumber'],
   PRE_SHIPPING: ['serialNumber'],
   COMPLETED: ['serialNumber'],
 }
@@ -98,14 +97,7 @@ async function getOrderSummary(orderId: string) {
       hardwareMainDrains: true,
 
       dealer: {
-        select: {
-          name: true,
-          email: true,
-          phone: true,
-          address: true,
-          city: true,
-          state: true,
-        },
+        select: { name: true, email: true, phone: true, address: true, city: true, state: true },
       },
       poolModel: { select: { name: true } },
       color: { select: { name: true } },
@@ -169,10 +161,7 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
 
   if (!order) return { ok: false, notFound: true }
 
-  const present = new Set(
-    media.map((m) => m.docType).filter(Boolean) as OrderDocType[]
-  )
-
+  const present = new Set(media.map((m) => m.docType).filter(Boolean) as OrderDocType[])
   const missingDocs = needDocs.filter((d) => !present.has(d))
 
   const missingFields: string[] = []
@@ -183,21 +172,17 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   return { ok: true, missingDocs, missingFields }
 }
 
-/**
- * GET: returns summary used by admin history page.
- */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
     const user = session?.user as any
-
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdminRole(user.role)) return json('Forbidden', 403)
 
     const orderId = await getOrderId(ctx)
     const summary = await getOrderSummary(orderId)
-
     if (!summary) return json('Order not found', 404)
+
     return NextResponse.json(summary, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('GET /api/admin/orders/[id]/status error:', e)
@@ -205,28 +190,21 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
 }
 
-/**
- * PATCH: change order status with "required docs/fields" gate when moving forward.
- * Body:
- *  { status: FlowStatus, comment?: string }
- */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
     const user = session?.user as any
-
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdminRole(user.role)) return json('Forbidden', 403)
 
     const orderId = await getOrderId(ctx)
-
     const body = await req.json().catch(() => null)
+
     const nextStatus = (body?.status as FlowStatus | undefined) ?? undefined
     const comment = (body?.comment as string | undefined) ?? ''
 
     if (!nextStatus) return json('Missing status', 400)
 
-    // Load current order status
     const current = await prisma.order.findUnique({
       where: { id: orderId },
       select: { id: true, status: true },
@@ -235,7 +213,6 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const currentStatus = current.status as FlowStatus
 
-    // If moving forward (ex: APPROVED -> IN_PRODUCTION), enforce requirements.
     if (isForwardMove(currentStatus, nextStatus)) {
       const missing = await getMissingForTarget(orderId, nextStatus)
       if (!missing.ok) return json('Order not found', 404)
@@ -252,15 +229,13 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       }
     }
 
-    // Update order + create history entry in a transaction
     const dbUser = await prisma.user.findUnique({
       where: { email: user.email },
-      select: { id: true, email: true },
+      select: { id: true },
     })
+    if (!dbUser) return json('User not found', 404)
 
-    const finalComment =
-      comment?.trim() ||
-      `Status changed from Orders list`
+    const finalComment = comment?.trim() || 'Status changed'
 
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -268,13 +243,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         data: { status: nextStatus as any },
       })
 
-      // Store timeline entry (so dealer/admin timeline stays consistent)
       await tx.orderHistory.create({
         data: {
           orderId,
           status: nextStatus as any,
           comment: finalComment,
-          userId: dbUser!.id,
+          userId: dbUser.id,
         },
       })
     })
