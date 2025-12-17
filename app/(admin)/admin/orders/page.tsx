@@ -1,4 +1,4 @@
-//glimmerglass-order-system/app/(admin)/admin/orders/page.tsx:
+//glimmerglass-order-system/app/(admin)/admin/orders/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
@@ -9,6 +9,8 @@ import {
   ChevronDown, ChevronRight, Filter, Search, Group, Factory as FactoryIcon,
   UserCircle2, RefreshCw, ArrowUpDown
 } from 'lucide-react'
+
+import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
 
 type Maybe<T> = T | null | undefined
 
@@ -29,6 +31,16 @@ type ApiResp = {
   page: number
   pageSize: number
   total: number
+}
+
+type MissingPayload = {
+  code?: string
+  message?: string
+  targetStatus?: string
+  missing?: {
+    docs?: string[]
+    fields?: string[]
+  }
 }
 
 const aqua = '#00B2CA'
@@ -53,8 +65,6 @@ type StatusKey = typeof ALL_STATUS[number]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.includes('application/json')) return null
     const text = await res.text()
     if (!text) return null
     return JSON.parse(text) as T
@@ -66,12 +76,18 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
 function StatusBadge({ status }: { status: string }) {
   const base = 'px-2 py-1 rounded-full text-xs font-semibold'
   switch (status) {
-    case 'PENDING_PAYMENT_APPROVAL': return <span className={`${base} bg-yellow-100 text-yellow-800`}>Pending</span>
-    case 'APPROVED':                 return <span className={`${base} bg-blue-100 text-blue-800`}>Approved</span>
-    case 'IN_PRODUCTION':            return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
-    case 'COMPLETED':                return <span className={`${base} bg-green-100 text-green-800`}>Completed</span>
-    case 'CANCELED':                 return <span className={`${base} bg-red-100 text-red-800`}>Canceled</span>
-    default:                         return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>
+    case 'PENDING_PAYMENT_APPROVAL':
+      return <span className={`${base} bg-yellow-100 text-yellow-800`}>Pending</span>
+    case 'APPROVED':
+      return <span className={`${base} bg-blue-100 text-blue-800`}>Approved</span>
+    case 'IN_PRODUCTION':
+      return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
+    case 'COMPLETED':
+      return <span className={`${base} bg-green-100 text-green-800`}>Completed</span>
+    case 'CANCELED':
+      return <span className={`${base} bg-red-100 text-red-800`}>Canceled</span>
+    default:
+      return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>
   }
 }
 
@@ -97,17 +113,23 @@ function AdminOrdersInner() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  // Query state (fuente = URL)
-  const q            = sp.get('q') || ''
+  // Modal missing requirements
+  const [missingOpen, setMissingOpen] = useState(false)
+  const [missingDocs, setMissingDocs] = useState<string[]>([])
+  const [missingFields, setMissingFields] = useState<string[]>([])
+  const [missingTarget, setMissingTarget] = useState<string | null>(null)
+  const [missingUploadHref, setMissingUploadHref] = useState<string | null>(null)
+
+  const q = sp.get('q') || ''
   const statusFilter = (sp.get('status') as StatusKey | 'ALL') || 'ALL'
   const dealerFilter = sp.get('dealer') || 'ALL'
-  const factoryFilter= sp.get('factory') || 'ALL'
-  const sort         = sp.get('sort') || 'createdAt'
-  const dir          = sp.get('dir') || 'desc'
-  const page         = Math.max(1, Number(sp.get('page') || 1))
-  const pageSize     = Math.max(5, Number(sp.get('pageSize') || 20))
+  const factoryFilter = sp.get('factory') || 'ALL'
+  const sort = sp.get('sort') || 'createdAt'
+  const dir = sp.get('dir') || 'desc'
+  const page = Math.max(1, Number(sp.get('page') || 1))
+  const pageSize = Math.max(5, Number(sp.get('pageSize') || 20))
 
-  const setParams = (patch: Record<string,string|number|undefined|null>) => {
+  const setParams = (patch: Record<string, string | number | undefined | null>) => {
     const params = new URLSearchParams(sp.toString())
     Object.entries(patch).forEach(([k, v]) => {
       if (v === undefined || v === null || v === '') params.delete(k)
@@ -120,6 +142,7 @@ function AdminOrdersInner() {
     try {
       setLoading(true)
       setError(null)
+
       const params = new URLSearchParams()
       if (q) params.set('q', q)
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
@@ -132,9 +155,9 @@ function AdminOrdersInner() {
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error((await safeJson<{ message?: string }>(res))?.message || 'Failed')
+
       const data = await safeJson<ApiResp>(res)
-      const list = data?.items ?? []
-      setOrders(list)
+      setOrders(data?.items ?? [])
       setError(null)
     } catch (e: any) {
       setError(e.message || 'Failed to load orders')
@@ -144,12 +167,28 @@ function AdminOrdersInner() {
     }
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line */ }, [q,statusFilter,dealerFilter,factoryFilter,sort,dir,page,pageSize])
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, statusFilter, dealerFilter, factoryFilter, sort, dir, page, pageSize])
 
   const [refreshing, setRefreshing] = useState(false)
-  const handleRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false) }
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }
 
-  // -------- NUEVO: helper para registrar historial tras acciones ----------
+  // Helper: open missing modal from payload
+  const openMissing = (orderId: string, nextStatus: string, payload: MissingPayload | null) => {
+    setMissingTarget(payload?.targetStatus ?? nextStatus)
+    setMissingDocs(payload?.missing?.docs ?? [])
+    setMissingFields(payload?.missing?.fields ?? [])
+    setMissingUploadHref(`/admin/orders/${orderId}/media`)
+    setMissingOpen(true)
+  }
+
+  // Registro de history (lo mantengo como lo tienes)
   const logHistory = async (orderId: string, status: StatusKey, comment = '') => {
     try {
       await fetch(`/api/admin/orders/${orderId}/history`, {
@@ -158,28 +197,39 @@ function AdminOrdersInner() {
         body: JSON.stringify({ status, comment }),
         cache: 'no-store',
       })
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   }
-  // -----------------------------------------------------------------------
 
   const updateStatus = async (orderId: string, newStatus: StatusKey) => {
     try {
       setBusyId(orderId)
+
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
-      if (!res.ok) throw new Error('Failed to update status')
-      const updated = await safeJson<Order>(res)
-      if (!updated) throw new Error('Invalid response')
-      setOrders(prev => prev.map(o => (o.id === orderId ? updated : o)))
 
-      // Registrar historial y refrescar
+      const payload = await safeJson<any>(res)
+
+      if (!res.ok) {
+        if (payload?.code === 'MISSING_REQUIREMENTS') {
+          openMissing(orderId, newStatus, payload as MissingPayload)
+          return
+        }
+        throw new Error(payload?.message || 'Failed to update status')
+      }
+
+      const updated = payload as Order
+      if (!updated?.id) throw new Error('Invalid response')
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
+
       await logHistory(orderId, newStatus, 'Status changed from Orders list')
       router.refresh()
-    } catch {
-      alert('Could not update status')
+    } catch (e: any) {
+      alert(e?.message || 'Could not update status')
     } finally {
       setBusyId(null)
     }
@@ -188,42 +238,64 @@ function AdminOrdersInner() {
   const approveOrder = async (orderId: string) => {
     try {
       setBusyId(orderId)
-      const res = await fetch(`/api/admin/orders/${orderId}/approve`, { method: 'PATCH' })
-      if (!res.ok) throw new Error('Failed to approve order')
-      const updated = await safeJson<Order>(res)
-      if (!updated) throw new Error('Invalid response')
-      setOrders(prev => prev.map(o => (o.id === orderId ? updated : o)))
 
-      // Registrar historial y refrescar
+      // OJO: tu endpoint /approve no recibe status. Si quieres gating aquí,
+      // lo ideal es que ese endpoint también haga el mismo check.
+      const res = await fetch(`/api/admin/orders/${orderId}/approve`, { method: 'PATCH' })
+      const payload = await safeJson<any>(res)
+
+      if (!res.ok) {
+        if (payload?.code === 'MISSING_REQUIREMENTS') {
+          openMissing(orderId, 'APPROVED', payload as MissingPayload)
+          return
+        }
+        throw new Error(payload?.message || 'Failed to approve order')
+      }
+
+      const updated = payload as Order
+      if (!updated?.id) throw new Error('Invalid response')
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
+
       await logHistory(orderId, 'APPROVED', 'Approved from Orders list')
       router.refresh()
-    } catch {
-      alert('Could not approve order')
+    } catch (e: any) {
+      alert(e?.message || 'Could not approve order')
     } finally {
       setBusyId(null)
     }
   }
 
-  // Catálogos para selects (derivados de los datos actuales)
   const dealers = useMemo(() => {
     const s = new Set<string>()
-    orders.forEach(o => s.add(o.dealer?.name || 'Unknown Dealer'))
+    orders.forEach((o) => s.add(o.dealer?.name || 'Unknown Dealer'))
     return Array.from(s).sort()
   }, [orders])
 
   const factories = useMemo(() => {
     const s = new Set<string>()
-    orders.forEach(o => s.add(o.factoryLocation?.name || 'Unknown Factory'))
+    orders.forEach((o) => s.add(o.factoryLocation?.name || 'Unknown Factory'))
     return Array.from(s).sort()
   }, [orders])
 
-  // Agrupado en cliente
   const [groupBy, setGroupBy] = useState<'DEALER' | 'FACTORY'>('DEALER')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
+  function groupKeys(list: Order[], g: 'DEALER' | 'FACTORY') {
+    const s = new Set<string>()
+    const keyer =
+      g === 'DEALER'
+        ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
+        : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
+    list.forEach((o) => s.add(keyer(o)))
+    return Array.from(s).sort()
+  }
+
   useEffect(() => {
     const keys = groupKeys(orders, groupBy)
-    const map = keys.reduce((acc, k) => { acc[k] = true; return acc }, {} as Record<string, boolean>)
+    const map = keys.reduce((acc, k) => {
+      acc[k] = true
+      return acc
+    }, {} as Record<string, boolean>)
     setOpenGroups(map)
   }, [orders, groupBy])
 
@@ -232,22 +304,15 @@ function AdminOrdersInner() {
       groupBy === 'DEALER'
         ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
         : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
+
     return orders.reduce((acc, o) => {
-      const k = keyer(o); (acc[k] ||= []).push(o); return acc
+      const k = keyer(o)
+      ;(acc[k] ||= []).push(o)
+      return acc
     }, {} as Record<string, Order[]>)
   }, [orders, groupBy])
 
-  function groupKeys(list: Order[], g: 'DEALER' | 'FACTORY') {
-    const s = new Set<string>()
-    const keyer =
-      g === 'DEALER'
-        ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
-        : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
-    list.forEach(o => s.add(keyer(o)))
-    return Array.from(s).sort()
-  }
-
-  // Paginación
+  // total count
   const [totalCount, setTotalCount] = useState(0)
   useEffect(() => {
     ;(async () => {
@@ -256,26 +321,18 @@ function AdminOrdersInner() {
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
-      params.set('sort', sort); params.set('dir', dir)
-      params.set('page', String(page)); params.set('pageSize', String(pageSize))
+      params.set('sort', sort)
+      params.set('dir', dir)
+      params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
-      const data = (await res.json()) as ApiResp
-      setTotalCount(data.total)
+      const data = (await safeJson<ApiResp>(res)) || { total: 0, items: [], page: 1, pageSize: 20 }
+      setTotalCount(data.total || 0)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q,statusFilter,dealerFilter,factoryFilter,sort,dir,page,pageSize])
+  }, [q, statusFilter, dealerFilter, factoryFilter, sort, dir, page, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-
-  const Stat = ({ label, value, Icon }: { label: string; value: number | string; Icon: any }) => (
-    <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-slate-600 text-sm">{label}</p>
-        <Icon size={18} className="text-slate-500" />
-      </div>
-      <div className="mt-2 text-3xl font-black text-slate-900">{value}</div>
-    </div>
-  )
 
   const toggleSort = (col: 'createdAt' | 'status') => {
     const nextDir = sort === col ? (dir === 'asc' ? 'desc' : 'asc') : 'desc'
@@ -295,6 +352,16 @@ function AdminOrdersInner() {
 
   return (
     <div className="space-y-6">
+      {/* Missing modal */}
+      <MissingRequirementsModal
+        open={missingOpen}
+        onClose={() => setMissingOpen(false)}
+        targetStatus={missingTarget}
+        missingDocs={missingDocs}
+        missingFields={missingFields}
+        goToUploadHref={missingUploadHref}
+      />
+
       {/* Header */}
       <div className="rounded-2xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -318,10 +385,7 @@ function AdminOrdersInner() {
               <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
               Refresh
             </button>
-            <div
-              className="h-1 w-32 rounded-full"
-              style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-            />
+            <div className="h-1 w-32 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }} />
           </div>
         </div>
       </div>
@@ -347,7 +411,11 @@ function AdminOrdersInner() {
               className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All statuses</option>
-              {ALL_STATUS.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              {ALL_STATUS.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
             </select>
 
             <UserCircle2 size={16} className="text-slate-500" />
@@ -357,7 +425,11 @@ function AdminOrdersInner() {
               className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All dealers</option>
-              {dealers.map(d => <option key={d} value={d}>{d}</option>)}
+              {dealers.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
             </select>
 
             <FactoryIcon size={16} className="text-slate-500" />
@@ -367,7 +439,11 @@ function AdminOrdersInner() {
               className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All factories</option>
-              {factories.map(f => <option key={f} value={f}>{f}</option>)}
+              {factories.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
             </select>
 
             <Group size={16} className="text-slate-500" />
@@ -426,7 +502,7 @@ function AdminOrdersInner() {
           <div className="divide-y">
             {Object.entries(grouped).map(([groupName, list]) => {
               const open = openGroups[groupName] ?? true
-              const toggle = () => setOpenGroups(prev => ({ ...prev, [groupName]: !open }))
+              const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
 
               return (
                 <section key={groupName}>
@@ -475,9 +551,8 @@ function AdminOrdersInner() {
                           </tr>
                         </thead>
                         <tbody>
-                          {list.map(order => (
+                          {list.map((order) => (
                             <tr key={order.id} className="border-t">
-                              {/* Model -> link a History */}
                               <td className="py-2 px-3">
                                 <Link
                                   href={`/admin/orders/${order.id}/history`}
@@ -509,11 +584,12 @@ function AdminOrdersInner() {
                                   >
                                     <FileText size={16} /> View
                                   </a>
-                                ) : <span className="text-slate-500">Not uploaded</span>}
+                                ) : (
+                                  <span className="text-slate-500">Not uploaded</span>
+                                )}
                               </td>
-                              <td className="py-2 px-3">
-                                {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
-                              </td>
+                              <td className="py-2 px-3">{order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}</td>
+
                               <td className="py-2 px-3">
                                 <div className="flex flex-wrap gap-2">
                                   <Link
@@ -534,6 +610,7 @@ function AdminOrdersInner() {
                                       <CheckCircle2 size={16} /> Approve
                                     </button>
                                   )}
+
                                   {order.status === 'APPROVED' && (
                                     <button
                                       disabled={busyId === order.id}
@@ -543,6 +620,7 @@ function AdminOrdersInner() {
                                       <Clock size={16} /> Start Prod.
                                     </button>
                                   )}
+
                                   {order.status === 'IN_PRODUCTION' && (
                                     <button
                                       disabled={busyId === order.id}
@@ -552,6 +630,7 @@ function AdminOrdersInner() {
                                       <CircleCheckBig size={16} /> Completed
                                     </button>
                                   )}
+
                                   {order.status !== 'COMPLETED' && order.status !== 'CANCELED' && (
                                     <button
                                       disabled={busyId === order.id}
@@ -564,7 +643,6 @@ function AdminOrdersInner() {
                                 </div>
                               </td>
 
-                              {/* Files link */}
                               <td className="py-2 px-3">
                                 <Link
                                   href={`/admin/orders/${order.id}/media`}
@@ -613,7 +691,11 @@ function AdminOrdersInner() {
             onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
             className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-sm"
           >
-            {[10,20,50,100].map(n => <option key={n} value={n}>{n}/page</option>)}
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}/page
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -627,9 +709,7 @@ function AdminOrdersInner() {
 
 export default function AdminOrdersPage() {
   return (
-    <Suspense fallback={
-      <div className="p-6 text-slate-600">Loading orders…</div>
-    }>
+    <Suspense fallback={<div className="p-6 text-slate-600">Loading orders…</div>}>
       <AdminOrdersInner />
     </Suspense>
   )

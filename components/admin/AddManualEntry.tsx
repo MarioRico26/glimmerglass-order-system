@@ -1,3 +1,4 @@
+//glimmerglass-order-system/components/admin/AddManualEntry.tsx
 'use client'
 
 import { useState } from 'react'
@@ -35,10 +36,12 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, comment }),
       })
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.message || 'Error creating entry')
       }
+
       onSuccess()
       onClose()
     } catch (err: any) {
@@ -50,10 +53,8 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Card */}
       <form
         onSubmit={handleSubmit}
         className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200"
@@ -71,8 +72,14 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
               required
               className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
             >
-              <option value="" disabled>Select Status</option>
-              {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              <option value="" disabled>
+                Select Status
+              </option>
+              {STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -87,7 +94,11 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
             />
           </div>
 
-          {error && <div className="text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm">{error}</div>}
+          {error && (
+            <div className="text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm">
+              {error}
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
