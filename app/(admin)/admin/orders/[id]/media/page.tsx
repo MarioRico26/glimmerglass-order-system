@@ -1,4 +1,4 @@
-//glimmerglass-order-system/app/(admin)/admin/orders/[id]/media/page.tsx:
+// glimmerglass-order-system/app/(admin)/admin/orders/[id]/media/page.tsx
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -35,8 +35,20 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 const DOC_GROUPS: Array<{ title: string; items: string[] }> = [
   { title: 'Payment / Finance', items: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'] },
-  { title: 'In Production', items: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'] },
-  { title: 'Pre-shipping', items: ['SHIPPING_CHECKLIST', 'PRE_SHIPPING_MEDIA', 'BILL_OF_LADING', 'PROOF_OF_FINAL_PAYMENT', 'PAID_INVOICE'] },
+  {
+    title: 'In Production',
+    items: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'],
+  },
+  {
+    title: 'Pre-shipping',
+    items: [
+      'SHIPPING_CHECKLIST',
+      'PRE_SHIPPING_MEDIA',
+      'BILL_OF_LADING',
+      'PROOF_OF_FINAL_PAYMENT',
+      'PAID_INVOICE',
+    ],
+  },
   { title: 'Dealer Documents', items: ['WARRANTY', 'MANUAL'] },
   { title: 'Other', items: ['OTHER'] },
 ]
@@ -54,7 +66,7 @@ export default function OrderMediaPage() {
   const params = useParams()
   const orderId = useMemo(() => {
     const raw = params?.id as string | string[] | undefined
-    return Array.isArray(raw) ? raw[0] : (raw ?? '')
+    return Array.isArray(raw) ? raw[0] : raw ?? ''
   }, [params])
 
   const [file, setFile] = useState<File | null>(null)
@@ -78,7 +90,11 @@ export default function OrderMediaPage() {
         return
       }
       const data = await safeJson<Media[] | { items: Media[] }>(res)
-      const items = Array.isArray(data) ? data : (Array.isArray((data as any)?.items) ? (data as any).items : [])
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray((data as any)?.items)
+          ? (data as any).items
+          : []
       setMediaList(items)
     } catch (err) {
       console.error('Error fetching media:', err)
@@ -140,9 +156,10 @@ export default function OrderMediaPage() {
 
         <div className="p-6">
           <form onSubmit={handleSubmit} className="grid gap-4">
-            <div className="grid gap-4 lg:grid-cols-12 items-end">
+            {/* ✅ Layout stable: 1 col (mobile), 2 cols (md), 4 cols (lg) */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-start">
               {/* File */}
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-semibold text-slate-700 mb-1">File</label>
                 <input
                   ref={fileInputRef}
@@ -154,8 +171,10 @@ export default function OrderMediaPage() {
               </div>
 
               {/* Doc Type */}
-              <div className="lg:col-span-4">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Document Type</label>
+              <div className="lg:col-span-1">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Document Type
+                </label>
                 <select
                   value={docType}
                   onChange={(e) => setDocType(e.target.value)}
@@ -176,32 +195,33 @@ export default function OrderMediaPage() {
                 </p>
               </div>
 
-              {/* Visibility */}
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Visibility</label>
-                <button
-                  type="button"
-                  onClick={() => setVisibleToDealer((v) => !v)}
-                  className={[
-                    'w-full rounded-lg border px-3 py-2 text-sm font-semibold',
-                    visibleToDealer
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-slate-200 bg-slate-50 text-slate-700',
-                  ].join(' ')}
-                >
-                  {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
-                </button>
-                <p className="text-xs text-slate-500 mt-1">
-                  {visibleToDealer ? 'Dealer will see this file.' : 'Hidden from dealer.'}
-                </p>
-              </div>
+              {/* Visibility + Upload (no overlap) */}
+              <div className="lg:col-span-1 flex flex-col gap-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Visibility
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleToDealer((v) => !v)}
+                    className={[
+                      'w-full rounded-lg border px-3 py-2 text-sm font-semibold',
+                      visibleToDealer
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-slate-50 text-slate-700',
+                    ].join(' ')}
+                  >
+                    {visibleToDealer ? 'Visible to dealer' : 'Internal only'}
+                  </button>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {visibleToDealer ? 'Dealer will see this file.' : 'Hidden from dealer.'}
+                  </p>
+                </div>
 
-              {/* Upload */}
-              <div className="lg:col-span-1 flex lg:justify-end">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full lg:w-auto rounded-xl bg-sky-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-sky-800 disabled:opacity-60"
+                  className="w-full rounded-xl bg-sky-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-sky-800 disabled:opacity-60"
                 >
                   {loading ? 'Uploading…' : 'Upload'}
                 </button>
