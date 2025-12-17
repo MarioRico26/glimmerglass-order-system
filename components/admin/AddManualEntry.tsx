@@ -1,7 +1,7 @@
-//glimmerglass-order-system/components/admin/AddManualEntry.tsx
+// glimmerglass-order-system/components/admin/AddManualEntry.tsx
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface Props {
   orderId: string
@@ -10,19 +10,17 @@ interface Props {
   onSuccess: () => void
 }
 
-const STATUSES = [
-  { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'IN_PRODUCTION', label: 'In Production' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELED', label: 'Canceled' },
-] as const
-
 export default function AddManualEntryModal({ orderId, open, onClose, onSuccess }: Props) {
-  const [status, setStatus] = useState<string>('IN_PRODUCTION')
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setError(null)
+      setLoading(false)
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -30,18 +28,20 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
     e?.preventDefault()
     setLoading(true)
     setError(null)
+
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comment }),
+        body: JSON.stringify({ comment }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || 'Error creating entry')
+        throw new Error(data.message || 'Error creating note')
       }
 
+      setComment('')
       onSuccess()
       onClose()
     } catch (err: any) {
@@ -50,6 +50,8 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
       setLoading(false)
     }
   }
+
+  const trimmed = comment.trim()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -60,37 +62,20 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
         className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200"
       >
         <div className="px-5 py-4 border-b border-slate-200">
-          <h3 className="text-xl font-bold text-slate-900">Add Manual Entry</h3>
+          <h3 className="text-xl font-bold text-slate-900">Add Note</h3>
+          <p className="text-sm text-slate-600 mt-1">Notes do not change the order status.</p>
         </div>
 
         <div className="p-5 space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-semibold text-slate-700">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              required
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
-            >
-              <option value="" disabled>
-                Select Status
-              </option>
-              {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-slate-700">Comment</label>
+            <label className="text-sm font-semibold text-slate-700">Note</label>
             <textarea
               rows={4}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Optional note…"
+              placeholder="Write a note…"
               className="w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              required
             />
           </div>
 
@@ -110,10 +95,10 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !trimmed}
               className="h-10 rounded-xl bg-blue-600 px-5 font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? 'Saving…' : 'Submit'}
+              {loading ? 'Saving…' : 'Save Note'}
             </button>
           </div>
         </div>
