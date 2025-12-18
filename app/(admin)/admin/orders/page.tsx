@@ -20,7 +20,6 @@ import {
   ArrowUpDown,
   Truck,
   ExternalLink,
-  AlertTriangle,
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
@@ -86,7 +85,7 @@ function labelStatus(status: string) {
 
 function StatusBadge({ status }: { status: string }) {
   const base =
-    'inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap'
+    'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap'
 
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
@@ -125,42 +124,23 @@ function StatusBadge({ status }: { status: string }) {
         </span>
       )
     default:
-      return (
-        <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>
-          {labelStatus(status)}
-        </span>
-      )
+      return <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>{labelStatus(status)}</span>
   }
 }
 
-function SkeletonRow() {
+function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <tr className="border-t border-slate-100">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <td key={i} className="py-4 px-4">
-          <div className="h-3 w-full max-w-[220px] animate-pulse rounded bg-slate-200/70" />
-        </td>
-      ))}
-    </tr>
+    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+      {children}
+    </div>
   )
 }
 
-function Th({
-  children,
-  className = '',
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
+function CardShell({ children }: { children: React.ReactNode }) {
   return (
-    <th
-      className={[
-        'text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500',
-        className,
-      ].join(' ')}
-    >
+    <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       {children}
-    </th>
+    </div>
   )
 }
 
@@ -174,6 +154,7 @@ function AdminOrdersInner() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  // Missing requirements modal
   const [missingOpen, setMissingOpen] = useState(false)
   const [missingDocs, setMissingDocs] = useState<string[]>([])
   const [missingFields, setMissingFields] = useState<string[]>([])
@@ -218,7 +199,6 @@ function AdminOrdersInner() {
 
       const data = await safeJson<ApiResp>(res)
       setOrders(data?.items ?? [])
-      setError(null)
     } catch (e: any) {
       setError(e.message || 'Failed to load orders')
       setOrders([])
@@ -363,16 +343,16 @@ function AdminOrdersInner() {
     return `/api/admin/orders/export?${params.toString()}`
   }
 
-  function renderNextStep(order: Order) {
+  function NextStep({ order }: { order: Order }) {
     const s = order.status as FlowStatus
     const disabled = busyId === order.id
-    const cancellable = order.status !== 'COMPLETED' && order.status !== 'CANCELED'
+    const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELED'
 
     const cancelBtn = (
       <button
-        disabled={disabled || !cancellable}
+        disabled={disabled || !canCancel}
         onClick={() => updateStatus(order.id, 'CANCELED')}
-        className="inline-flex items-center justify-center h-9 w-9 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+        className="inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
         title="Cancel order"
       >
         <CircleX size={16} />
@@ -381,12 +361,12 @@ function AdminOrdersInner() {
 
     if (s === 'PENDING_PAYMENT_APPROVAL') {
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-end">
           <button
             disabled={disabled}
             onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-            title="Move to In Production (requirements enforced)"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+            title="Move to In Production"
           >
             <Clock size={16} /> Start
           </button>
@@ -397,11 +377,11 @@ function AdminOrdersInner() {
 
     if (s === 'IN_PRODUCTION') {
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-end">
           <button
             disabled={disabled}
             onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
-            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-violet-600 text-white text-xs font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-violet-600 text-white text-sm font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
             title="Move to Pre-Shipping"
           >
             <Truck size={16} /> Pre-Ship
@@ -413,11 +393,11 @@ function AdminOrdersInner() {
 
     if (s === 'PRE_SHIPPING') {
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-end">
           <button
             disabled={disabled}
             onClick={() => updateStatus(order.id, 'COMPLETED')}
-            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
             title="Complete order"
           >
             <CircleCheckBig size={16} /> Complete
@@ -427,15 +407,7 @@ function AdminOrdersInner() {
       )
     }
 
-    return (
-      <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-2 text-xs text-slate-500">
-          <AlertTriangle size={14} />
-          No step
-        </span>
-        {cancelBtn}
-      </div>
-    )
+    return <div className="flex items-center justify-end">{cancelBtn}</div>
   }
 
   return (
@@ -450,8 +422,8 @@ function AdminOrdersInner() {
       />
 
       {/* Header */}
-      <div className="rounded-2xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <CardShell>
+        <div className="p-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Order Management</h1>
             <p className="text-slate-600">Review, filter and update orders</p>
@@ -461,7 +433,7 @@ function AdminOrdersInner() {
           <div className="flex items-center gap-2">
             <a
               href={exportUrl()}
-              className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
             >
               <FileText size={16} />
               Export CSV
@@ -469,7 +441,7 @@ function AdminOrdersInner() {
 
             <button
               onClick={handleRefresh}
-              className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
               title="Refresh"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
@@ -482,263 +454,256 @@ function AdminOrdersInner() {
             />
           </div>
         </div>
-      </div>
+      </CardShell>
 
       {/* Filters */}
-      <div className="rounded-2xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={q}
-              onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-              placeholder="Search (model, dealer, factory, address)"
-              className="pl-8 pr-3 h-10 rounded-xl border border-slate-200 bg-white w-72 max-w-[85vw]"
-            />
-          </div>
+      <CardShell>
+        <div className="p-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={q}
+                onChange={(e) => setParams({ q: e.target.value, page: 1 })}
+                placeholder="Search (model, dealer, factory, address)"
+                className="pl-8 pr-3 h-10 rounded-2xl border border-slate-200 bg-white w-72 max-w-[85vw]"
+              />
+            </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter size={16} className="text-slate-500" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
-            >
-              <option value="ALL">All statuses</option>
-              {ALL_STATUS.map((s) => (
-                <option key={s} value={s}>
-                  {labelStatus(s)}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={16} className="text-slate-500" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setParams({ status: e.target.value, page: 1 })}
+                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+              >
+                <option value="ALL">All statuses</option>
+                {ALL_STATUS.map((s) => (
+                  <option key={s} value={s}>
+                    {labelStatus(s)}
+                  </option>
+                ))}
+              </select>
 
-            <UserCircle2 size={16} className="text-slate-500" />
-            <select
-              value={dealerFilter}
-              onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
-            >
-              <option value="ALL">All dealers</option>
-              {dealers.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+              <UserCircle2 size={16} className="text-slate-500" />
+              <select
+                value={dealerFilter}
+                onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
+                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+              >
+                <option value="ALL">All dealers</option>
+                {dealers.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
 
-            <FactoryIcon size={16} className="text-slate-500" />
-            <select
-              value={factoryFilter}
-              onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
-            >
-              <option value="ALL">All factories</option>
-              {factories.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
+              <FactoryIcon size={16} className="text-slate-500" />
+              <select
+                value={factoryFilter}
+                onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
+                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+              >
+                <option value="ALL">All factories</option>
+                {factories.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
 
-            <Group size={16} className="text-slate-500" />
-            <select
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value as any)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
-            >
-              <option value="DEALER">Group by dealer</option>
-              <option value="FACTORY">Group by factory</option>
-            </select>
+              <Group size={16} className="text-slate-500" />
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as any)}
+                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+              >
+                <option value="DEALER">Group by dealer</option>
+                <option value="FACTORY">Group by factory</option>
+              </select>
+
+              {/* Tiny sort control (premium, without breaking layout) */}
+              <button
+                onClick={() => toggleSort('status')}
+                className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+                title="Toggle sort by status"
+              >
+                <ArrowUpDown size={16} />
+                Sort
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </CardShell>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] overflow-hidden">
-        {loading ? (
-          <div className="overflow-auto">
-            <table className="w-full text-sm table-fixed">
-              <thead className="bg-white">
-                <tr>
-                  <Th className="w-[170px]">Model</Th>
-                  <Th className="w-[200px]">Dealer</Th>
-                  <Th>Address</Th>
-                  <Th className="w-[150px]">
-                    <button className="inline-flex items-center gap-1" onClick={() => toggleSort('status')}>
-                      Status <ArrowUpDown size={14} />
-                    </button>
-                  </Th>
-                  <Th className="w-[210px]">Next step</Th>
-                  <Th className="w-[150px]">Links</Th>
-                </tr>
-              </thead>
-              <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
-            </table>
-          </div>
-        ) : Object.keys(grouped).length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-              <PackageSearch size={28} className="text-slate-500" />
+      {/* Content */}
+      <CardShell>
+        <div className="p-4">
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-20 rounded-2xl border border-slate-100 bg-slate-50 animate-pulse" />
+              ))}
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No orders match your filters</h3>
-            <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {Object.entries(grouped).map(([groupName, list]) => {
-              const open = openGroups[groupName] ?? true
-              const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
+          ) : Object.keys(grouped).length === 0 ? (
+            <div className="p-10 text-center">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                <PackageSearch size={28} className="text-slate-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">No orders match your filters</h3>
+              <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(grouped).map(([groupName, list]) => {
+                const open = openGroups[groupName] ?? true
+                const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
 
-              return (
-                <section key={groupName}>
-                  <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={toggle}
-                        className="rounded-lg hover:bg-white p-1 border border-transparent hover:border-slate-200 transition"
-                        aria-label="Toggle group"
-                      >
-                        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                      </button>
+                return (
+                  <section key={groupName} className="rounded-2xl border border-slate-100 bg-white">
+                    {/* Group header */}
+                    <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60 rounded-t-2xl">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={toggle}
+                          className="rounded-xl hover:bg-white p-2 border border-transparent hover:border-slate-200 transition"
+                          aria-label="Toggle group"
+                        >
+                          {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </button>
 
-                      <h2 className="font-semibold text-slate-900">
-                        {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
-                      </h2>
+                        <h2 className="font-semibold text-slate-900">
+                          {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
+                        </h2>
 
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700">
-                        {list.length} orders
-                      </span>
-                    </div>
-                  </header>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700">
+                          {list.length} orders
+                        </span>
+                      </div>
+                    </header>
 
-                  {open && (
-                    <div className="overflow-auto">
-                      <table className="w-full text-sm table-fixed">
-                        {/* Premium sticky header */}
-                        <thead className="sticky top-0 z-10 bg-white/85 backdrop-blur border-b border-slate-100">
-                          <tr>
-                            <Th className="w-[170px]">Model</Th>
-                            <Th className="w-[200px]">Dealer</Th>
-                            <Th>Address</Th>
-                            <Th className="w-[150px]">Status</Th>
-                            <Th className="w-[210px]">Next step</Th>
-                            <Th className="w-[150px]">Links</Th>
-                          </tr>
-                        </thead>
+                    {/* Desktop header row (clean + consistent) */}
+                    {open && (
+                      <div className="hidden lg:grid grid-cols-12 gap-4 px-5 py-3 border-t border-slate-100 bg-white">
+                        <div className="col-span-3"><FieldLabel>Model</FieldLabel></div>
+                        <div className="col-span-3"><FieldLabel>Dealer</FieldLabel></div>
+                        <div className="col-span-3"><FieldLabel>Address</FieldLabel></div>
+                        <div className="col-span-1"><FieldLabel>Status</FieldLabel></div>
+                        <div className="col-span-2 text-right"><FieldLabel>Next step</FieldLabel></div>
+                      </div>
+                    )}
 
-                        <tbody>
-                          {list.map((order) => {
-                            return (
-                              <tr
-                                key={order.id}
-                                className="border-t border-slate-100 hover:bg-slate-50/60 transition"
-                              >
-                                {/* Model */}
-                                <td className="py-4 px-4">
+                    {/* Orders */}
+                    {open && (
+                      <div className="divide-y divide-slate-100">
+                        {list.map((order) => (
+                          <div
+                            key={order.id}
+                            className="px-5 py-4 hover:bg-slate-50/60 transition"
+                          >
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                              {/* Model */}
+                              <div className="lg:col-span-3">
+                                <Link
+                                  href={`/admin/orders/${order.id}/history`}
+                                  prefetch={false}
+                                  className="text-sky-700 hover:underline font-bold text-base"
+                                  title="Open order details"
+                                >
+                                  {order.poolModel?.name || '-'}
+                                </Link>
+
+                                <div className="mt-1 text-sm text-slate-600">
+                                  <span className="font-semibold">Factory:</span>{' '}
+                                  {order.factoryLocation?.name || <span className="italic text-slate-500">Not set</span>}
+                                </div>
+
+                                <div className="mt-1 text-xs text-slate-500">
+                                  <span className="font-semibold text-slate-600">Color:</span>{' '}
+                                  {order.color?.name || '—'}
+                                </div>
+                              </div>
+
+                              {/* Dealer */}
+                              <div className="lg:col-span-3">
+                                <div className="text-slate-900 font-semibold text-base">
+                                  {order.dealer?.name || 'Unknown Dealer'}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-600">
+                                  <span className="font-semibold">Created:</span>{' '}
+                                  {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
+                                </div>
+                              </div>
+
+                              {/* Address + Payment */}
+                              <div className="lg:col-span-3">
+                                <div className="text-slate-700 leading-snug line-clamp-2 break-words">
+                                  {order.deliveryAddress}
+                                </div>
+
+                                <div className="mt-2 text-sm text-slate-600 flex items-center gap-2">
+                                  <span className="font-semibold">Payment:</span>
+                                  {order.paymentProofUrl ? (
+                                    <a
+                                      href={order.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
+                                      title="View payment proof"
+                                    >
+                                      <ExternalLink size={14} />
+                                      View
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-500">Not uploaded</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Status */}
+                              <div className="lg:col-span-1">
+                                <StatusBadge status={order.status} />
+                              </div>
+
+                              {/* Right side: Next step + links */}
+                              <div className="lg:col-span-2 flex flex-col gap-2 lg:items-end">
+                                <NextStep order={order} />
+
+                                <div className="grid grid-cols-2 lg:flex lg:flex-col gap-2 w-full lg:w-auto">
                                   <Link
                                     href={`/admin/orders/${order.id}/history`}
                                     prefetch={false}
-                                    className="text-sky-700 hover:underline font-semibold"
-                                    title="Open order details"
+                                    className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
+                                    title="Open order"
                                   >
-                                    {order.poolModel?.name || '-'}
+                                    <PackageSearch size={16} />
+                                    Open
                                   </Link>
 
-                                  {/* Secondary info (only when space exists) */}
-                                  <div className="hidden xl:block mt-1 text-xs text-slate-500">
-                                    <span className="font-semibold text-slate-600">Factory:</span>{' '}
-                                    {order.factoryLocation?.name || 'Not set'}
-                                  </div>
-                                </td>
-
-                                {/* Dealer */}
-                                <td className="py-4 px-4">
-                                  <div className="truncate text-slate-900 font-medium" title={order.dealer?.name || ''}>
-                                    {order.dealer?.name || 'Unknown Dealer'}
-                                  </div>
-
-                                  <div className="hidden 2xl:block mt-1 text-xs text-slate-500">
-                                    <span className="font-semibold text-slate-600">Created:</span>{' '}
-                                    {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
-                                  </div>
-                                </td>
-
-                                {/* Address */}
-                                <td className="py-4 px-4">
-                                  <div
-                                    className="text-slate-700 break-words whitespace-normal leading-snug line-clamp-2"
-                                    title={order.deliveryAddress}
+                                  <Link
+                                    href={`/admin/orders/${order.id}/media`}
+                                    prefetch={false}
+                                    className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
+                                    title="Files"
                                   >
-                                    {order.deliveryAddress}
-                                  </div>
-
-                                  {/* Payment quick link when there's room */}
-                                  <div className="hidden xl:flex mt-2 items-center gap-2 text-xs">
-                                    <span className="text-slate-500">Payment:</span>
-                                    {order.paymentProofUrl ? (
-                                      <a
-                                        href={order.paymentProofUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
-                                        title="View payment proof"
-                                      >
-                                        <ExternalLink size={14} />
-                                        View
-                                      </a>
-                                    ) : (
-                                      <span className="text-slate-500">Not uploaded</span>
-                                    )}
-                                  </div>
-                                </td>
-
-                                {/* Status */}
-                                <td className="py-4 px-4">
-                                  <StatusBadge status={order.status} />
-                                </td>
-
-                                {/* Next Step + Quick actions */}
-                                <td className="py-4 px-4">
-                                  {renderNextStep(order)}
-                                </td>
-
-                                {/* Links */}
-                                <td className="py-4 px-4">
-                                  <div className="grid gap-2">
-                                    <Link
-                                      href={`/admin/orders/${order.id}/history`}
-                                      prefetch={false}
-                                      className="inline-flex items-center justify-center gap-2 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold"
-                                      title="Open order"
-                                    >
-                                      <PackageSearch size={16} />
-                                      Open
-                                    </Link>
-
-                                    <Link
-                                      href={`/admin/orders/${order.id}/media`}
-                                      prefetch={false}
-                                      className="inline-flex items-center justify-center gap-2 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold"
-                                      title="Files"
-                                    >
-                                      <FileText size={16} />
-                                      Files
-                                    </Link>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
-              )
-            })}
-          </div>
-        )}
-      </div>
+                                    <FileText size={16} />
+                                    Files
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </CardShell>
 
       {/* Pagination */}
       <div className="flex items-center justify-between gap-3">
@@ -750,21 +715,21 @@ function AdminOrdersInner() {
           <button
             disabled={page <= 1}
             onClick={() => setParams({ page: page - 1 })}
-            className="h-9 px-3 rounded-xl border border-slate-200 bg-white disabled:opacity-50"
+            className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
           >
             Prev
           </button>
           <button
             disabled={page >= totalPages}
             onClick={() => setParams({ page: page + 1 })}
-            className="h-9 px-3 rounded-xl border border-slate-200 bg-white disabled:opacity-50"
+            className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
           >
             Next
           </button>
           <select
             value={pageSize}
             onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-sm"
+            className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
           >
             {[10, 20, 50, 100].map((n) => (
               <option key={n} value={n}>
