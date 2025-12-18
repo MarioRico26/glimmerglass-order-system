@@ -19,8 +19,8 @@ import {
   RefreshCw,
   ArrowUpDown,
   Truck,
-  AlertTriangle,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
@@ -60,7 +60,6 @@ type MissingPayload = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
-// ✅ APPROVED eliminado del UI (y del filtro)
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
   'IN_PRODUCTION',
@@ -86,7 +85,9 @@ function labelStatus(status: string) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const base = 'inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-semibold border'
+  const base =
+    'inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap'
+
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
       return (
@@ -135,12 +136,31 @@ function StatusBadge({ status }: { status: string }) {
 function SkeletonRow() {
   return (
     <tr className="border-t border-slate-100">
-      {Array.from({ length: 11 }).map((_, i) => (
-        <td key={i} className="py-3 px-3">
-          <div className="h-3 w-full max-w-[180px] animate-pulse rounded bg-slate-200/70" />
+      {Array.from({ length: 9 }).map((_, i) => (
+        <td key={i} className="py-4 px-4">
+          <div className="h-3 w-full max-w-[220px] animate-pulse rounded bg-slate-200/70" />
         </td>
       ))}
     </tr>
+  )
+}
+
+function Th({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <th
+      className={[
+        'text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500',
+        className,
+      ].join(' ')}
+    >
+      {children}
+    </th>
   )
 }
 
@@ -154,7 +174,6 @@ function AdminOrdersInner() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  // Missing requirements modal state
   const [missingOpen, setMissingOpen] = useState(false)
   const [missingDocs, setMissingDocs] = useState<string[]>([])
   const [missingFields, setMissingFields] = useState<string[]>([])
@@ -228,7 +247,6 @@ function AdminOrdersInner() {
     setMissingOpen(true)
   }
 
-  // ✅ único lugar para cambiar status: /status
   const updateStatus = async (orderId: string, newStatus: FlowStatus) => {
     try {
       setBusyId(orderId)
@@ -251,8 +269,8 @@ function AdminOrdersInner() {
 
       const updated = payload as Order
       if (!updated?.id) throw new Error('Invalid response')
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
 
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
       router.refresh()
     } catch (e: any) {
       alert(e?.message || 'Could not update status')
@@ -308,7 +326,6 @@ function AdminOrdersInner() {
     }, {} as Record<string, Order[]>)
   }, [orders, groupBy])
 
-  // total count (mantengo tu patrón)
   const [totalCount, setTotalCount] = useState(0)
   useEffect(() => {
     ;(async () => {
@@ -346,57 +363,78 @@ function AdminOrdersInner() {
     return `/api/admin/orders/export?${params.toString()}`
   }
 
-  // ✅ helper para next-step button
-  function renderNextAction(order: Order) {
+  function renderNextStep(order: Order) {
     const s = order.status as FlowStatus
     const disabled = busyId === order.id
+    const cancellable = order.status !== 'COMPLETED' && order.status !== 'CANCELED'
 
-    // ✅ flow sin APPROVED:
-    // PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+    const cancelBtn = (
+      <button
+        disabled={disabled || !cancellable}
+        onClick={() => updateStatus(order.id, 'CANCELED')}
+        className="inline-flex items-center justify-center h-9 w-9 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+        title="Cancel order"
+      >
+        <CircleX size={16} />
+      </button>
+    )
+
     if (s === 'PENDING_PAYMENT_APPROVAL') {
       return (
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-          title="Move to In Production (requirements enforced)"
-        >
-          <Clock size={16} /> Start
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={disabled}
+            onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
+            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+            title="Move to In Production (requirements enforced)"
+          >
+            <Clock size={16} /> Start
+          </button>
+          {cancelBtn}
+        </div>
       )
     }
 
     if (s === 'IN_PRODUCTION') {
       return (
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
-          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-violet-600 text-white text-xs font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
-          title="Move to Pre-Shipping"
-        >
-          <Truck size={16} /> Pre-Ship
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={disabled}
+            onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
+            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-violet-600 text-white text-xs font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
+            title="Move to Pre-Shipping"
+          >
+            <Truck size={16} /> Pre-Ship
+          </button>
+          {cancelBtn}
+        </div>
       )
     }
 
     if (s === 'PRE_SHIPPING') {
       return (
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'COMPLETED')}
-          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-          title="Complete order"
-        >
-          <CircleCheckBig size={16} /> Complete
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={disabled}
+            onClick={() => updateStatus(order.id, 'COMPLETED')}
+            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+            title="Complete order"
+          >
+            <CircleCheckBig size={16} /> Complete
+          </button>
+          {cancelBtn}
+        </div>
       )
     }
 
     return (
-      <span className="inline-flex items-center gap-2 text-xs text-slate-500">
-        <AlertTriangle size={14} />
-        No next step
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-2 text-xs text-slate-500">
+          <AlertTriangle size={14} />
+          No step
+        </span>
+        {cancelBtn}
+      </div>
     )
   }
 
@@ -454,7 +492,7 @@ function AdminOrdersInner() {
             <input
               value={q}
               onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-              placeholder="Search (model, color, dealer, factory, address)"
+              placeholder="Search (model, dealer, factory, address)"
               className="pl-8 pr-3 h-10 rounded-xl border border-slate-200 bg-white w-72 max-w-[85vw]"
             />
           </div>
@@ -518,29 +556,20 @@ function AdminOrdersInner() {
       {/* Table */}
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] overflow-hidden">
         {loading ? (
-          <div className="overflow-auto p-2">
+          <div className="overflow-auto">
             <table className="w-full text-sm table-fixed">
-              <thead className="text-slate-600 bg-slate-50">
+              <thead className="bg-white">
                 <tr>
-                  <th className="text-left py-2 px-3 w-[180px]">Model</th>
-                  <th className="text-left py-2 px-3 hidden lg:table-cell w-[130px]">Color</th>
-                  <th className="text-left py-2 px-3 w-[200px]">Dealer</th>
-                  <th className="text-left py-2 px-3 hidden xl:table-cell w-[160px]">Factory</th>
-                  <th className="text-left py-2 px-3 w-auto">Address</th>
-                  <th className="text-left py-2 px-3 w-[140px]">
+                  <Th className="w-[170px]">Model</Th>
+                  <Th className="w-[200px]">Dealer</Th>
+                  <Th>Address</Th>
+                  <Th className="w-[150px]">
                     <button className="inline-flex items-center gap-1" onClick={() => toggleSort('status')}>
                       Status <ArrowUpDown size={14} />
                     </button>
-                  </th>
-                  <th className="text-left py-2 px-3 hidden lg:table-cell w-[120px]">Payment</th>
-                  <th className="text-left py-2 px-3 hidden 2xl:table-cell w-[170px]">
-                    <button className="inline-flex items-center gap-1" onClick={() => toggleSort('createdAt')}>
-                      Created <ArrowUpDown size={14} />
-                    </button>
-                  </th>
-                  <th className="text-left py-2 px-3 w-[160px]">Next step</th>
-                  <th className="text-left py-2 px-3 w-[90px]">Actions</th>
-                  <th className="text-left py-2 px-3 w-[140px]">Links</th>
+                  </Th>
+                  <Th className="w-[210px]">Next step</Th>
+                  <Th className="w-[150px]">Links</Th>
                 </tr>
               </thead>
               <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
@@ -585,33 +614,27 @@ function AdminOrdersInner() {
                   {open && (
                     <div className="overflow-auto">
                       <table className="w-full text-sm table-fixed">
-                        <thead className="text-slate-600 bg-white border-b border-slate-100">
+                        {/* Premium sticky header */}
+                        <thead className="sticky top-0 z-10 bg-white/85 backdrop-blur border-b border-slate-100">
                           <tr>
-                            <th className="text-left py-3 px-3 w-[180px]">Model</th>
-                            <th className="text-left py-3 px-3 hidden lg:table-cell w-[130px]">Color</th>
-                            <th className="text-left py-3 px-3 w-[200px]">Dealer</th>
-                            <th className="text-left py-3 px-3 hidden xl:table-cell w-[160px]">Factory</th>
-                            <th className="text-left py-3 px-3 w-auto">Address</th>
-                            <th className="text-left py-3 px-3 w-[140px]">Status</th>
-                            <th className="text-left py-3 px-3 hidden lg:table-cell w-[120px]">Payment</th>
-                            <th className="text-left py-3 px-3 hidden 2xl:table-cell w-[170px]">Created</th>
-                            <th className="text-left py-3 px-3 w-[160px]">Next step</th>
-                            <th className="text-left py-3 px-3 w-[90px]">Actions</th>
-                            <th className="text-left py-3 px-3 w-[140px]">Links</th>
+                            <Th className="w-[170px]">Model</Th>
+                            <Th className="w-[200px]">Dealer</Th>
+                            <Th>Address</Th>
+                            <Th className="w-[150px]">Status</Th>
+                            <Th className="w-[210px]">Next step</Th>
+                            <Th className="w-[150px]">Links</Th>
                           </tr>
                         </thead>
 
                         <tbody>
                           {list.map((order) => {
-                            const disabled = busyId === order.id
-
                             return (
                               <tr
                                 key={order.id}
                                 className="border-t border-slate-100 hover:bg-slate-50/60 transition"
                               >
                                 {/* Model */}
-                                <td className="py-3 px-3">
+                                <td className="py-4 px-4">
                                   <Link
                                     href={`/admin/orders/${order.id}/history`}
                                     prefetch={false}
@@ -620,86 +643,67 @@ function AdminOrdersInner() {
                                   >
                                     {order.poolModel?.name || '-'}
                                   </Link>
-                                </td>
 
-                                {/* Color (lg+) */}
-                                <td className="py-3 px-3 hidden lg:table-cell text-slate-700">
-                                  {order.color?.name || '-'}
-                                </td>
-
-                                {/* Dealer */}
-                                <td className="py-3 px-3">
-                                  <div className="truncate text-slate-800 font-medium" title={order.dealer?.name || ''}>
-                                    {order.dealer?.name || 'Unknown Dealer'}
+                                  {/* Secondary info (only when space exists) */}
+                                  <div className="hidden xl:block mt-1 text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-600">Factory:</span>{' '}
+                                    {order.factoryLocation?.name || 'Not set'}
                                   </div>
                                 </td>
 
-                                {/* Factory (xl+) */}
-                                <td className="py-3 px-3 hidden xl:table-cell text-slate-700">
-                                  <div className="truncate" title={order.factoryLocation?.name || ''}>
-                                    {order.factoryLocation?.name || 'Unknown Factory'}
+                                {/* Dealer */}
+                                <td className="py-4 px-4">
+                                  <div className="truncate text-slate-900 font-medium" title={order.dealer?.name || ''}>
+                                    {order.dealer?.name || 'Unknown Dealer'}
+                                  </div>
+
+                                  <div className="hidden 2xl:block mt-1 text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-600">Created:</span>{' '}
+                                    {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
                                   </div>
                                 </td>
 
                                 {/* Address */}
-                                <td className="py-3 px-3">
+                                <td className="py-4 px-4">
                                   <div
                                     className="text-slate-700 break-words whitespace-normal leading-snug line-clamp-2"
                                     title={order.deliveryAddress}
                                   >
                                     {order.deliveryAddress}
                                   </div>
-                                </td>
 
-                                {/* Status */}
-                                <td className="py-3 px-3">
-                                  <StatusBadge status={order.status} />
-                                </td>
-
-                                {/* Payment (lg+) */}
-                                <td className="py-3 px-3 hidden lg:table-cell">
-                                  {order.paymentProofUrl ? (
-                                    <a
-                                      href={order.paymentProofUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sky-700 hover:underline text-xs font-semibold"
-                                      title="View payment proof"
-                                    >
-                                      <ExternalLink size={14} />
-                                      View
-                                    </a>
-                                  ) : (
-                                    <span className="text-slate-500 text-xs">Not uploaded</span>
-                                  )}
-                                </td>
-
-                                {/* Created (2xl+) */}
-                                <td className="py-3 px-3 hidden 2xl:table-cell text-xs text-slate-600">
-                                  {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
-                                </td>
-
-                                {/* Next step */}
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center">
-                                    {renderNextAction(order)}
+                                  {/* Payment quick link when there's room */}
+                                  <div className="hidden xl:flex mt-2 items-center gap-2 text-xs">
+                                    <span className="text-slate-500">Payment:</span>
+                                    {order.paymentProofUrl ? (
+                                      <a
+                                        href={order.paymentProofUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
+                                        title="View payment proof"
+                                      >
+                                        <ExternalLink size={14} />
+                                        View
+                                      </a>
+                                    ) : (
+                                      <span className="text-slate-500">Not uploaded</span>
+                                    )}
                                   </div>
                                 </td>
 
-                                {/* Actions (compact, not mounted) */}
-                                <td className="py-3 px-3">
-                                  <button
-                                    disabled={disabled || order.status === 'COMPLETED' || order.status === 'CANCELED'}
-                                    onClick={() => updateStatus(order.id, 'CANCELED')}
-                                    className="inline-flex items-center justify-center h-9 w-full rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 disabled:opacity-50"
-                                    title="Cancel order"
-                                  >
-                                    <CircleX size={16} />
-                                  </button>
+                                {/* Status */}
+                                <td className="py-4 px-4">
+                                  <StatusBadge status={order.status} />
+                                </td>
+
+                                {/* Next Step + Quick actions */}
+                                <td className="py-4 px-4">
+                                  {renderNextStep(order)}
                                 </td>
 
                                 {/* Links */}
-                                <td className="py-3 px-3">
+                                <td className="py-4 px-4">
                                   <div className="grid gap-2">
                                     <Link
                                       href={`/admin/orders/${order.id}/history`}
