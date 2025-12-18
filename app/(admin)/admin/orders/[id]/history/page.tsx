@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
+import AddManualEntryModal from '@/components/admin/AddManualEntry'
+
 interface OrderHistory {
   id: string
   status: string
@@ -94,87 +96,78 @@ export default function OrderHistoryPage() {
 
   const [editRequestedDate, setEditRequestedDate] = useState<string>('') // yyyy-mm-dd
   const [editSerialNumber, setEditSerialNumber] = useState<string>('')
-  const [editPriority, setEditPriority] = useState<string>('') // string para permitir vacío
+  const [editPriority, setEditPriority] = useState<string>('')
 
   const [editing, setEditing] = useState(false)
-  const [status, setStatus] = useState('')
-  const [comment, setComment] = useState('')
-  const [showModal, setShowModal] = useState(false)
+
+  // ✅ usa tu modal real
+  const [manualOpen, setManualOpen] = useState(false)
+
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        setLoading(true)
+  const loadAll = async () => {
+    try {
+      setLoading(true)
 
-        const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
-          fetch(`/api/admin/orders/${orderId}/status`),
-          fetch(`/api/admin/orders/${orderId}/history`),
-          fetch(`/api/admin/orders/${orderId}/media`),
-          fetch(`/api/factories`),
-        ])
+      const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
+        fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' }),
+        fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' }),
+        fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' }),
+        fetch(`/api/factories`, { cache: 'no-store' }),
+      ])
 
-        const orderData = await safeJson<OrderSummary>(orderRes)
-        const historyData = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(historyRes)
-        const mediaData = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(mediaRes)
-        const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
+      const orderData = await safeJson<OrderSummary>(orderRes)
+      const historyData = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(historyRes)
+      const mediaData = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(mediaRes)
+      const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
 
-        if (orderData) {
-          setSummary(orderData)
+      if (orderData) {
+        setSummary(orderData)
 
-          setSelectedFactoryId(orderData.factory?.id || '')
-          setSelectedShippingMethod(orderData.shippingMethod || '')
+        setSelectedFactoryId(orderData.factory?.id || '')
+        setSelectedShippingMethod(orderData.shippingMethod || '')
 
-          // requestedShipDate viene como ISO; lo llevamos a yyyy-mm-dd
-          if (orderData.requestedShipDate) {
-            const d = new Date(orderData.requestedShipDate)
-            if (!isNaN(d.getTime())) {
-              setEditRequestedDate(d.toISOString().slice(0, 10))
-            } else {
-              setEditRequestedDate('')
-            }
-          } else {
-            setEditRequestedDate('')
-          }
-
-          setEditSerialNumber(orderData.serialNumber || '')
-          setEditPriority(
-            typeof orderData.productionPriority === 'number'
-              ? String(orderData.productionPriority)
-              : ''
-          )
+        if (orderData.requestedShipDate) {
+          const d = new Date(orderData.requestedShipDate)
+          setEditRequestedDate(!isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '')
         } else {
-          setMessage('❌ Failed to load order data')
+          setEditRequestedDate('')
         }
 
-        const historyList = Array.isArray(historyData)
-          ? historyData
-          : Array.isArray((historyData as any)?.items)
-          ? (historyData as any).items
-          : []
-        setHistory(historyList)
-
-        const mediaList = Array.isArray(mediaData)
-          ? mediaData
-          : Array.isArray((mediaData as any)?.items)
-          ? (mediaData as any).items
-          : []
-        setMediaFiles(mediaList)
-
-        if (Array.isArray(factoriesData)) {
-          setFactoryList(factoriesData)
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error)
-        setMessage('❌ Error loading order data')
-      } finally {
-        setLoading(false)
+        setEditSerialNumber(orderData.serialNumber || '')
+        setEditPriority(typeof orderData.productionPriority === 'number' ? String(orderData.productionPriority) : '')
+      } else {
+        setMessage('❌ Failed to load order data')
       }
-    }
 
-    fetchAll()
+      const historyList = Array.isArray(historyData)
+        ? historyData
+        : Array.isArray((historyData as any)?.items)
+        ? (historyData as any).items
+        : []
+      setHistory(historyList)
+
+      const mediaList = Array.isArray(mediaData)
+        ? mediaData
+        : Array.isArray((mediaData as any)?.items)
+        ? (mediaData as any).items
+        : []
+      setMediaFiles(mediaList)
+
+      if (Array.isArray(factoriesData)) setFactoryList(factoriesData)
+    } catch (err) {
+      console.error(err)
+      setMessage('❌ Error loading order data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId])
 
   const handleSaveChanges = async () => {
@@ -200,16 +193,11 @@ export default function OrderHistoryPage() {
 
       if (res.ok && updated) {
         setSummary(updated)
-
         setSelectedFactoryId(updated.factory?.id || '')
         setSelectedShippingMethod(updated.shippingMethod || '')
 
         setEditSerialNumber(updated.serialNumber || '')
-        setEditPriority(
-          typeof updated.productionPriority === 'number'
-            ? String(updated.productionPriority)
-            : ''
-        )
+        setEditPriority(typeof updated.productionPriority === 'number' ? String(updated.productionPriority) : '')
 
         if (updated.requestedShipDate) {
           const d = new Date(updated.requestedShipDate)
@@ -228,35 +216,6 @@ export default function OrderHistoryPage() {
       setMessage('❌ Network error. Please check your connection.')
     } finally {
       setSaving(false)
-      setTimeout(() => setMessage(''), 3000)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      setMessage('🔄 Adding history entry...')
-
-      const res = await fetch(`/api/admin/orders/${orderId}/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comment }),
-      })
-
-      const payload = await safeJson<OrderHistory>(res)
-      if (res.ok && payload) {
-        setHistory((prev) => [payload, ...prev])
-        setStatus('')
-        setComment('')
-        setShowModal(false)
-        setMessage('✅ History entry added successfully!')
-      } else {
-        setMessage(`❌ Failed to add history entry (${res.status})`)
-      }
-    } catch (error) {
-      console.error('Submit error:', error)
-      setMessage('❌ Network error. Please try again.')
-    } finally {
       setTimeout(() => setMessage(''), 3000)
     }
   }
@@ -284,6 +243,19 @@ export default function OrderHistoryPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
+      {/* ✅ tu modal real (y aquí el error ya sale dentro del modal, no “detrás”) */}
+      <AddManualEntryModal
+        orderId={orderId}
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        onSuccess={async () => {
+          // refresca todo para que status + timeline + media queden actualizados
+          await loadAll()
+          setMessage('✅ Status updated.')
+          setTimeout(() => setMessage(''), 2500)
+        }}
+      />
+
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl md:text-3xl font-black text-slate-900">
           Order Details &amp; History
@@ -323,20 +295,16 @@ export default function OrderHistoryPage() {
               <span className="text-sm font-semibold text-slate-700">Order Summary</span>
             </div>
 
-            {/* GRID */}
             <div className="px-6 pt-4 pb-5 grid gap-6 md:grid-cols-4 text-sm text-slate-800">
-              {/* Order */}
               <div className="space-y-1">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Order
                 </h3>
                 <p>
-                  <span className="font-semibold">Model:</span>{' '}
-                  {summary.poolModel?.name || 'Not set'}
+                  <span className="font-semibold">Model:</span> {summary.poolModel?.name || 'Not set'}
                 </p>
                 <p>
-                  <span className="font-semibold">Color:</span>{' '}
-                  {summary.color?.name || 'Not set'}
+                  <span className="font-semibold">Color:</span> {summary.color?.name || 'Not set'}
                 </p>
                 <p className="mt-1">
                   <span className="font-semibold">Status:</span>{' '}
@@ -346,7 +314,6 @@ export default function OrderHistoryPage() {
                 </p>
               </div>
 
-              {/* Dealer */}
               <div className="space-y-1">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Dealer
@@ -356,10 +323,7 @@ export default function OrderHistoryPage() {
                 {summary.dealer?.email && (
                   <p className="text-xs">
                     <span className="font-semibold">Email:</span>{' '}
-                    <a
-                      href={`mailto:${summary.dealer.email}`}
-                      className="text-sky-700 hover:underline"
-                    >
+                    <a href={`mailto:${summary.dealer.email}`} className="text-sky-700 hover:underline">
                       {summary.dealer.email}
                     </a>
                   </p>
@@ -381,7 +345,6 @@ export default function OrderHistoryPage() {
                 )}
               </div>
 
-              {/* Schedule */}
               <div className="space-y-1">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Schedule
@@ -391,42 +354,29 @@ export default function OrderHistoryPage() {
                 </p>
                 <p>
                   <span className="font-semibold">Serial Number:</span>{' '}
-                  {summary.serialNumber ? (
-                    summary.serialNumber
-                  ) : (
-                    <span className="italic text-slate-500">Not set</span>
-                  )}
+                  {summary.serialNumber ? summary.serialNumber : <span className="italic text-slate-500">Not set</span>}
                 </p>
                 <p>
                   <span className="font-semibold">Production Priority:</span>{' '}
-                  {typeof summary.productionPriority === 'number' ? (
-                    <>#{summary.productionPriority}</>
-                  ) : (
-                    <span className="italic text-slate-500">Not assigned</span>
-                  )}
+                  {typeof summary.productionPriority === 'number'
+                    ? <>#{summary.productionPriority}</>
+                    : <span className="italic text-slate-500">Not assigned</span>}
                 </p>
               </div>
 
-              {/* Logistics */}
               <div className="space-y-1">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Logistics
                 </h3>
                 <p>
                   <span className="font-semibold">Factory:</span>{' '}
-                  {summary.factory?.name ? (
-                    summary.factory.name
-                  ) : (
-                    <span className="italic text-slate-500">Not assigned</span>
-                  )}
+                  {summary.factory?.name ? summary.factory.name : <span className="italic text-slate-500">Not assigned</span>}
                 </p>
                 <p>
                   <span className="font-semibold">Shipping:</span>{' '}
-                  {summary.shippingMethod ? (
-                    SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod
-                  ) : (
-                    <span className="italic text-slate-500">Not set</span>
-                  )}
+                  {summary.shippingMethod
+                    ? (SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod)
+                    : <span className="italic text-slate-500">Not set</span>}
                 </p>
 
                 <button
@@ -438,7 +388,6 @@ export default function OrderHistoryPage() {
               </div>
             </div>
 
-            {/* Subcards: delivery + hardware */}
             <div className="px-6 pb-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
@@ -481,17 +430,14 @@ export default function OrderHistoryPage() {
                   ))}
                 </div>
 
-                {hardwareAllOff && (
-                  <p className="mt-2 text-xs text-slate-500">None selected.</p>
-                )}
+                {hardwareAllOff && <p className="mt-2 text-xs text-slate-500">None selected.</p>}
               </div>
             </div>
           </div>
 
-          {/* BOTONES */}
           <div className="flex flex-wrap gap-2 mb-8">
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => setManualOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
             >
               + Manual Entry
@@ -508,16 +454,16 @@ export default function OrderHistoryPage() {
               </a>
             )}
 
-            <Link href={`/admin/orders/${orderId}/media`}>
-              <span className="inline-flex bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm cursor-pointer">
-                Upload Media
-              </span>
+            <Link
+              href={`/admin/orders/${orderId}/media`}
+              className="inline-flex bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
+            >
+              Upload Media
             </Link>
           </div>
         </>
       )}
 
-      {/* TIMELINE */}
       <div className="mb-8">
         <h3 className="text-lg font-semibold mb-3 text-slate-900">Timeline</h3>
         {history.length === 0 ? (
@@ -547,7 +493,6 @@ export default function OrderHistoryPage() {
         )}
       </div>
 
-      {/* MEDIA */}
       <div className="mb-8">
         <h3 className="text-lg font-semibold mb-3 text-slate-900">Uploaded Media</h3>
         {mediaFiles.length === 0 ? (
@@ -562,9 +507,9 @@ export default function OrderHistoryPage() {
                 className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between"
               >
                 <div>
-                <p className="text-sm font-medium text-slate-900">
-  {m.docType ? m.docType.replaceAll('_', ' ') : m.type}
-</p>
+                  <p className="text-sm font-medium text-slate-900">
+                    {m.docType ? m.docType.replaceAll('_', ' ') : m.type}
+                  </p>
                   <a
                     href={m.fileUrl}
                     target="_blank"
@@ -581,63 +526,6 @@ export default function OrderHistoryPage() {
         )}
       </div>
 
-      {/* MODAL: NUEVO HISTORY ENTRY */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-slate-900">Add History Entry</h2>
-            <form onSubmit={handleSubmit}>
-              <label className="block mb-4">
-                <span className="block text-sm font-semibold mb-1 text-slate-700">Status</span>
-                <select
-                  required
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                >
-                  <option value="">Select status</option>
-                  {Object.entries(STATUS_LABEL).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block mb-6">
-                <span className="block text-sm font-semibold mb-1 text-slate-700">
-                  Comment (optional)
-                </span>
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows={3}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  placeholder="Any notes related to this change…"
-                />
-              </label>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800"
-                >
-                  Add Entry
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: EDIT FACTORY / SHIPPING / PRODUCTION */}
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-lg">
@@ -646,7 +534,6 @@ export default function OrderHistoryPage() {
             </h2>
 
             <div className="space-y-4 mb-6">
-              {/* Factory */}
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">
                   Factory Location
@@ -667,7 +554,6 @@ export default function OrderHistoryPage() {
                 </select>
               </div>
 
-              {/* Shipping */}
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">
                   Shipping Method
@@ -684,7 +570,6 @@ export default function OrderHistoryPage() {
                 </select>
               </div>
 
-              {/* Requested Ship Date */}
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">
                   Requested Ship Date
@@ -696,12 +581,8 @@ export default function OrderHistoryPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   disabled={saving}
                 />
-                <p className="text-xs text-slate-500 mt-1">
-                  Suggested: at least 4 weeks out from order creation.
-                </p>
               </div>
 
-              {/* Serial Number */}
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">
                   Serial Number
@@ -712,11 +593,9 @@ export default function OrderHistoryPage() {
                   onChange={(e) => setEditSerialNumber(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   disabled={saving}
-                  placeholder="e.g. PON-XL-12082025-CB"
                 />
               </div>
 
-              {/* Production Priority */}
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">
                   Production Priority
@@ -728,11 +607,7 @@ export default function OrderHistoryPage() {
                   onChange={(e) => setEditPriority(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   disabled={saving}
-                  placeholder="1 = highest priority"
                 />
-                <p className="text-xs text-slate-500 mt-1">
-                  Lower numbers mean higher priority in the production schedule.
-                </p>
               </div>
             </div>
 

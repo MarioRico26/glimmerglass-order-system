@@ -10,9 +10,9 @@ interface Props {
   onSuccess: () => void
 }
 
+// ✅ APPROVED fuera (ya no lo vamos a usar)
 const STATUSES = [
   { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending Payment Approval' },
-  { value: 'APPROVED', label: 'Approved (temporary)' }, // remove later easily
   { value: 'IN_PRODUCTION', label: 'In Production' },
   { value: 'PRE_SHIPPING', label: 'Pre-Shipping' },
   { value: 'COMPLETED', label: 'Completed' },
@@ -62,15 +62,15 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
   const [missingFields, setMissingFields] = useState<string[]>([])
 
   const hint = useMemo(() => {
-    // Mike rules reminder
-    if (status === 'APPROVED') {
-      return 'To move to Approved: Proof of Payment, Quote, Invoice.'
-    }
+    // Mike rules reminder (sin APPROVED)
     if (status === 'IN_PRODUCTION') {
-      return 'To move to In Production: Build Sheet, Post-production media, and Serial Number.'
+      return 'To move to In Production: Proof of Payment, Quote, Invoice + Serial Number (if required by your flow).'
     }
     if (status === 'PRE_SHIPPING') {
-      return 'To move to Pre-Shipping: Shipping checklist, Pre-shipping media, Bill of Lading, Proof of Final Payment, Paid invoice.'
+      return 'To move to Pre-Shipping: Build Sheet, Post-production media, and Serial Number.'
+    }
+    if (status === 'COMPLETED') {
+      return 'To move to Completed: Shipping checklist, Pre-shipping media, Bill of Lading, Proof of Final Payment, Paid invoice, and Serial Number.'
     }
     return null
   }, [status])
@@ -88,6 +88,7 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           status,
           comment: comment?.trim() || '',
