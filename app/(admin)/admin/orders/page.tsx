@@ -1,3 +1,4 @@
+// glimmerglass-order-system/app/(admin)/admin/orders/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
@@ -56,6 +57,11 @@ type MissingPayload = {
   }
 }
 
+// UI constants
+const aqua = '#00B2CA'
+const deep = '#007A99'
+
+// ✅ APPROVED fuera del UI
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
   'IN_PRODUCTION',
@@ -81,58 +87,149 @@ function labelStatus(status: string) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const base =
-    'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap'
+  const base = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border'
+  const dot = 'h-2 w-2 rounded-full'
 
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
       return (
-        <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        <span className={`${base} bg-amber-50 text-amber-900 border-amber-200`}>
+          <span className={`${dot} bg-amber-500`} />
           Pending
         </span>
       )
     case 'IN_PRODUCTION':
       return (
-        <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+        <span className={`${base} bg-indigo-50 text-indigo-900 border-indigo-200`}>
+          <span className={`${dot} bg-indigo-500`} />
           In Production
         </span>
       )
     case 'PRE_SHIPPING':
       return (
-        <span className={`${base} bg-violet-50 text-violet-800 border-violet-200`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+        <span className={`${base} bg-violet-50 text-violet-900 border-violet-200`}>
+          <span className={`${dot} bg-violet-500`} />
           Pre-Shipping
         </span>
       )
     case 'COMPLETED':
       return (
-        <span className={`${base} bg-emerald-50 text-emerald-800 border-emerald-200`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        <span className={`${base} bg-emerald-50 text-emerald-900 border-emerald-200`}>
+          <span className={`${dot} bg-emerald-500`} />
           Completed
         </span>
       )
     case 'CANCELED':
       return (
-        <span className={`${base} bg-rose-50 text-rose-800 border-rose-200`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+        <span className={`${base} bg-rose-50 text-rose-900 border-rose-200`}>
+          <span className={`${dot} bg-rose-500`} />
           Canceled
         </span>
       )
     default:
       return (
-        <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>
+        <span className={`${base} bg-slate-50 text-slate-800 border-slate-200`}>
+          <span className={`${dot} bg-slate-400`} />
           {labelStatus(status)}
         </span>
       )
   }
 }
 
-function CardShell({ children }: { children: React.ReactNode }) {
+function SkeletonGroup() {
   return (
-    <div className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
-      {children}
+    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="h-6 w-64 rounded bg-slate-100 animate-pulse" />
+      <div className="mt-4 space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-20 rounded-2xl bg-slate-100 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Botón “siguiente paso” según flow:
+ * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+ */
+function NextStep({
+  order,
+  busy,
+  onAdvance,
+  onCancel,
+}: {
+  order: Order
+  busy: boolean
+  onAdvance: (next: FlowStatus) => void
+  onCancel: () => void
+}) {
+  const s = order.status as FlowStatus
+
+  // Completed/Canceled: nada que hacer
+  if (s === 'COMPLETED' || s === 'CANCELED') {
+    return (
+      <div className="flex items-center justify-between gap-2 w-full xl:w-auto">
+        <div className="text-xs text-slate-500">No actions</div>
+      </div>
+    )
+  }
+
+  const primary =
+    s === 'PENDING_PAYMENT_APPROVAL'
+      ? {
+          label: 'Start',
+          icon: <Clock size={16} />,
+          next: 'IN_PRODUCTION' as FlowStatus,
+          className:
+            'bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_10px_30px_rgba(79,70,229,0.25)]',
+        }
+      : s === 'IN_PRODUCTION'
+      ? {
+          label: 'Pre-Ship',
+          icon: <Truck size={16} />,
+          next: 'PRE_SHIPPING' as FlowStatus,
+          className:
+            'bg-violet-600 hover:bg-violet-700 text-white shadow-[0_10px_30px_rgba(124,58,237,0.25)]',
+        }
+      : {
+          label: 'Complete',
+          icon: <CircleCheckBig size={16} />,
+          next: 'COMPLETED' as FlowStatus,
+          className:
+            'bg-emerald-600 hover:bg-emerald-700 text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]',
+        }
+
+  return (
+    <div className="flex items-center gap-2 w-full xl:w-auto">
+      <button
+        disabled={busy}
+        onClick={() => onAdvance(primary.next)}
+        className={[
+          'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-2xl text-sm font-bold transition',
+          'focus:outline-none focus:ring-2 focus:ring-slate-300/70',
+          busy ? 'opacity-60 cursor-not-allowed' : '',
+          primary.className,
+        ].join(' ')}
+        title={`Move to ${labelStatus(primary.next)}`}
+      >
+        {primary.icon}
+        {primary.label}
+      </button>
+
+      <button
+        disabled={busy}
+        onClick={onCancel}
+        className={[
+          'h-10 w-10 rounded-2xl border border-rose-200 bg-rose-50 text-rose-700',
+          'hover:bg-rose-100 transition inline-flex items-center justify-center',
+          'focus:outline-none focus:ring-2 focus:ring-rose-200',
+          busy ? 'opacity-60 cursor-not-allowed' : '',
+        ].join(' ')}
+        title="Cancel order"
+      >
+        <CircleX size={18} />
+      </button>
     </div>
   )
 }
@@ -144,7 +241,6 @@ function AdminOrdersInner() {
 
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   // Missing requirements modal
@@ -173,10 +269,8 @@ function AdminOrdersInner() {
   }
 
   const load = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError(null)
-
       const params = new URLSearchParams()
       if (q) params.set('q', q)
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
@@ -188,12 +282,11 @@ function AdminOrdersInner() {
       params.set('pageSize', String(pageSize))
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error((await safeJson<{ message?: string }>(res))?.message || 'Failed')
+      if (!res.ok) throw new Error('Failed to load orders')
 
       const data = await safeJson<ApiResp>(res)
       setOrders(data?.items ?? [])
-    } catch (e: any) {
-      setError(e.message || 'Failed to load orders')
+    } catch (e) {
       setOrders([])
     } finally {
       setLoading(false)
@@ -242,6 +335,7 @@ function AdminOrdersInner() {
 
       const updated = payload as Order
       if (!updated?.id) throw new Error('Invalid response')
+
       setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
       router.refresh()
     } catch (e: any) {
@@ -251,6 +345,7 @@ function AdminOrdersInner() {
     }
   }
 
+  // Filters lists from current page items (tu patrón original)
   const dealers = useMemo(() => {
     const s = new Set<string>()
     orders.forEach((o) => s.add(o.dealer?.name || 'Unknown Dealer'))
@@ -298,6 +393,7 @@ function AdminOrdersInner() {
     }, {} as Record<string, Order[]>)
   }, [orders, groupBy])
 
+  // Total count (tu patrón)
   const [totalCount, setTotalCount] = useState(0)
   useEffect(() => {
     ;(async () => {
@@ -310,6 +406,7 @@ function AdminOrdersInner() {
       params.set('dir', dir)
       params.set('page', String(page))
       params.set('pageSize', String(pageSize))
+
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
       const data = (await safeJson<ApiResp>(res)) || { total: 0, items: [], page: 1, pageSize: 20 }
       setTotalCount(data.total || 0)
@@ -335,357 +432,322 @@ function AdminOrdersInner() {
     return `/api/admin/orders/export?${params.toString()}`
   }
 
-  function NextStep({ order }: { order: Order }) {
-    const s = order.status as FlowStatus
-    const disabled = busyId === order.id
-    const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELED'
-
-    const cancelBtn = (
-      <button
-        disabled={disabled || !canCancel}
-        onClick={() => updateStatus(order.id, 'CANCELED')}
-        className="inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-        title="Cancel order"
-      >
-        <CircleX size={16} />
-      </button>
-    )
-
-    const wrap = (btn: React.ReactNode) => (
-      <div className="flex items-center gap-2 justify-end">
-        {btn}
-        {cancelBtn}
-      </div>
-    )
-
-    if (s === 'PENDING_PAYMENT_APPROVAL') {
-      return wrap(
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-          title="Move to In Production"
-        >
-          <Clock size={16} /> Start
-        </button>
-      )
-    }
-
-    if (s === 'IN_PRODUCTION') {
-      return wrap(
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-violet-600 text-white text-sm font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
-          title="Move to Pre-Shipping"
-        >
-          <Truck size={16} /> Pre-Ship
-        </button>
-      )
-    }
-
-    if (s === 'PRE_SHIPPING') {
-      return wrap(
-        <button
-          disabled={disabled}
-          onClick={() => updateStatus(order.id, 'COMPLETED')}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-          title="Complete order"
-        >
-          <CircleCheckBig size={16} /> Complete
-        </button>
-      )
-    }
-
-    return <div className="flex items-center justify-end">{cancelBtn}</div>
-  }
-
   return (
-    // 🔥 clave: w-full + min-w-0 + overflow-x-hidden para matar el scroll lateral
-    <div className="w-full min-w-0 overflow-x-hidden">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-6 space-y-6">
-        <MissingRequirementsModal
-          open={missingOpen}
-          onClose={() => setMissingOpen(false)}
-          targetStatus={missingTarget}
-          missingDocs={missingDocs}
-          missingFields={missingFields}
-          goToUploadHref={missingUploadHref}
-        />
+    <div className="space-y-6">
+      <MissingRequirementsModal
+        open={missingOpen}
+        onClose={() => setMissingOpen(false)}
+        targetStatus={missingTarget}
+        missingDocs={missingDocs}
+        missingFields={missingFields}
+        goToUploadHref={missingUploadHref}
+      />
 
-        {/* Header */}
-        <CardShell>
-          <div className="p-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">
-                Order Management
-              </h1>
-              <p className="text-slate-600">Review, filter and update orders</p>
-              {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-              <a
-                href={exportUrl()}
-                className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-              >
-                <FileText size={16} />
-                Export CSV
-              </a>
-
-              <button
-                onClick={handleRefresh}
-                className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-                title="Refresh"
-              >
-                <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
-                Refresh
-              </button>
-            </div>
+      {/* Header */}
+      <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900">Order Management</h1>
+            <p className="text-slate-600 mt-1">Review, filter and update orders</p>
           </div>
-        </CardShell>
 
-        {/* Filters */}
-        <CardShell>
-          <div className="p-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative min-w-0">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={q}
-                  onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-                  placeholder="Search (model, dealer, factory, address)"
-                  className="pl-8 pr-3 h-10 rounded-2xl border border-slate-200 bg-white w-80 max-w-[85vw]"
-                />
-              </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={exportUrl()}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+            >
+              <FileText size={16} />
+              Export CSV
+            </a>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <Filter size={16} className="text-slate-500" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-                >
-                  <option value="ALL">All statuses</option>
-                  {ALL_STATUS.map((s) => (
-                    <option key={s} value={s}>
-                      {labelStatus(s)}
-                    </option>
-                  ))}
-                </select>
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+              title="Refresh"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
+              Refresh
+            </button>
 
-                <UserCircle2 size={16} className="text-slate-500" />
-                <select
-                  value={dealerFilter}
-                  onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-                >
-                  <option value="ALL">All dealers</option>
-                  {dealers.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-
-                <FactoryIcon size={16} className="text-slate-500" />
-                <select
-                  value={factoryFilter}
-                  onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-                >
-                  <option value="ALL">All factories</option>
-                  {factories.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-
-                <Group size={16} className="text-slate-500" />
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as any)}
-                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-                >
-                  <option value="DEALER">Group by dealer</option>
-                  <option value="FACTORY">Group by factory</option>
-                </select>
-
-                <button
-                  onClick={() => toggleSort('status')}
-                  className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-                  title="Toggle sort"
-                >
-                  <ArrowUpDown size={16} />
-                  Sort
-                </button>
-              </div>
-            </div>
+            <div
+              className="hidden sm:block h-1 w-28 rounded-full"
+              style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+            />
           </div>
-        </CardShell>
+        </div>
+      </div>
 
-        {/* Content */}
-        <CardShell>
-          <div className="p-4">
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-20 rounded-2xl border border-slate-100 bg-slate-50 animate-pulse" />
+      {/* Filters */}
+      <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative w-full lg:w-[420px]">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={q}
+              onChange={(e) => setParams({ q: e.target.value, page: 1 })}
+              placeholder="Search (model, color, dealer, factory, address)"
+              className="w-full pl-11 pr-4 h-11 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2">
+              <Filter size={16} className="text-slate-500" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setParams({ status: e.target.value, page: 1 })}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
+              >
+                <option value="ALL">All statuses</option>
+                {ALL_STATUS.map((s) => (
+                  <option key={s} value={s}>
+                    {labelStatus(s)}
+                  </option>
                 ))}
-              </div>
-            ) : Object.keys(grouped).length === 0 ? (
-              <div className="p-10 text-center">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-                  <PackageSearch size={28} className="text-slate-500" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-900">No orders match your filters</h3>
-                <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {Object.entries(grouped).map(([groupName, list]) => {
-                  const open = openGroups[groupName] ?? true
-                  const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
+              </select>
+            </div>
 
-                  return (
-                    <section key={groupName} className="rounded-2xl border border-slate-100 bg-white overflow-hidden">
-                      <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <button
-                            onClick={toggle}
-                            className="rounded-xl hover:bg-white p-2 border border-transparent hover:border-slate-200 transition"
-                            aria-label="Toggle group"
-                          >
-                            {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                          </button>
+            <div className="inline-flex items-center gap-2">
+              <UserCircle2 size={16} className="text-slate-500" />
+              <select
+                value={dealerFilter}
+                onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
+              >
+                <option value="ALL">All dealers</option>
+                {dealers.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                          <h2 className="font-semibold text-slate-900 truncate">
-                            {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
-                          </h2>
+            <div className="inline-flex items-center gap-2">
+              <FactoryIcon size={16} className="text-slate-500" />
+              <select
+                value={factoryFilter}
+                onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
+              >
+                <option value="ALL">All factories</option>
+                {factories.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700 whitespace-nowrap">
-                            {list.length} orders
-                          </span>
-                        </div>
-                      </header>
+            <div className="inline-flex items-center gap-2">
+              <Group size={16} className="text-slate-500" />
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as any)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
+              >
+                <option value="DEALER">Group by dealer</option>
+                <option value="FACTORY">Group by factory</option>
+              </select>
+            </div>
 
-                      {open && (
-                        <div className="divide-y divide-slate-100">
-                          {list.map((order) => (
-                            <div key={order.id} className="px-5 py-4 hover:bg-slate-50/60 transition">
-                              {/* Grid principal: min-w-0 en TODAS las columnas para evitar overflow */}
-                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
-                                {/* Model */}
-                                <div className="lg:col-span-3 min-w-0">
-                                  <Link
-                                    href={`/admin/orders/${order.id}/history`}
-                                    prefetch={false}
-                                    className="text-sky-700 hover:underline font-bold text-base block truncate"
-                                    title="Open order details"
-                                  >
-                                    {order.poolModel?.name || '-'}
-                                  </Link>
+            <button
+              onClick={() => toggleSort('status')}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+              title="Sort by status"
+            >
+              <ArrowUpDown size={16} />
+              Sort
+            </button>
+          </div>
+        </div>
+      </div>
 
-                                  <div className="mt-1 text-sm text-slate-600 min-w-0">
-                                    <span className="font-semibold">Factory:</span>{' '}
-                                    <span className="truncate inline-block max-w-full align-bottom">
-                                      {order.factoryLocation?.name || 'Not set'}
-                                    </span>
-                                  </div>
+      {/* Content */}
+      {loading ? (
+        <div className="grid gap-4">
+          <SkeletonGroup />
+          <SkeletonGroup />
+        </div>
+      ) : Object.keys(grouped).length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+            <PackageSearch size={28} className="text-slate-500" />
+          </div>
+          <h3 className="text-xl font-black text-slate-900">No orders match your filters</h3>
+          <p className="text-slate-600 mt-1">Try changing status, dealer/factory or search.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(grouped).map(([groupName, list]) => {
+            const open = openGroups[groupName] ?? true
+            const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
 
-                                  <div className="mt-1 text-xs text-slate-500">
-                                    <span className="font-semibold text-slate-600">Color:</span>{' '}
-                                    {order.color?.name || '—'}
-                                  </div>
+            return (
+              <section
+                key={groupName}
+                className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] overflow-hidden"
+              >
+                {/* Group header */}
+                <header className="flex items-center justify-between px-5 py-4 bg-slate-50/70 border-b border-slate-200/60">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      onClick={toggle}
+                      className="h-9 w-9 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center justify-center"
+                      aria-label="Toggle group"
+                    >
+                      {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    </button>
+
+                    <div className="min-w-0">
+                      <div className="text-sm text-slate-500 font-semibold">
+                        {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}
+                      </div>
+                      <div className="text-lg font-black text-slate-900 truncate">
+                        {groupName}
+                      </div>
+                    </div>
+
+                    <span className="text-xs px-3 py-1 rounded-full bg-slate-200/70 text-slate-700 font-bold">
+                      {list.length} orders
+                    </span>
+                  </div>
+                </header>
+
+                {!open ? null : (
+                  <div className="divide-y divide-slate-100">
+                    {/* “Headers” premium (no table) */}
+                    <div className="hidden xl:grid grid-cols-12 gap-4 px-5 py-3 text-[11px] font-black tracking-widest text-slate-500 uppercase bg-white">
+                      <div className="col-span-8 grid grid-cols-3 gap-4">
+                        <div>Model</div>
+                        <div>Dealer</div>
+                        <div>Address & Payment</div>
+                      </div>
+                      <div className="col-span-4 text-right">Status • Next step • Links</div>
+                    </div>
+
+                    {list.map((order) => (
+                      <div key={order.id} className="px-5 py-4 hover:bg-slate-50/60 transition">
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start min-w-0">
+                          {/* LEFT: info */}
+                          <div className="xl:col-span-8 min-w-0">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-w-0">
+                              {/* Model */}
+                              <div className="min-w-0">
+                                <Link
+                                  href={`/admin/orders/${order.id}/history`}
+                                  prefetch={false}
+                                  className="text-sky-700 hover:underline font-black text-base block truncate"
+                                  title="Open order details"
+                                >
+                                  {order.poolModel?.name || '-'}
+                                </Link>
+
+                                <div className="mt-1 text-sm text-slate-600 min-w-0">
+                                  <span className="font-semibold">Factory:</span>{' '}
+                                  <span className="truncate inline-block max-w-full align-bottom">
+                                    {order.factoryLocation?.name || 'Not set'}
+                                  </span>
                                 </div>
 
-                                {/* Dealer */}
-                                <div className="lg:col-span-3 min-w-0">
-                                  <div className="text-slate-900 font-semibold text-base truncate">
-                                    {order.dealer?.name || 'Unknown Dealer'}
-                                  </div>
-                                  <div className="mt-1 text-sm text-slate-600">
-                                    <span className="font-semibold">Created:</span>{' '}
-                                    {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
-                                  </div>
+                                <div className="mt-1 text-xs text-slate-500">
+                                  <span className="font-semibold text-slate-600">Color:</span>{' '}
+                                  {order.color?.name || '—'}
+                                </div>
+                              </div>
+
+                              {/* Dealer */}
+                              <div className="min-w-0">
+                                <div className="text-slate-900 font-black text-base truncate">
+                                  {order.dealer?.name || 'Unknown Dealer'}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-600">
+                                  <span className="font-semibold">Created:</span>{' '}
+                                  {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
+                                </div>
+                              </div>
+
+                              {/* Address + Payment */}
+                              <div className="min-w-0">
+                                <div className="text-slate-700 leading-snug break-words overflow-hidden">
+                                  <span className="block">{order.deliveryAddress}</span>
                                 </div>
 
-                                {/* Address + Payment */}
-                                <div className="lg:col-span-3 min-w-0">
-                                  <div className="text-slate-700 leading-snug break-words overflow-hidden">
-                                    {/* no line-clamp dependency */}
-                                    <span className="block">
-                                      {order.deliveryAddress}
-                                    </span>
-                                  </div>
-
-                                  <div className="mt-2 text-sm text-slate-600 flex items-center gap-2 flex-wrap">
-                                    <span className="font-semibold">Payment:</span>
-                                    {order.paymentProofUrl ? (
-                                      <a
-                                        href={order.paymentProofUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
-                                        title="View payment proof"
-                                      >
-                                        <ExternalLink size={14} />
-                                        View
-                                      </a>
-                                    ) : (
-                                      <span className="text-slate-500">Not uploaded</span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Status */}
-                                <div className="lg:col-span-1 min-w-0">
-                                  <StatusBadge status={order.status} />
-                                </div>
-
-                                {/* Right side */}
-                                <div className="lg:col-span-2 min-w-0 flex flex-col gap-2 lg:items-end">
-                                  <NextStep order={order} />
-
-                                  <div className="grid grid-cols-2 lg:flex lg:flex-col gap-2 w-full lg:w-auto">
-                                    <Link
-                                      href={`/admin/orders/${order.id}/history`}
-                                      prefetch={false}
-                                      className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
-                                      title="Open order"
+                                <div className="mt-2 text-sm text-slate-600 flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold">Payment:</span>
+                                  {order.paymentProofUrl ? (
+                                    <a
+                                      href={order.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-sky-700 hover:underline font-bold"
+                                      title="View payment proof"
                                     >
-                                      <PackageSearch size={16} />
-                                      Open
-                                    </Link>
-
-                                    <Link
-                                      href={`/admin/orders/${order.id}/media`}
-                                      prefetch={false}
-                                      className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
-                                      title="Files"
-                                    >
-                                      <FileText size={16} />
-                                      Files
-                                    </Link>
-                                  </div>
+                                      <ExternalLink size={14} />
+                                      View
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-500">Not uploaded</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </CardShell>
+                          </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm text-slate-600">
+                          {/* RIGHT: ops */}
+                          <div className="xl:col-span-4 min-w-0">
+                            <div className="flex flex-col gap-3 xl:items-end">
+                              <div className="w-full xl:w-auto flex xl:justify-end">
+                                <StatusBadge status={order.status} />
+                              </div>
+
+                              <div className="w-full xl:w-auto">
+                                <NextStep
+                                  order={order}
+                                  busy={busyId === order.id}
+                                  onAdvance={(next) => updateStatus(order.id, next)}
+                                  onCancel={() => updateStatus(order.id, 'CANCELED')}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 xl:flex xl:flex-col gap-2 w-full xl:w-[180px]">
+                                <Link
+                                  href={`/admin/orders/${order.id}/history`}
+                                  prefetch={false}
+                                  className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 text-sm font-black"
+                                  title="Open order"
+                                >
+                                  <PackageSearch size={16} />
+                                  Open
+                                </Link>
+
+                                <Link
+                                  href={`/admin/orders/${order.id}/media`}
+                                  prefetch={false}
+                                  className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 text-sm font-black"
+                                  title="Files"
+                                >
+                                  <FileText size={16} />
+                                  Files
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-sm text-slate-700">
             Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> • {totalCount} results
           </div>
 
@@ -693,21 +755,23 @@ function AdminOrdersInner() {
             <button
               disabled={page <= 1}
               onClick={() => setParams({ page: page - 1 })}
-              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
+              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 font-bold"
             >
               Prev
             </button>
+
             <button
               disabled={page >= totalPages}
               onClick={() => setParams({ page: page + 1 })}
-              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
+              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 font-bold"
             >
               Next
             </button>
+
             <select
               value={pageSize}
               onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
-              className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+              className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold"
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
@@ -717,13 +781,18 @@ function AdminOrdersInner() {
             </select>
           </div>
         </div>
-
-        <style jsx global>{`
-          .animate-spin-slow {
-            animation: spin 1.2s linear infinite;
-          }
-        `}</style>
       </div>
+
+      <style jsx global>{`
+        .animate-spin-slow {
+          animation: spin 1.2s linear infinite;
+        }
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   )
 }
