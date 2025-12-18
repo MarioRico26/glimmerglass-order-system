@@ -19,7 +19,7 @@ import {
   RefreshCw,
   ArrowUpDown,
   Truck,
-  MoreVertical,
+  AlertTriangle,
   ExternalLink,
 } from 'lucide-react'
 
@@ -60,6 +60,7 @@ type MissingPayload = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
+// ✅ APPROVED eliminado del UI (y del filtro)
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
   'IN_PRODUCTION',
@@ -67,7 +68,7 @@ const ALL_STATUS = [
   'COMPLETED',
   'CANCELED',
 ] as const
-type StatusKey = (typeof ALL_STATUS)[number]
+type StatusKey = typeof ALL_STATUS[number]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -84,39 +85,44 @@ function labelStatus(status: string) {
   return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
 }
 
-function formatDateMaybe(iso?: string) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '-'
-  return d.toLocaleString()
-}
-
 function StatusBadge({ status }: { status: string }) {
-  const base =
-    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap'
+  const base = 'inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-semibold border'
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
-      return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
+      return (
+        <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Pending
+        </span>
+      )
     case 'IN_PRODUCTION':
       return (
         <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
           In Production
         </span>
       )
     case 'PRE_SHIPPING':
       return (
         <span className={`${base} bg-violet-50 text-violet-800 border-violet-200`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
           Pre-Shipping
         </span>
       )
     case 'COMPLETED':
       return (
         <span className={`${base} bg-emerald-50 text-emerald-800 border-emerald-200`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           Completed
         </span>
       )
     case 'CANCELED':
-      return <span className={`${base} bg-rose-50 text-rose-800 border-rose-200`}>Canceled</span>
+      return (
+        <span className={`${base} bg-rose-50 text-rose-800 border-rose-200`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          Canceled
+        </span>
+      )
     default:
       return (
         <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>
@@ -125,16 +131,6 @@ function StatusBadge({ status }: { status: string }) {
       )
   }
 }
-
-// ---- Button system (consistent + premium) ----
-const btnBase =
-  'inline-flex items-center justify-center gap-2 h-9 rounded-lg px-3 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-sky-200'
-const btnSoft = `${btnBase} border border-slate-200 bg-white hover:bg-slate-50 text-slate-800`
-const btnPrimary = `${btnBase} bg-sky-700 hover:bg-sky-800 text-white shadow-sm`
-const btnIndigo = `${btnBase} bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm`
-const btnViolet = `${btnBase} bg-violet-600 hover:bg-violet-700 text-white shadow-sm`
-const btnSuccess = `${btnBase} bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm`
-const btnDanger = `${btnBase} bg-rose-600 hover:bg-rose-700 text-white shadow-sm`
 
 function SkeletonRow() {
   return (
@@ -147,10 +143,6 @@ function SkeletonRow() {
     </tr>
   )
 }
-
-type Row =
-  | { kind: 'group'; key: string; label: string; count: number; open: boolean }
-  | { kind: 'order'; key: string; order: Order; groupKey: string; indexInGroup: number }
 
 function AdminOrdersInner() {
   const router = useRouter()
@@ -209,7 +201,7 @@ function AdminOrdersInner() {
       setOrders(data?.items ?? [])
       setError(null)
     } catch (e: any) {
-      setError(e?.message || 'Failed to load orders')
+      setError(e.message || 'Failed to load orders')
       setOrders([])
     } finally {
       setLoading(false)
@@ -236,6 +228,7 @@ function AdminOrdersInner() {
     setMissingOpen(true)
   }
 
+  // ✅ único lugar para cambiar status: /status
   const updateStatus = async (orderId: string, newStatus: FlowStatus) => {
     try {
       setBusyId(orderId)
@@ -283,6 +276,25 @@ function AdminOrdersInner() {
   const [groupBy, setGroupBy] = useState<'DEALER' | 'FACTORY'>('DEALER')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
+  function groupKeys(list: Order[], g: 'DEALER' | 'FACTORY') {
+    const s = new Set<string>()
+    const keyer =
+      g === 'DEALER'
+        ? (o: Order) => o.dealer?.name || 'Unknown Dealer'
+        : (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
+    list.forEach((o) => s.add(keyer(o)))
+    return Array.from(s).sort()
+  }
+
+  useEffect(() => {
+    const keys = groupKeys(orders, groupBy)
+    const map = keys.reduce((acc, k) => {
+      acc[k] = true
+      return acc
+    }, {} as Record<string, boolean>)
+    setOpenGroups(map)
+  }, [orders, groupBy])
+
   const grouped = useMemo(() => {
     const keyer =
       groupBy === 'DEALER'
@@ -296,17 +308,7 @@ function AdminOrdersInner() {
     }, {} as Record<string, Order[]>)
   }, [orders, groupBy])
 
-  useEffect(() => {
-    const keys = Object.keys(grouped).sort()
-    const map = keys.reduce((acc, k) => {
-      acc[k] = openGroups[k] ?? true
-      return acc
-    }, {} as Record<string, boolean>)
-    setOpenGroups(map)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBy, orders])
-
-  // total count
+  // total count (mantengo tu patrón)
   const [totalCount, setTotalCount] = useState(0)
   useEffect(() => {
     ;(async () => {
@@ -344,19 +346,22 @@ function AdminOrdersInner() {
     return `/api/admin/orders/export?${params.toString()}`
   }
 
-  function renderNextStep(order: Order) {
+  // ✅ helper para next-step button
+  function renderNextAction(order: Order) {
     const s = order.status as FlowStatus
     const disabled = busyId === order.id
 
+    // ✅ flow sin APPROVED:
+    // PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
     if (s === 'PENDING_PAYMENT_APPROVAL') {
       return (
         <button
           disabled={disabled}
           onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-          className={btnIndigo + ' w-full'}
-          title="Move to In Production"
+          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+          title="Move to In Production (requirements enforced)"
         >
-          <Clock size={16} /> Start Prod.
+          <Clock size={16} /> Start
         </button>
       )
     }
@@ -366,7 +371,7 @@ function AdminOrdersInner() {
         <button
           disabled={disabled}
           onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
-          className={btnViolet + ' w-full'}
+          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-violet-600 text-white text-xs font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
           title="Move to Pre-Shipping"
         >
           <Truck size={16} /> Pre-Ship
@@ -379,7 +384,7 @@ function AdminOrdersInner() {
         <button
           disabled={disabled}
           onClick={() => updateStatus(order.id, 'COMPLETED')}
-          className={btnSuccess + ' w-full'}
+          className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           title="Complete order"
         >
           <CircleCheckBig size={16} /> Complete
@@ -387,38 +392,13 @@ function AdminOrdersInner() {
       )
     }
 
-    return <span className="text-xs text-slate-500">No next step</span>
+    return (
+      <span className="inline-flex items-center gap-2 text-xs text-slate-500">
+        <AlertTriangle size={14} />
+        No next step
+      </span>
+    )
   }
-
-  const rows: Row[] = useMemo(() => {
-    const out: Row[] = []
-    const keys = Object.keys(grouped).sort((a, b) => a.localeCompare(b))
-
-    for (const k of keys) {
-      const list = grouped[k] || []
-      const open = openGroups[k] ?? true
-      out.push({
-        kind: 'group',
-        key: `group:${k}`,
-        label: k,
-        count: list.length,
-        open,
-      })
-      if (!open) continue
-      list.forEach((o, idx) => {
-        out.push({
-          kind: 'order',
-          key: o.id,
-          order: o,
-          groupKey: k,
-          indexInGroup: idx,
-        })
-      })
-    }
-    return out
-  }, [grouped, openGroups])
-
-  const hasAny = Object.keys(grouped).length > 0
 
   return (
     <div className="space-y-6">
@@ -436,27 +416,30 @@ function AdminOrdersInner() {
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Order Management</h1>
-            <p className="text-slate-600">Premium view: sticky header, grouped rows, next-step flow</p>
-            {error && (
-              <div className="mt-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 inline-block">
-                {error}
-              </div>
-            )}
+            <p className="text-slate-600">Review, filter and update orders</p>
+            {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <a href={exportUrl()} className={btnSoft}>
+          <div className="flex items-center gap-2">
+            <a
+              href={exportUrl()}
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+            >
               <FileText size={16} />
               Export CSV
             </a>
 
-            <button onClick={handleRefresh} className={btnSoft} title="Refresh">
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+              title="Refresh"
+            >
               <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
               Refresh
             </button>
 
             <div
-              className="h-1 w-32 rounded-full"
+              className="hidden sm:block h-1 w-32 rounded-full"
               style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
             />
           </div>
@@ -472,7 +455,7 @@ function AdminOrdersInner() {
               value={q}
               onChange={(e) => setParams({ q: e.target.value, page: 1 })}
               placeholder="Search (model, color, dealer, factory, address)"
-              className="pl-8 pr-3 h-10 rounded-xl border border-slate-200 bg-white w-80 max-w-[90vw] focus:outline-none focus:ring-2 focus:ring-sky-200"
+              className="pl-8 pr-3 h-10 rounded-xl border border-slate-200 bg-white w-72 max-w-[85vw]"
             />
           </div>
 
@@ -481,7 +464,7 @@ function AdminOrdersInner() {
             <select
               value={statusFilter}
               onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All statuses</option>
               {ALL_STATUS.map((s) => (
@@ -495,7 +478,7 @@ function AdminOrdersInner() {
             <select
               value={dealerFilter}
               onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All dealers</option>
               {dealers.map((d) => (
@@ -509,7 +492,7 @@ function AdminOrdersInner() {
             <select
               value={factoryFilter}
               onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="ALL">All factories</option>
               {factories.map((f) => (
@@ -523,7 +506,7 @@ function AdminOrdersInner() {
             <select
               value={groupBy}
               onChange={(e) => setGroupBy(e.target.value as any)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3"
             >
               <option value="DEALER">Group by dealer</option>
               <option value="FACTORY">Group by factory</option>
@@ -532,30 +515,38 @@ function AdminOrdersInner() {
         </div>
       </div>
 
-      {/* Premium Table Shell */}
+      {/* Table */}
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] overflow-hidden">
         {loading ? (
-          <div className="overflow-x-auto p-2">
-            <table className="min-w-full text-sm">
+          <div className="overflow-auto p-2">
+            <table className="w-full text-sm table-fixed">
               <thead className="text-slate-600 bg-slate-50">
                 <tr>
-                  <th className="text-left py-3 px-3">Model</th>
-                  <th className="text-left py-3 px-3">Color</th>
-                  <th className="text-left py-3 px-3">Dealer</th>
-                  <th className="text-left py-3 px-3">Factory</th>
-                  <th className="text-left py-3 px-3">Address</th>
-                  <th className="text-left py-3 px-3">Status</th>
-                  <th className="text-left py-3 px-3">Payment</th>
-                  <th className="text-left py-3 px-3">Created</th>
-                  <th className="text-left py-3 px-3">Next step</th>
-                  <th className="text-left py-3 px-3">Actions</th>
-                  <th className="text-left py-3 px-3">Links</th>
+                  <th className="text-left py-2 px-3 w-[180px]">Model</th>
+                  <th className="text-left py-2 px-3 hidden lg:table-cell w-[130px]">Color</th>
+                  <th className="text-left py-2 px-3 w-[200px]">Dealer</th>
+                  <th className="text-left py-2 px-3 hidden xl:table-cell w-[160px]">Factory</th>
+                  <th className="text-left py-2 px-3 w-auto">Address</th>
+                  <th className="text-left py-2 px-3 w-[140px]">
+                    <button className="inline-flex items-center gap-1" onClick={() => toggleSort('status')}>
+                      Status <ArrowUpDown size={14} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-3 hidden lg:table-cell w-[120px]">Payment</th>
+                  <th className="text-left py-2 px-3 hidden 2xl:table-cell w-[170px]">
+                    <button className="inline-flex items-center gap-1" onClick={() => toggleSort('createdAt')}>
+                      Created <ArrowUpDown size={14} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-3 w-[160px]">Next step</th>
+                  <th className="text-left py-2 px-3 w-[90px]">Actions</th>
+                  <th className="text-left py-2 px-3 w-[140px]">Links</th>
                 </tr>
               </thead>
-              <tbody>{Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
+              <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
             </table>
           </div>
-        ) : !hasAny ? (
+        ) : Object.keys(grouped).length === 0 ? (
           <div className="p-10 text-center">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
               <PackageSearch size={28} className="text-slate-500" />
@@ -564,268 +555,225 @@ function AdminOrdersInner() {
             <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
           </div>
         ) : (
-          <div className="overflow-auto max-h-[72vh]">
-            <table className="min-w-[1200px] w-full text-sm">
-              {/* Sticky header */}
-              <thead className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-100 text-slate-600">
-                <tr>
-                  <th className="text-left py-3 px-3 w-[220px]">
-                    Model
-                  </th>
-                  <th className="text-left py-3 px-3 w-[160px]">Color</th>
-                  <th className="text-left py-3 px-3 w-[220px]">Dealer</th>
-                  <th className="text-left py-3 px-3 w-[180px]">Factory</th>
-                  <th className="text-left py-3 px-3 w-[320px]">Address</th>
-                  <th className="text-left py-3 px-3 w-[150px]">
-                    <button
-                      className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
-                      onClick={() => toggleSort('status')}
-                      title="Sort by status"
-                    >
-                      Status <ArrowUpDown size={14} />
-                    </button>
-                  </th>
-                  <th className="text-left py-3 px-3 w-[140px]">Payment</th>
-                  <th className="text-left py-3 px-3 w-[190px]">
-                    <button
-                      className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
-                      onClick={() => toggleSort('createdAt')}
-                      title="Sort by created date"
-                    >
-                      Created <ArrowUpDown size={14} />
-                    </button>
-                  </th>
-                  <th className="text-left py-3 px-3 w-[180px]">Next step</th>
-                  <th className="text-left py-3 px-3 w-[120px]">Actions</th>
-                  <th className="text-left py-3 px-3 w-[160px]">Links</th>
-                </tr>
-              </thead>
+          <div className="divide-y divide-slate-100">
+            {Object.entries(grouped).map(([groupName, list]) => {
+              const open = openGroups[groupName] ?? true
+              const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
 
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => {
-                  if (r.kind === 'group') {
-                    const groupName = r.label
-                    const open = r.open
-                    const toggle = () =>
-                      setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
+              return (
+                <section key={groupName}>
+                  <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={toggle}
+                        className="rounded-lg hover:bg-white p-1 border border-transparent hover:border-slate-200 transition"
+                        aria-label="Toggle group"
+                      >
+                        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      </button>
 
-                    return (
-                      <tr key={r.key} className="bg-slate-50/60">
-                        <td colSpan={11} className="py-3 px-3">
-                          <div className="flex items-center justify-between">
-                            <button
-                              onClick={toggle}
-                              className="inline-flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-white border border-transparent hover:border-slate-200 transition text-slate-900 font-semibold"
-                              aria-label="Toggle group"
-                            >
-                              {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                              <span className="text-slate-700">
-                                {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}:
-                              </span>
-                              <span className="text-slate-900">{groupName}</span>
-                              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700">
-                                {r.count} orders
-                              </span>
-                            </button>
+                      <h2 className="font-semibold text-slate-900">
+                        {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
+                      </h2>
 
-                            <div className="text-xs text-slate-500">
-                              Scroll stays smooth. Header stays sticky. Humans stay happy.
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  }
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700">
+                        {list.length} orders
+                      </span>
+                    </div>
+                  </header>
 
-                  const o = r.order
-                  const zebra = r.indexInGroup % 2 === 0
-                  const disabled = busyId === o.id
+                  {open && (
+                    <div className="overflow-auto">
+                      <table className="w-full text-sm table-fixed">
+                        <thead className="text-slate-600 bg-white border-b border-slate-100">
+                          <tr>
+                            <th className="text-left py-3 px-3 w-[180px]">Model</th>
+                            <th className="text-left py-3 px-3 hidden lg:table-cell w-[130px]">Color</th>
+                            <th className="text-left py-3 px-3 w-[200px]">Dealer</th>
+                            <th className="text-left py-3 px-3 hidden xl:table-cell w-[160px]">Factory</th>
+                            <th className="text-left py-3 px-3 w-auto">Address</th>
+                            <th className="text-left py-3 px-3 w-[140px]">Status</th>
+                            <th className="text-left py-3 px-3 hidden lg:table-cell w-[120px]">Payment</th>
+                            <th className="text-left py-3 px-3 hidden 2xl:table-cell w-[170px]">Created</th>
+                            <th className="text-left py-3 px-3 w-[160px]">Next step</th>
+                            <th className="text-left py-3 px-3 w-[90px]">Actions</th>
+                            <th className="text-left py-3 px-3 w-[140px]">Links</th>
+                          </tr>
+                        </thead>
 
-                  return (
-                    <tr
-                      key={r.key}
-                      className={[
-                        zebra ? 'bg-white' : 'bg-slate-50/30',
-                        'hover:bg-sky-50/40 transition',
-                      ].join(' ')}
-                    >
-                      <td className="py-3 px-3">
-                        <Link
-                          href={`/admin/orders/${o.id}/history`}
-                          prefetch={false}
-                          className="text-sky-800 hover:underline font-semibold"
-                          title="Open order timeline (History)"
-                        >
-                          {o.poolModel?.name || '-'}
-                        </Link>
-                      </td>
+                        <tbody>
+                          {list.map((order) => {
+                            const disabled = busyId === order.id
 
-                      <td className="py-3 px-3">{o.color?.name || '-'}</td>
-                      <td className="py-3 px-3">{o.dealer?.name || 'Unknown Dealer'}</td>
-                      <td className="py-3 px-3">{o.factoryLocation?.name || 'Unknown Factory'}</td>
-
-                      <td className="py-3 px-3">
-                        <div className="max-w-[320px] truncate" title={o.deliveryAddress}>
-                          {o.deliveryAddress}
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-3">
-                        <StatusBadge status={o.status} />
-                      </td>
-
-                      <td className="py-3 px-3">
-                        {o.paymentProofUrl ? (
-                          <a
-                            href={o.paymentProofUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-sky-800 font-semibold hover:underline"
-                            title="View payment proof"
-                          >
-                            <FileText size={16} />
-                            View
-                            <ExternalLink size={14} className="text-slate-400" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-500">Not uploaded</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3 whitespace-nowrap">{formatDateMaybe(o.createdAt)}</td>
-
-                      <td className="py-3 px-3">
-                        <div className="w-[170px]">{renderNextStep(o)}</div>
-                      </td>
-
-                      {/* Actions: clean dropdown menu */}
-                      <td className="py-3 px-3">
-                        <details className="relative">
-                          <summary
-                            className={[
-                              btnSoft,
-                              'h-9 px-2 w-10 justify-center',
-                              'list-none cursor-pointer select-none',
-                            ].join(' ')}
-                            title="Actions"
-                          >
-                            <MoreVertical size={18} />
-                          </summary>
-
-                          <div className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-xl z-30 overflow-hidden">
-                            <div className="px-3 py-2 text-xs text-slate-500 border-b border-slate-100">
-                              Order actions
-                            </div>
-
-                            <Link
-                              href={`/admin/orders/${o.id}/history`}
-                              prefetch={false}
-                              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                            >
-                              <PackageSearch size={16} /> Open details
-                            </Link>
-
-                            <Link
-                              href={`/admin/orders/${o.id}/media`}
-                              prefetch={false}
-                              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                            >
-                              <FileText size={16} /> Files / Upload
-                            </Link>
-
-                            {o.status !== 'COMPLETED' && o.status !== 'CANCELED' && (
-                              <button
-                                disabled={disabled}
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  updateStatus(o.id, 'CANCELED')
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                            return (
+                              <tr
+                                key={order.id}
+                                className="border-t border-slate-100 hover:bg-slate-50/60 transition"
                               >
-                                <CircleX size={16} /> Cancel order
-                              </button>
-                            )}
-                          </div>
-                        </details>
-                      </td>
+                                {/* Model */}
+                                <td className="py-3 px-3">
+                                  <Link
+                                    href={`/admin/orders/${order.id}/history`}
+                                    prefetch={false}
+                                    className="text-sky-700 hover:underline font-semibold"
+                                    title="Open order details"
+                                  >
+                                    {order.poolModel?.name || '-'}
+                                  </Link>
+                                </td>
 
-                      {/* Links */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-3 whitespace-nowrap">
-                          <Link
-                            href={`/admin/orders/${o.id}/history`}
-                            prefetch={false}
-                            className="inline-flex items-center gap-1 text-sky-800 font-semibold hover:underline"
-                            title="Order timeline"
-                          >
-                            <Clock size={16} /> History
-                          </Link>
+                                {/* Color (lg+) */}
+                                <td className="py-3 px-3 hidden lg:table-cell text-slate-700">
+                                  {order.color?.name || '-'}
+                                </td>
 
-                          <Link
-                            href={`/admin/orders/${o.id}/media`}
-                            prefetch={false}
-                            className="inline-flex items-center gap-1 text-sky-800 font-semibold hover:underline"
-                            title="View & upload files"
-                          >
-                            <FileText size={16} /> Files
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                                {/* Dealer */}
+                                <td className="py-3 px-3">
+                                  <div className="truncate text-slate-800 font-medium" title={order.dealer?.name || ''}>
+                                    {order.dealer?.name || 'Unknown Dealer'}
+                                  </div>
+                                </td>
+
+                                {/* Factory (xl+) */}
+                                <td className="py-3 px-3 hidden xl:table-cell text-slate-700">
+                                  <div className="truncate" title={order.factoryLocation?.name || ''}>
+                                    {order.factoryLocation?.name || 'Unknown Factory'}
+                                  </div>
+                                </td>
+
+                                {/* Address */}
+                                <td className="py-3 px-3">
+                                  <div
+                                    className="text-slate-700 break-words whitespace-normal leading-snug line-clamp-2"
+                                    title={order.deliveryAddress}
+                                  >
+                                    {order.deliveryAddress}
+                                  </div>
+                                </td>
+
+                                {/* Status */}
+                                <td className="py-3 px-3">
+                                  <StatusBadge status={order.status} />
+                                </td>
+
+                                {/* Payment (lg+) */}
+                                <td className="py-3 px-3 hidden lg:table-cell">
+                                  {order.paymentProofUrl ? (
+                                    <a
+                                      href={order.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-sky-700 hover:underline text-xs font-semibold"
+                                      title="View payment proof"
+                                    >
+                                      <ExternalLink size={14} />
+                                      View
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-500 text-xs">Not uploaded</span>
+                                  )}
+                                </td>
+
+                                {/* Created (2xl+) */}
+                                <td className="py-3 px-3 hidden 2xl:table-cell text-xs text-slate-600">
+                                  {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
+                                </td>
+
+                                {/* Next step */}
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center">
+                                    {renderNextAction(order)}
+                                  </div>
+                                </td>
+
+                                {/* Actions (compact, not mounted) */}
+                                <td className="py-3 px-3">
+                                  <button
+                                    disabled={disabled || order.status === 'COMPLETED' || order.status === 'CANCELED'}
+                                    onClick={() => updateStatus(order.id, 'CANCELED')}
+                                    className="inline-flex items-center justify-center h-9 w-full rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 disabled:opacity-50"
+                                    title="Cancel order"
+                                  >
+                                    <CircleX size={16} />
+                                  </button>
+                                </td>
+
+                                {/* Links */}
+                                <td className="py-3 px-3">
+                                  <div className="grid gap-2">
+                                    <Link
+                                      href={`/admin/orders/${order.id}/history`}
+                                      prefetch={false}
+                                      className="inline-flex items-center justify-center gap-2 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold"
+                                      title="Open order"
+                                    >
+                                      <PackageSearch size={16} />
+                                      Open
+                                    </Link>
+
+                                    <Link
+                                      href={`/admin/orders/${order.id}/media`}
+                                      prefetch={false}
+                                      className="inline-flex items-center justify-center gap-2 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold"
+                                      title="Files"
+                                    >
+                                      <FileText size={16} />
+                                      Files
+                                    </Link>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              )
+            })}
           </div>
         )}
       </div>
 
       {/* Pagination */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
-          Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> •{' '}
-          <strong>{totalCount}</strong> results
+          Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> • {totalCount} results
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <button
             disabled={page <= 1}
             onClick={() => setParams({ page: page - 1 })}
-            className={btnSoft}
+            className="h-9 px-3 rounded-xl border border-slate-200 bg-white disabled:opacity-50"
           >
             Prev
           </button>
           <button
             disabled={page >= totalPages}
             onClick={() => setParams({ page: page + 1 })}
-            className={btnSoft}
+            className="h-9 px-3 rounded-xl border border-slate-200 bg-white disabled:opacity-50"
           >
             Next
           </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">Page size</span>
-            <select
-              value={pageSize}
-              onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
-            >
-              {[10, 20, 50, 100].map((n) => (
-                <option key={n} value={n}>
-                  {n}/page
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={pageSize}
+            onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
+            className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-sm"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}/page
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       <style jsx global>{`
         .animate-spin-slow {
           animation: spin 1.2s linear infinite;
-        }
-        details > summary::-webkit-details-marker {
-          display: none;
         }
       `}</style>
     </div>
