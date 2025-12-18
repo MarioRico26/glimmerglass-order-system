@@ -5,15 +5,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { PackageSearch, Palette, Truck, Clock, CheckCircle2, CircleCheckBig, CircleX, FileText, CheckSquare } from 'lucide-react'
+import {
+  PackageSearch,
+  Palette,
+  Truck,
+  Clock,
+  FileText,
+} from 'lucide-react'
+
+import { STATUS_LABELS, type FlowStatus } from '@/lib/orderFlow'
 
 type Order = {
   id: string
-  poolModel: { name: string }
-  color: { name: string }
-  status: string
+  poolModel: { name: string } | null
+  color: { name: string } | null
+  status: string // viene del API/DB como string
   deliveryAddress: string
-  paymentProofUrl: string
+  paymentProofUrl?: string | null
   notes?: string | null
   createdAt: string
   hardwareSkimmer?: boolean
@@ -25,24 +33,31 @@ type Order = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
+function labelStatus(status: string) {
+  const key = status as FlowStatus
+  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const base = 'text-xs font-semibold px-2 py-1 rounded-full'
-  const map: Record<string, string> = {
-    PENDING_PAYMENT_APPROVAL: 'bg-amber-100 text-amber-700',
-    APPROVED: 'bg-sky-100 text-sky-700',
-    IN_PRODUCTION: 'bg-indigo-100 text-indigo-700',
-    COMPLETED: 'bg-emerald-100 text-emerald-700',
-    CANCELED: 'bg-rose-100 text-rose-700',
+  const base = 'text-xs font-semibold px-2 py-1 rounded-full border'
+
+  // ✅ APPROVED eliminado
+  const map: Partial<Record<FlowStatus, string>> = {
+    PENDING_PAYMENT_APPROVAL: 'bg-amber-50 text-amber-800 border-amber-200',
+    IN_PRODUCTION: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+    PRE_SHIPPING: 'bg-violet-50 text-violet-800 border-violet-200',
+    COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    CANCELED: 'bg-rose-50 text-rose-800 border-rose-200',
   }
-  return (
-    <span className={`${base} ${map[status] ?? 'bg-slate-100 text-slate-700'}`}>
-      {status.replaceAll('_', ' ')}
-    </span>
-  )
+
+  const key = status as FlowStatus
+  const cls = map[key] ?? 'bg-slate-50 text-slate-700 border-slate-200'
+
+  return <span className={`${base} ${cls}`}>{labelStatus(status)}</span>
 }
 
 export default function MyOrdersPage() {
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,9 +72,13 @@ export default function MyOrdersPage() {
     ;(async () => {
       try {
         setLoading(true)
-        const res = await fetch('/api/dealer/orders')
-        const data = await res.json()
+        setError(null)
+
+        const res = await fetch('/api/dealer/orders', { cache: 'no-store' })
+        const data = await res.json().catch(() => null)
+
         if (!res.ok) throw new Error(data?.message || 'Failed to load orders')
+
         setOrders(Array.isArray(data?.orders) ? data.orders : [])
       } catch (e: any) {
         setError(e?.message || 'Error loading orders')
@@ -85,7 +104,10 @@ export default function MyOrdersPage() {
       {loading ? (
         <div className="grid md:grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
+            <div
+              key={i}
+              className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5"
+            >
               <div className="h-5 w-40 bg-slate-100 rounded mb-3" />
               <div className="h-4 w-28 bg-slate-100 rounded mb-6" />
               <div className="h-4 w-full bg-slate-100 rounded mb-2" />
@@ -110,77 +132,100 @@ export default function MyOrdersPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
-          {orders.map((o) => (
-            <div
-              key={o.id}
-              className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <PackageSearch size={18} className="text-slate-500" />
-                  <h3 className="font-bold text-slate-900">{o.poolModel?.name}</h3>
-                </div>
-                <StatusBadge status={o.status} />
-              </div>
+          {orders.map((o) => {
+            const paymentUrl = (o.paymentProofUrl ?? '').trim()
 
-              <div className="text-sm text-slate-600 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Palette size={16} className="text-slate-400" />
-                  <span><span className="text-slate-500">Color:</span> {o.color?.name}</span>
+            return (
+              <div
+                key={o.id}
+                className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <PackageSearch size={18} className="text-slate-500" />
+                    <h3 className="font-bold text-slate-900">{o.poolModel?.name ?? 'Pool'}</h3>
+                  </div>
+                  <StatusBadge status={o.status} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Clock size={16} className="text-slate-400" />
-                  <span>
-                    <span className="text-slate-500">Created:</span>{' '}
-                    {o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'}
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Truck size={16} className="text-slate-400 mt-0.5" />
-                  <span className="line-clamp-3">
-                    <span className="text-slate-500">Delivery:</span> {o.deliveryAddress}
-                  </span>
-                </div>
-                {o.notes ? (
-                  <div className="flex items-start gap-2">
-                    <FileText size={16} className="text-slate-400 mt-0.5" />
-                    <span className="line-clamp-3">
-                      <span className="text-slate-500">Notes:</span> {o.notes}
+
+                <div className="text-sm text-slate-600 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Palette size={16} className="text-slate-400" />
+                    <span>
+                      <span className="text-slate-500">Color:</span> {o.color?.name ?? '-'}
                     </span>
                   </div>
-                ) : null}
 
-                {/* HARDWARE CHECKS */}
-                <div className="pt-1">
-                  <div className="text-slate-500 font-semibold mb-1">Hardware:</div>
-                  <ul className="pl-4 space-y-1 text-slate-700 list-disc">
-                    {o.hardwareSkimmer && <li>Skimmer</li>}
-                    {o.hardwareMainDrains && <li>Main Drains</li>}
-                    {o.hardwareReturns && <li>Returns</li>}
-                    {o.hardwareAutocover && <li>Auto Cover</li>}
-                  </ul>
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-slate-400" />
+                    <span>
+                      <span className="text-slate-500">Created:</span>{' '}
+                      {o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Truck size={16} className="text-slate-400 mt-0.5" />
+                    <span className="line-clamp-3">
+                      <span className="text-slate-500">Delivery:</span> {o.deliveryAddress || '-'}
+                    </span>
+                  </div>
+
+                  {o.notes ? (
+                    <div className="flex items-start gap-2">
+                      <FileText size={16} className="text-slate-400 mt-0.5" />
+                      <span className="line-clamp-3">
+                        <span className="text-slate-500">Notes:</span> {o.notes}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* HARDWARE CHECKS */}
+                  <div className="pt-1">
+                    <div className="text-slate-500 font-semibold mb-1">Hardware:</div>
+                    <ul className="pl-4 space-y-1 text-slate-700 list-disc">
+                      {o.hardwareSkimmer && <li>Skimmer</li>}
+                      {o.hardwareMainDrains && <li>Main Drains</li>}
+                      {o.hardwareReturns && <li>Returns</li>}
+                      {o.hardwareAutocover && <li>Auto Cover</li>}
+                      {!o.hardwareSkimmer &&
+                        !o.hardwareMainDrains &&
+                        !o.hardwareReturns &&
+                        !o.hardwareAutocover && <li className="text-slate-500">None</li>}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3">
+                  {paymentUrl ? (
+                    <a
+                      href={paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-9 inline-flex items-center justify-center rounded-xl text-white font-semibold px-3 shadow-lg hover:shadow-md transition"
+                      style={{ backgroundImage: 'linear-gradient(90deg,#00B2CA,#007A99)' }}
+                    >
+                      Payment proof
+                    </a>
+                  ) : (
+                    <span
+                      className="h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 font-semibold px-3 cursor-not-allowed"
+                      title="No payment proof uploaded yet"
+                    >
+                      Payment proof
+                    </span>
+                  )}
+
+                  <Link
+                    href={`/dealer/orders/${o.id}/history`}
+                    className="h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold px-3"
+                  >
+                    History & Media
+                  </Link>
                 </div>
               </div>
-
-              <div className="mt-4 flex items-center gap-3">
-                <a
-                  href={o.paymentProofUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-9 inline-flex items-center justify-center rounded-xl text-white font-semibold px-3 shadow-lg hover:shadow-md transition"
-                  style={{ backgroundImage: 'linear-gradient(90deg,#00B2CA,#007A99)' }}
-                >
-                  Payment proof
-                </a>
-                <Link
-                  href={`/dealer/orders/${o.id}/history`}
-                  className="h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold px-3"
-                >
-                  History & Media
-                </Link>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

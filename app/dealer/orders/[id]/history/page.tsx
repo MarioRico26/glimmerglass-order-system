@@ -39,17 +39,11 @@ function toApiUrl(u: string) {
   return u.startsWith('/uploads/') ? '/api/uploads/' + u.replace('/uploads/', '') : u
 }
 
-const STATUS_META: Record<
-  string,
-  { icon: any; badge: string }
-> = {
+// ✅ APPROVED eliminado
+const STATUS_META: Record<string, { icon: any; badge: string }> = {
   PENDING_PAYMENT_APPROVAL: {
     icon: BadgeDollarSign,
     badge: 'bg-amber-50 text-amber-800 border-amber-200',
-  },
-  APPROVED: {
-    icon: CheckCircle2,
-    badge: 'bg-sky-50 text-sky-800 border-sky-200',
   },
   IN_PRODUCTION: {
     icon: CircleCheckBig,

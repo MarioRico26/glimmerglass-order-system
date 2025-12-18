@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { OrderDocType, Role } from '@prisma/client'
+import { Role, OrderDocType } from '@prisma/client'
 
 import {
   FLOW_ORDER,
@@ -35,13 +35,12 @@ function isAdminRole(role: any) {
 }
 
 function flowIndex(s: FlowStatus) {
-  // CANCELED no pertenece al orden normal
-  if (s === 'CANCELED') return -1
-  return FLOW_ORDER.indexOf(s)
+  // FLOW_ORDER no incluye CANCELED, por eso puede retornar -1
+  return FLOW_ORDER.indexOf(s as any)
 }
 
 function isForwardMove(from: FlowStatus, to: FlowStatus) {
-  // CANCELED es “side exit”
+  // ✅ Ahora FlowStatus incluye CANCELED, así que TS no se queja.
   if (to === 'CANCELED') return false
   const a = flowIndex(from)
   const b = flowIndex(to)
@@ -133,7 +132,10 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
 
   if (!order) return { ok: false, notFound: true }
 
-  const present = new Set(media.map((m) => m.docType).filter(Boolean) as OrderDocType[])
+  const present = new Set(
+    media.map((m) => m.docType).filter(Boolean) as OrderDocType[]
+  )
+
   const missingDocs = needDocs.filter((d) => !present.has(d as unknown as OrderDocType))
 
   const missingFields: string[] = []
@@ -144,6 +146,9 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   return { ok: true, missingDocs, missingFields }
 }
 
+/**
+ * GET: summary usado por admin history page
+ */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
@@ -162,6 +167,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
 }
 
+/**
+ * PATCH: cambiar status con gate de docs/campos
+ * Body: { status: FlowStatus, comment?: string }
+ */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
@@ -185,7 +194,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const currentStatus = current.status as FlowStatus
 
-    // gate: requirements only when moving forward in normal flow
+    // Gate solo al mover forward
     if (isForwardMove(currentStatus, nextStatus)) {
       const missing = await getMissingForTarget(orderId, nextStatus)
       if (!missing.ok) return json('Order not found', 404)

@@ -1,16 +1,29 @@
-//glimmerglass-order-system/app/(admin)/admin/orders/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
-  CheckCircle2, CircleCheckBig, CircleX, Clock, FileText, PackageSearch,
-  ChevronDown, ChevronRight, Filter, Search, Group, Factory as FactoryIcon,
-  UserCircle2, RefreshCw, ArrowUpDown
+  CheckCircle2,
+  CircleCheckBig,
+  CircleX,
+  Clock,
+  FileText,
+  PackageSearch,
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  Search,
+  Group,
+  Factory as FactoryIcon,
+  UserCircle2,
+  RefreshCw,
+  ArrowUpDown,
+  Truck,
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
+import { STATUS_LABELS, type FlowStatus } from '@/lib/orderFlow'
 
 type Maybe<T> = T | null | undefined
 
@@ -46,18 +59,11 @@ type MissingPayload = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending',
-  APPROVED: 'Approved',
-  IN_PRODUCTION: 'In Production',
-  COMPLETED: 'Completed',
-  CANCELED: 'Canceled',
-}
-
+// ✅ APPROVED eliminado del UI (y del filtro)
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
-  'APPROVED',
   'IN_PRODUCTION',
+  'PRE_SHIPPING',
   'COMPLETED',
   'CANCELED',
 ] as const
@@ -73,21 +79,26 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   }
 }
 
+function labelStatus(status: string) {
+  const key = status as FlowStatus
+  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const base = 'px-2 py-1 rounded-full text-xs font-semibold'
+  const base = 'px-2 py-1 rounded-full text-xs font-semibold border'
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
-      return <span className={`${base} bg-yellow-100 text-yellow-800`}>Pending</span>
-    case 'APPROVED':
-      return <span className={`${base} bg-blue-100 text-blue-800`}>Approved</span>
+      return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
     case 'IN_PRODUCTION':
-      return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
+      return <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>In Production</span>
+    case 'PRE_SHIPPING':
+      return <span className={`${base} bg-violet-50 text-violet-800 border-violet-200`}>Pre-Shipping</span>
     case 'COMPLETED':
-      return <span className={`${base} bg-green-100 text-green-800`}>Completed</span>
+      return <span className={`${base} bg-emerald-50 text-emerald-800 border-emerald-200`}>Completed</span>
     case 'CANCELED':
-      return <span className={`${base} bg-red-100 text-red-800`}>Canceled</span>
+      return <span className={`${base} bg-rose-50 text-rose-800 border-rose-200`}>Canceled</span>
     default:
-      return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>
+      return <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>{labelStatus(status)}</span>
   }
 }
 
@@ -113,7 +124,7 @@ function AdminOrdersInner() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  // Modal missing requirements
+  // Missing requirements modal state
   const [missingOpen, setMissingOpen] = useState(false)
   const [missingDocs, setMissingDocs] = useState<string[]>([])
   const [missingFields, setMissingFields] = useState<string[]>([])
@@ -179,7 +190,6 @@ function AdminOrdersInner() {
     setRefreshing(false)
   }
 
-  // Helper: open missing modal from payload
   const openMissing = (orderId: string, nextStatus: string, payload: MissingPayload | null) => {
     setMissingTarget(payload?.targetStatus ?? nextStatus)
     setMissingDocs(payload?.missing?.docs ?? [])
@@ -188,28 +198,15 @@ function AdminOrdersInner() {
     setMissingOpen(true)
   }
 
-  // Registro de history (lo mantengo como lo tienes)
-  const logHistory = async (orderId: string, status: StatusKey, comment = '') => {
-    try {
-      await fetch(`/api/admin/orders/${orderId}/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comment }),
-        cache: 'no-store',
-      })
-    } catch {
-      /* noop */
-    }
-  }
-
-  const updateStatus = async (orderId: string, newStatus: StatusKey) => {
+  // ✅ único lugar para cambiar status: /status
+  const updateStatus = async (orderId: string, newStatus: FlowStatus) => {
     try {
       setBusyId(orderId)
 
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, comment: 'Status changed from Orders list' }),
       })
 
       const payload = await safeJson<any>(res)
@@ -226,40 +223,10 @@ function AdminOrdersInner() {
       if (!updated?.id) throw new Error('Invalid response')
       setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
 
-      await logHistory(orderId, newStatus, 'Status changed from Orders list')
+      // no manual history here. /status already creates history.
       router.refresh()
     } catch (e: any) {
       alert(e?.message || 'Could not update status')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  const approveOrder = async (orderId: string) => {
-    try {
-      setBusyId(orderId)
-
-      // OJO: tu endpoint /approve no recibe status. Si quieres gating aquí,
-      // lo ideal es que ese endpoint también haga el mismo check.
-      const res = await fetch(`/api/admin/orders/${orderId}/approve`, { method: 'PATCH' })
-      const payload = await safeJson<any>(res)
-
-      if (!res.ok) {
-        if (payload?.code === 'MISSING_REQUIREMENTS') {
-          openMissing(orderId, 'APPROVED', payload as MissingPayload)
-          return
-        }
-        throw new Error(payload?.message || 'Failed to approve order')
-      }
-
-      const updated = payload as Order
-      if (!updated?.id) throw new Error('Invalid response')
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
-
-      await logHistory(orderId, 'APPROVED', 'Approved from Orders list')
-      router.refresh()
-    } catch (e: any) {
-      alert(e?.message || 'Could not approve order')
     } finally {
       setBusyId(null)
     }
@@ -312,7 +279,7 @@ function AdminOrdersInner() {
     }, {} as Record<string, Order[]>)
   }, [orders, groupBy])
 
-  // total count
+  // total count (mantengo tu patrón)
   const [totalCount, setTotalCount] = useState(0)
   useEffect(() => {
     ;(async () => {
@@ -350,9 +317,57 @@ function AdminOrdersInner() {
     return `/api/admin/orders/export?${params.toString()}`
   }
 
+  // ✅ helper para next-step button
+  function renderNextAction(order: Order) {
+    const s = order.status as FlowStatus
+    const disabled = busyId === order.id
+
+    // ✅ flow sin APPROVED:
+    // PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+    if (s === 'PENDING_PAYMENT_APPROVAL') {
+      return (
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
+          className="inline-flex items-center gap-1 bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
+          title="Move to In Production (requires payment docs, then serial/build docs per rules)"
+        >
+          <Clock size={16} /> Start Prod.
+        </button>
+      )
+    }
+
+    if (s === 'IN_PRODUCTION') {
+      return (
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
+          className="inline-flex items-center gap-1 bg-violet-600 text-white px-2 py-1 rounded hover:bg-violet-700 disabled:opacity-50"
+          title="Move to Pre-Shipping"
+        >
+          <Truck size={16} /> Pre-Ship
+        </button>
+      )
+    }
+
+    if (s === 'PRE_SHIPPING') {
+      return (
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'COMPLETED')}
+          className="inline-flex items-center gap-1 bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700 disabled:opacity-50"
+          title="Complete order"
+        >
+          <CircleCheckBig size={16} /> Completed
+        </button>
+      )
+    }
+
+    return null
+  }
+
   return (
     <div className="space-y-6">
-      {/* Missing modal */}
       <MissingRequirementsModal
         open={missingOpen}
         onClose={() => setMissingOpen(false)}
@@ -390,7 +405,7 @@ function AdminOrdersInner() {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filters */}
       <div className="rounded-2xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
@@ -413,7 +428,7 @@ function AdminOrdersInner() {
               <option value="ALL">All statuses</option>
               {ALL_STATUS.map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
+                  {labelStatus(s)}
                 </option>
               ))}
             </select>
@@ -459,7 +474,7 @@ function AdminOrdersInner() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Table */}
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
         {loading ? (
           <div className="overflow-x-auto p-2">
@@ -534,22 +549,15 @@ function AdminOrdersInner() {
                             <th className="text-left py-2 px-3">Dealer</th>
                             <th className="text-left py-2 px-3">Factory</th>
                             <th className="text-left py-2 px-3">Address</th>
-                            <th className="text-left py-2 px-3">
-                              <button className="inline-flex items-center gap-1" onClick={() => toggleSort('status')}>
-                                Status <ArrowUpDown size={14} />
-                              </button>
-                            </th>
+                            <th className="text-left py-2 px-3">Status</th>
                             <th className="text-left py-2 px-3">Payment</th>
-                            <th className="text-left py-2 px-3">
-                              <button className="inline-flex items-center gap-1" onClick={() => toggleSort('createdAt')}>
-                                Created <ArrowUpDown size={14} />
-                              </button>
-                            </th>
+                            <th className="text-left py-2 px-3">Created</th>
                             <th className="text-left py-2 px-3">Actions</th>
                             <th className="text-left py-2 px-3">History</th>
                             <th className="text-left py-2 px-3">Files</th>
                           </tr>
                         </thead>
+
                         <tbody>
                           {list.map((order) => (
                             <tr key={order.id} className="border-t">
@@ -570,9 +578,11 @@ function AdminOrdersInner() {
                               <td className="py-2 px-3 max-w-[320px] truncate" title={order.deliveryAddress}>
                                 {order.deliveryAddress}
                               </td>
+
                               <td className="py-2 px-3">
                                 <StatusBadge status={order.status} />
                               </td>
+
                               <td className="py-2 px-3">
                                 {order.paymentProofUrl ? (
                                   <a
@@ -588,7 +598,10 @@ function AdminOrdersInner() {
                                   <span className="text-slate-500">Not uploaded</span>
                                 )}
                               </td>
-                              <td className="py-2 px-3">{order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}</td>
+
+                              <td className="py-2 px-3">
+                                {order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}
+                              </td>
 
                               <td className="py-2 px-3">
                                 <div className="flex flex-wrap gap-2">
@@ -601,35 +614,7 @@ function AdminOrdersInner() {
                                     <PackageSearch size={16} /> Open
                                   </Link>
 
-                                  {order.status === 'PENDING_PAYMENT_APPROVAL' && (
-                                    <button
-                                      disabled={busyId === order.id}
-                                      onClick={() => approveOrder(order.id)}
-                                      className="inline-flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-                                    >
-                                      <CheckCircle2 size={16} /> Approve
-                                    </button>
-                                  )}
-
-                                  {order.status === 'APPROVED' && (
-                                    <button
-                                      disabled={busyId === order.id}
-                                      onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-                                      className="inline-flex items-center gap-1 bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
-                                    >
-                                      <Clock size={16} /> Start Prod.
-                                    </button>
-                                  )}
-
-                                  {order.status === 'IN_PRODUCTION' && (
-                                    <button
-                                      disabled={busyId === order.id}
-                                      onClick={() => updateStatus(order.id, 'COMPLETED')}
-                                      className="inline-flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
-                                    >
-                                      <CircleCheckBig size={16} /> Completed
-                                    </button>
-                                  )}
+                                  {renderNextAction(order)}
 
                                   {order.status !== 'COMPLETED' && order.status !== 'CANCELED' && (
                                     <button
@@ -641,6 +626,17 @@ function AdminOrdersInner() {
                                     </button>
                                   )}
                                 </div>
+                              </td>
+
+                              <td className="py-2 px-3">
+                                <Link
+                                  href={`/admin/orders/${order.id}/history`}
+                                  prefetch={false}
+                                  className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+                                  title="Order timeline"
+                                >
+                                  <Clock size={16} /> History
+                                </Link>
                               </td>
 
                               <td className="py-2 px-3">
@@ -666,7 +662,7 @@ function AdminOrdersInner() {
         )}
       </div>
 
-      {/* Paginación */}
+      {/* Pagination */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
           Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> • {totalCount} results
@@ -701,7 +697,9 @@ function AdminOrdersInner() {
       </div>
 
       <style jsx global>{`
-        .animate-spin-slow { animation: spin 1.2s linear infinite; }
+        .animate-spin-slow {
+          animation: spin 1.2s linear infinite;
+        }
       `}</style>
     </div>
   )
