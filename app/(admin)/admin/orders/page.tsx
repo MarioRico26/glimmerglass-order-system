@@ -56,9 +56,6 @@ type MissingPayload = {
   }
 }
 
-const aqua = '#00B2CA'
-const deep = '#007A99'
-
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
   'IN_PRODUCTION',
@@ -66,7 +63,7 @@ const ALL_STATUS = [
   'COMPLETED',
   'CANCELED',
 ] as const
-type StatusKey = typeof ALL_STATUS[number]
+type StatusKey = (typeof ALL_STATUS)[number]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -124,21 +121,17 @@ function StatusBadge({ status }: { status: string }) {
         </span>
       )
     default:
-      return <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>{labelStatus(status)}</span>
+      return (
+        <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>
+          {labelStatus(status)}
+        </span>
+      )
   }
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-      {children}
-    </div>
-  )
 }
 
 function CardShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
+    <div className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)]">
       {children}
     </div>
   )
@@ -249,7 +242,6 @@ function AdminOrdersInner() {
 
       const updated = payload as Order
       if (!updated?.id) throw new Error('Invalid response')
-
       setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
       router.refresh()
     } catch (e: any) {
@@ -359,51 +351,49 @@ function AdminOrdersInner() {
       </button>
     )
 
+    const wrap = (btn: React.ReactNode) => (
+      <div className="flex items-center gap-2 justify-end">
+        {btn}
+        {cancelBtn}
+      </div>
+    )
+
     if (s === 'PENDING_PAYMENT_APPROVAL') {
-      return (
-        <div className="flex items-center gap-2 justify-end">
-          <button
-            disabled={disabled}
-            onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-            title="Move to In Production"
-          >
-            <Clock size={16} /> Start
-          </button>
-          {cancelBtn}
-        </div>
+      return wrap(
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'IN_PRODUCTION')}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+          title="Move to In Production"
+        >
+          <Clock size={16} /> Start
+        </button>
       )
     }
 
     if (s === 'IN_PRODUCTION') {
-      return (
-        <div className="flex items-center gap-2 justify-end">
-          <button
-            disabled={disabled}
-            onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-violet-600 text-white text-sm font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
-            title="Move to Pre-Shipping"
-          >
-            <Truck size={16} /> Pre-Ship
-          </button>
-          {cancelBtn}
-        </div>
+      return wrap(
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'PRE_SHIPPING')}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-violet-600 text-white text-sm font-semibold shadow-sm hover:bg-violet-700 disabled:opacity-50"
+          title="Move to Pre-Shipping"
+        >
+          <Truck size={16} /> Pre-Ship
+        </button>
       )
     }
 
     if (s === 'PRE_SHIPPING') {
-      return (
-        <div className="flex items-center gap-2 justify-end">
-          <button
-            disabled={disabled}
-            onClick={() => updateStatus(order.id, 'COMPLETED')}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-            title="Complete order"
-          >
-            <CircleCheckBig size={16} /> Complete
-          </button>
-          {cancelBtn}
-        </div>
+      return wrap(
+        <button
+          disabled={disabled}
+          onClick={() => updateStatus(order.id, 'COMPLETED')}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          title="Complete order"
+        >
+          <CircleCheckBig size={16} /> Complete
+        </button>
       )
     }
 
@@ -411,340 +401,329 @@ function AdminOrdersInner() {
   }
 
   return (
-    <div className="space-y-6">
-      <MissingRequirementsModal
-        open={missingOpen}
-        onClose={() => setMissingOpen(false)}
-        targetStatus={missingTarget}
-        missingDocs={missingDocs}
-        missingFields={missingFields}
-        goToUploadHref={missingUploadHref}
-      />
+    // 🔥 clave: w-full + min-w-0 + overflow-x-hidden para matar el scroll lateral
+    <div className="w-full min-w-0 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-6 space-y-6">
+        <MissingRequirementsModal
+          open={missingOpen}
+          onClose={() => setMissingOpen(false)}
+          targetStatus={missingTarget}
+          missingDocs={missingDocs}
+          missingFields={missingFields}
+          goToUploadHref={missingUploadHref}
+        />
 
-      {/* Header */}
-      <CardShell>
-        <div className="p-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Order Management</h1>
-            <p className="text-slate-600">Review, filter and update orders</p>
-            {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <a
-              href={exportUrl()}
-              className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-            >
-              <FileText size={16} />
-              Export CSV
-            </a>
-
-            <button
-              onClick={handleRefresh}
-              className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-              title="Refresh"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
-              Refresh
-            </button>
-
-            <div
-              className="hidden sm:block h-1 w-32 rounded-full"
-              style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-            />
-          </div>
-        </div>
-      </CardShell>
-
-      {/* Filters */}
-      <CardShell>
-        <div className="p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={q}
-                onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-                placeholder="Search (model, dealer, factory, address)"
-                className="pl-8 pr-3 h-10 rounded-2xl border border-slate-200 bg-white w-72 max-w-[85vw]"
-              />
+        {/* Header */}
+        <CardShell>
+          <div className="p-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">
+                Order Management
+              </h1>
+              <p className="text-slate-600">Review, filter and update orders</p>
+              {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <Filter size={16} className="text-slate-500" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-              >
-                <option value="ALL">All statuses</option>
-                {ALL_STATUS.map((s) => (
-                  <option key={s} value={s}>
-                    {labelStatus(s)}
-                  </option>
-                ))}
-              </select>
-
-              <UserCircle2 size={16} className="text-slate-500" />
-              <select
-                value={dealerFilter}
-                onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-              >
-                <option value="ALL">All dealers</option>
-                {dealers.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-
-              <FactoryIcon size={16} className="text-slate-500" />
-              <select
-                value={factoryFilter}
-                onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-              >
-                <option value="ALL">All factories</option>
-                {factories.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-
-              <Group size={16} className="text-slate-500" />
-              <select
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value as any)}
-                className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
-              >
-                <option value="DEALER">Group by dealer</option>
-                <option value="FACTORY">Group by factory</option>
-              </select>
-
-              {/* Tiny sort control (premium, without breaking layout) */}
-              <button
-                onClick={() => toggleSort('status')}
+            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+              <a
+                href={exportUrl()}
                 className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-                title="Toggle sort by status"
               >
-                <ArrowUpDown size={16} />
-                Sort
+                <FileText size={16} />
+                Export CSV
+              </a>
+
+              <button
+                onClick={handleRefresh}
+                className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+                title="Refresh"
+              >
+                <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
+                Refresh
               </button>
             </div>
           </div>
-        </div>
-      </CardShell>
+        </CardShell>
 
-      {/* Content */}
-      <CardShell>
-        <div className="p-4">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-20 rounded-2xl border border-slate-100 bg-slate-50 animate-pulse" />
-              ))}
-            </div>
-          ) : Object.keys(grouped).length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-                <PackageSearch size={28} className="text-slate-500" />
+        {/* Filters */}
+        <CardShell>
+          <div className="p-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative min-w-0">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setParams({ q: e.target.value, page: 1 })}
+                  placeholder="Search (model, dealer, factory, address)"
+                  className="pl-8 pr-3 h-10 rounded-2xl border border-slate-200 bg-white w-80 max-w-[85vw]"
+                />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">No orders match your filters</h3>
-              <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter size={16} className="text-slate-500" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setParams({ status: e.target.value, page: 1 })}
+                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+                >
+                  <option value="ALL">All statuses</option>
+                  {ALL_STATUS.map((s) => (
+                    <option key={s} value={s}>
+                      {labelStatus(s)}
+                    </option>
+                  ))}
+                </select>
+
+                <UserCircle2 size={16} className="text-slate-500" />
+                <select
+                  value={dealerFilter}
+                  onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
+                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+                >
+                  <option value="ALL">All dealers</option>
+                  {dealers.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+
+                <FactoryIcon size={16} className="text-slate-500" />
+                <select
+                  value={factoryFilter}
+                  onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
+                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+                >
+                  <option value="ALL">All factories</option>
+                  {factories.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+
+                <Group size={16} className="text-slate-500" />
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as any)}
+                  className="h-10 rounded-2xl border border-slate-200 bg-white px-3"
+                >
+                  <option value="DEALER">Group by dealer</option>
+                  <option value="FACTORY">Group by factory</option>
+                </select>
+
+                <button
+                  onClick={() => toggleSort('status')}
+                  className="inline-flex items-center gap-2 h-10 px-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
+                  title="Toggle sort"
+                >
+                  <ArrowUpDown size={16} />
+                  Sort
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(grouped).map(([groupName, list]) => {
-                const open = openGroups[groupName] ?? true
-                const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
+          </div>
+        </CardShell>
 
-                return (
-                  <section key={groupName} className="rounded-2xl border border-slate-100 bg-white">
-                    {/* Group header */}
-                    <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60 rounded-t-2xl">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={toggle}
-                          className="rounded-xl hover:bg-white p-2 border border-transparent hover:border-slate-200 transition"
-                          aria-label="Toggle group"
-                        >
-                          {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                        </button>
+        {/* Content */}
+        <CardShell>
+          <div className="p-4">
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-20 rounded-2xl border border-slate-100 bg-slate-50 animate-pulse" />
+                ))}
+              </div>
+            ) : Object.keys(grouped).length === 0 ? (
+              <div className="p-10 text-center">
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                  <PackageSearch size={28} className="text-slate-500" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">No orders match your filters</h3>
+                <p className="text-slate-600">Try changing status, dealer/factory or search.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(grouped).map(([groupName, list]) => {
+                  const open = openGroups[groupName] ?? true
+                  const toggle = () => setOpenGroups((prev) => ({ ...prev, [groupName]: !open }))
 
-                        <h2 className="font-semibold text-slate-900">
-                          {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
-                        </h2>
-
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700">
-                          {list.length} orders
-                        </span>
-                      </div>
-                    </header>
-
-                    {/* Desktop header row (clean + consistent) */}
-                    {open && (
-                      <div className="hidden lg:grid grid-cols-12 gap-4 px-5 py-3 border-t border-slate-100 bg-white">
-                        <div className="col-span-3"><FieldLabel>Model</FieldLabel></div>
-                        <div className="col-span-3"><FieldLabel>Dealer</FieldLabel></div>
-                        <div className="col-span-3"><FieldLabel>Address</FieldLabel></div>
-                        <div className="col-span-1"><FieldLabel>Status</FieldLabel></div>
-                        <div className="col-span-2 text-right"><FieldLabel>Next step</FieldLabel></div>
-                      </div>
-                    )}
-
-                    {/* Orders */}
-                    {open && (
-                      <div className="divide-y divide-slate-100">
-                        {list.map((order) => (
-                          <div
-                            key={order.id}
-                            className="px-5 py-4 hover:bg-slate-50/60 transition"
+                  return (
+                    <section key={groupName} className="rounded-2xl border border-slate-100 bg-white overflow-hidden">
+                      <header className="flex items-center justify-between px-4 py-3 bg-slate-50/60">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            onClick={toggle}
+                            className="rounded-xl hover:bg-white p-2 border border-transparent hover:border-slate-200 transition"
+                            aria-label="Toggle group"
                           >
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-                              {/* Model */}
-                              <div className="lg:col-span-3">
-                                <Link
-                                  href={`/admin/orders/${order.id}/history`}
-                                  prefetch={false}
-                                  className="text-sky-700 hover:underline font-bold text-base"
-                                  title="Open order details"
-                                >
-                                  {order.poolModel?.name || '-'}
-                                </Link>
+                            {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                          </button>
 
-                                <div className="mt-1 text-sm text-slate-600">
-                                  <span className="font-semibold">Factory:</span>{' '}
-                                  {order.factoryLocation?.name || <span className="italic text-slate-500">Not set</span>}
-                                </div>
+                          <h2 className="font-semibold text-slate-900 truncate">
+                            {groupBy === 'DEALER' ? 'Dealer' : 'Factory'}: {groupName}
+                          </h2>
 
-                                <div className="mt-1 text-xs text-slate-500">
-                                  <span className="font-semibold text-slate-600">Color:</span>{' '}
-                                  {order.color?.name || '—'}
-                                </div>
-                              </div>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/60 text-slate-700 whitespace-nowrap">
+                            {list.length} orders
+                          </span>
+                        </div>
+                      </header>
 
-                              {/* Dealer */}
-                              <div className="lg:col-span-3">
-                                <div className="text-slate-900 font-semibold text-base">
-                                  {order.dealer?.name || 'Unknown Dealer'}
-                                </div>
-                                <div className="mt-1 text-sm text-slate-600">
-                                  <span className="font-semibold">Created:</span>{' '}
-                                  {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
-                                </div>
-                              </div>
-
-                              {/* Address + Payment */}
-                              <div className="lg:col-span-3">
-                                <div className="text-slate-700 leading-snug line-clamp-2 break-words">
-                                  {order.deliveryAddress}
-                                </div>
-
-                                <div className="mt-2 text-sm text-slate-600 flex items-center gap-2">
-                                  <span className="font-semibold">Payment:</span>
-                                  {order.paymentProofUrl ? (
-                                    <a
-                                      href={order.paymentProofUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
-                                      title="View payment proof"
-                                    >
-                                      <ExternalLink size={14} />
-                                      View
-                                    </a>
-                                  ) : (
-                                    <span className="text-slate-500">Not uploaded</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Status */}
-                              <div className="lg:col-span-1">
-                                <StatusBadge status={order.status} />
-                              </div>
-
-                              {/* Right side: Next step + links */}
-                              <div className="lg:col-span-2 flex flex-col gap-2 lg:items-end">
-                                <NextStep order={order} />
-
-                                <div className="grid grid-cols-2 lg:flex lg:flex-col gap-2 w-full lg:w-auto">
+                      {open && (
+                        <div className="divide-y divide-slate-100">
+                          {list.map((order) => (
+                            <div key={order.id} className="px-5 py-4 hover:bg-slate-50/60 transition">
+                              {/* Grid principal: min-w-0 en TODAS las columnas para evitar overflow */}
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
+                                {/* Model */}
+                                <div className="lg:col-span-3 min-w-0">
                                   <Link
                                     href={`/admin/orders/${order.id}/history`}
                                     prefetch={false}
-                                    className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
-                                    title="Open order"
+                                    className="text-sky-700 hover:underline font-bold text-base block truncate"
+                                    title="Open order details"
                                   >
-                                    <PackageSearch size={16} />
-                                    Open
+                                    {order.poolModel?.name || '-'}
                                   </Link>
 
-                                  <Link
-                                    href={`/admin/orders/${order.id}/media`}
-                                    prefetch={false}
-                                    className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
-                                    title="Files"
-                                  >
-                                    <FileText size={16} />
-                                    Files
-                                  </Link>
+                                  <div className="mt-1 text-sm text-slate-600 min-w-0">
+                                    <span className="font-semibold">Factory:</span>{' '}
+                                    <span className="truncate inline-block max-w-full align-bottom">
+                                      {order.factoryLocation?.name || 'Not set'}
+                                    </span>
+                                  </div>
+
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-600">Color:</span>{' '}
+                                    {order.color?.name || '—'}
+                                  </div>
+                                </div>
+
+                                {/* Dealer */}
+                                <div className="lg:col-span-3 min-w-0">
+                                  <div className="text-slate-900 font-semibold text-base truncate">
+                                    {order.dealer?.name || 'Unknown Dealer'}
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-600">
+                                    <span className="font-semibold">Created:</span>{' '}
+                                    {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
+                                  </div>
+                                </div>
+
+                                {/* Address + Payment */}
+                                <div className="lg:col-span-3 min-w-0">
+                                  <div className="text-slate-700 leading-snug break-words overflow-hidden">
+                                    {/* no line-clamp dependency */}
+                                    <span className="block">
+                                      {order.deliveryAddress}
+                                    </span>
+                                  </div>
+
+                                  <div className="mt-2 text-sm text-slate-600 flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold">Payment:</span>
+                                    {order.paymentProofUrl ? (
+                                      <a
+                                        href={order.paymentProofUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-sky-700 hover:underline font-semibold"
+                                        title="View payment proof"
+                                      >
+                                        <ExternalLink size={14} />
+                                        View
+                                      </a>
+                                    ) : (
+                                      <span className="text-slate-500">Not uploaded</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Status */}
+                                <div className="lg:col-span-1 min-w-0">
+                                  <StatusBadge status={order.status} />
+                                </div>
+
+                                {/* Right side */}
+                                <div className="lg:col-span-2 min-w-0 flex flex-col gap-2 lg:items-end">
+                                  <NextStep order={order} />
+
+                                  <div className="grid grid-cols-2 lg:flex lg:flex-col gap-2 w-full lg:w-auto">
+                                    <Link
+                                      href={`/admin/orders/${order.id}/history`}
+                                      prefetch={false}
+                                      className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
+                                      title="Open order"
+                                    >
+                                      <PackageSearch size={16} />
+                                      Open
+                                    </Link>
+
+                                    <Link
+                                      href={`/admin/orders/${order.id}/media`}
+                                      prefetch={false}
+                                      className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold"
+                                      title="Files"
+                                    >
+                                      <FileText size={16} />
+                                      Files
+                                    </Link>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </CardShell>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </CardShell>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm text-slate-600">
-          Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> • {totalCount} results
+        {/* Pagination */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm text-slate-600">
+            Page <strong>{page}</strong> of <strong>{totalPages || 1}</strong> • {totalCount} results
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setParams({ page: page - 1 })}
+              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setParams({ page: page + 1 })}
+              className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
+            >
+              Next
+            </button>
+            <select
+              value={pageSize}
+              onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
+              className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+            >
+              {[10, 20, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n}/page
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            disabled={page <= 1}
-            onClick={() => setParams({ page: page - 1 })}
-            className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
-          >
-            Prev
-          </button>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setParams({ page: page + 1 })}
-            className="h-10 px-4 rounded-2xl border border-slate-200 bg-white disabled:opacity-50"
-          >
-            Next
-          </button>
-          <select
-            value={pageSize}
-            onChange={(e) => setParams({ pageSize: Number(e.target.value), page: 1 })}
-            className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
-          >
-            {[10, 20, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}/page
-              </option>
-            ))}
-          </select>
-        </div>
+        <style jsx global>{`
+          .animate-spin-slow {
+            animation: spin 1.2s linear infinite;
+          }
+        `}</style>
       </div>
-
-      <style jsx global>{`
-        .animate-spin-slow {
-          animation: spin 1.2s linear infinite;
-        }
-      `}</style>
     </div>
   )
 }
