@@ -8,45 +8,15 @@ import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { OrderDocType, Role } from '@prisma/client'
 
-type FlowStatus =
-  | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED' // (eventually removed)
-  | 'IN_PRODUCTION'
-  | 'PRE_SHIPPING'
-  | 'COMPLETED'
-  | 'CANCELED'
+import {
+  FLOW_ORDER,
+  REQUIRED_FOR,
+  REQUIRED_FIELDS_FOR,
+  type FlowStatus,
+  type OrderDocTypeKey,
+} from '@/lib/orderFlow'
 
-const FLOW_ORDER: FlowStatus[] = [
-  'PENDING_PAYMENT_APPROVAL',
-  'APPROVED',
-  'IN_PRODUCTION',
-  'PRE_SHIPPING',
-  'COMPLETED',
-]
-
-const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocType[]>> = {
-  // Pending -> Approved (Mike)
-  APPROVED: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
-
-  // Approved -> In Production (Mike)
-  IN_PRODUCTION: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'],
-
-  // In Production -> Pre-Shipping (Mike)
-  PRE_SHIPPING: [
-    'SHIPPING_CHECKLIST',
-    'PRE_SHIPPING_MEDIA',
-    'BILL_OF_LADING',
-    'PROOF_OF_FINAL_PAYMENT',
-    'PAID_INVOICE',
-  ],
-}
-
-// Mike: Serial Number required to move to In Production (and keep it for later stages too)
-const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, Array<'serialNumber'>>> = {
-  IN_PRODUCTION: ['serialNumber'],
-  PRE_SHIPPING: ['serialNumber'],
-  COMPLETED: ['serialNumber'],
-}
+type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 
 function json(message: string, status = 400, extra?: Record<string, any>) {
   return NextResponse.json(
@@ -55,7 +25,6 @@ function json(message: string, status = 400, extra?: Record<string, any>) {
   )
 }
 
-type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
   const p: any = ctx.params
   return ('then' in p ? (await p).id : p.id) as string
@@ -66,10 +35,13 @@ function isAdminRole(role: any) {
 }
 
 function flowIndex(s: FlowStatus) {
+  // CANCELED no pertenece al orden normal
+  if (s === 'CANCELED') return -1
   return FLOW_ORDER.indexOf(s)
 }
 
 function isForwardMove(from: FlowStatus, to: FlowStatus) {
+  // CANCELED es “side exit”
   if (to === 'CANCELED') return false
   const a = flowIndex(from)
   const b = flowIndex(to)
@@ -134,12 +106,12 @@ async function getOrderSummary(orderId: string) {
   }
 }
 
-type MissingResult =
-  | { ok: true; missingDocs: OrderDocType[]; missingFields: string[] }
-  | { ok: false; notFound: true }
+type MissingOk = { ok: true; missingDocs: OrderDocTypeKey[]; missingFields: string[] }
+type MissingNotFound = { ok: false; notFound: true }
+type MissingResult = MissingOk | MissingNotFound
 
 async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): Promise<MissingResult> {
-  const needDocs = REQUIRED_FOR[targetStatus] ?? []
+  const needDocs = (REQUIRED_FOR[targetStatus] ?? []) as OrderDocTypeKey[]
   const needFields = REQUIRED_FIELDS_FOR[targetStatus] ?? []
 
   if (needDocs.length === 0 && needFields.length === 0) {
@@ -153,7 +125,7 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
     }),
     needDocs.length
       ? prisma.orderMedia.findMany({
-          where: { orderId, docType: { in: needDocs } },
+          where: { orderId, docType: { in: needDocs as unknown as OrderDocType[] } },
           select: { docType: true },
         })
       : Promise.resolve([] as Array<{ docType: OrderDocType | null }>),
@@ -162,7 +134,7 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   if (!order) return { ok: false, notFound: true }
 
   const present = new Set(media.map((m) => m.docType).filter(Boolean) as OrderDocType[])
-  const missingDocs = needDocs.filter((d) => !present.has(d))
+  const missingDocs = needDocs.filter((d) => !present.has(d as unknown as OrderDocType))
 
   const missingFields: string[] = []
   for (const f of needFields) {
@@ -213,6 +185,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const currentStatus = current.status as FlowStatus
 
+    // gate: requirements only when moving forward in normal flow
     if (isForwardMove(currentStatus, nextStatus)) {
       const missing = await getMissingForTarget(orderId, nextStatus)
       if (!missing.ok) return json('Order not found', 404)

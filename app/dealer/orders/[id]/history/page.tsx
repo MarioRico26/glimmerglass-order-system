@@ -13,6 +13,8 @@ import {
   FileDown,
 } from 'lucide-react'
 
+import { STATUS_LABELS, labelDocType, type FlowStatus } from '@/lib/orderFlow'
+
 type OrderHistory = {
   id: string
   status: string
@@ -32,21 +34,9 @@ type OrderMedia = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
-// Optional: if you still serve legacy /uploads/* through /api/uploads/*
 function toApiUrl(u: string) {
   if (!u) return ''
-  return u.startsWith('/uploads/')
-    ? '/api/uploads/' + u.replace('/uploads/', '')
-    : u
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
-  APPROVED: 'Approved',
-  IN_PRODUCTION: 'In Production',
-  PRE_SHIPPING: 'Pre-Shipping',
-  COMPLETED: 'Completed',
-  CANCELED: 'Canceled',
+  return u.startsWith('/uploads/') ? '/api/uploads/' + u.replace('/uploads/', '') : u
 }
 
 const STATUS_META: Record<
@@ -79,28 +69,10 @@ const STATUS_META: Record<
   },
 }
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  PROOF_OF_PAYMENT: 'Proof of Payment',
-  QUOTE: 'Quote',
-  INVOICE: 'Invoice',
-
-  BUILD_SHEET: 'Build Sheet',
-  POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',
-
-  SHIPPING_CHECKLIST: 'Shipping Checklist',
-  PRE_SHIPPING_MEDIA: 'Pre-shipping Photos/Video',
-  BILL_OF_LADING: 'Bill of Lading',
-  PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
-  PAID_INVOICE: 'Paid Invoice',
-
-  // if you later add these to your enum, they’ll automatically render nicely
-  WARRANTY: 'Warranty',
-  MANUAL: 'Manual',
-}
-
-function safeLabelDocType(docType?: string | null) {
-  if (!docType) return null
-  return DOC_TYPE_LABELS[docType] || docType.replaceAll('_', ' ')
+// ✅ evita el error TS: h.status es string, STATUS_LABELS espera FlowStatus
+function labelStatus(status: string) {
+  const key = status as FlowStatus
+  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
 }
 
 export default function DealerOrderHistoryPage() {
@@ -129,21 +101,13 @@ export default function DealerOrderHistoryPage() {
         setLoading(true)
         setError(null)
 
-        // ✅ Dealer history (dealer-only endpoint)
         const hRes = await fetch(`/api/dealer/orders/${orderId}/history`, { cache: 'no-store' })
         const hJson = await hRes.json().catch(() => null)
+        if (!hRes.ok) throw new Error(hJson?.message || `Failed to load history (${hRes.status})`)
 
-        if (!hRes.ok) {
-          throw new Error(hJson?.message || `Failed to load history (${hRes.status})`)
-        }
-
-        // ✅ Dealer media (dealer-visible files only)
         const mRes = await fetch(`/api/orders/${orderId}/media`, { cache: 'no-store' })
         const mJson = await mRes.json().catch(() => null)
-
-        if (!mRes.ok) {
-          throw new Error(hJson?.message || `Failed to load files (${mRes.status})`)
-        }
+        if (!mRes.ok) throw new Error(mJson?.message || `Failed to load files (${mRes.status})`)
 
         if (!abort) {
           setHistory(Array.isArray(hJson) ? hJson : [])
@@ -204,11 +168,10 @@ export default function DealerOrderHistoryPage() {
                   badge: 'bg-slate-50 text-slate-800 border-slate-200',
                 }
                 const Icon = meta.icon
-                const title = STATUS_LABELS[h.status] || h.status.replaceAll('_', ' ')
+                const title = labelStatus(h.status)
 
                 return (
                   <div key={h.id} className="relative">
-                    {/* node */}
                     <div className="absolute -left-0.5 top-1.5 w-6 h-6 rounded-full border bg-white flex items-center justify-center shadow-sm ring-2 ring-[#007A99]">
                       <Icon size={14} className="text-[#007A99]" />
                     </div>
@@ -269,7 +232,7 @@ export default function DealerOrderHistoryPage() {
           <div className="grid gap-3">
             {normalizedMedia.map((m) => {
               const href = toApiUrl(m.fileUrl || '')
-              const docLabel = safeLabelDocType(m.docType)
+              const docLabel = labelDocType(m.docType)
               const fallbackLabel = m.type ? m.type.replaceAll('_', ' ') : 'File'
 
               return (
@@ -283,7 +246,6 @@ export default function DealerOrderHistoryPage() {
                         {docLabel || fallbackLabel}
                       </span>
 
-                      {/* technical badge (optional but useful) */}
                       <span className="text-[11px] rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600 capitalize">
                         {m.type}
                       </span>
