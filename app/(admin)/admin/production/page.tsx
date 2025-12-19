@@ -8,19 +8,19 @@ import {
   Maximize2,
   Minimize2,
   X,
+  PackageSearch,
   ExternalLink,
   Factory as FactoryIcon,
-  PackageSearch,
-  CalendarDays,
-  Hash,
+  Calendar,
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
+  CheckCircle2,
+  CircleX,
+  Clock,
 } from 'lucide-react'
 
 type Maybe<T> = T | null | undefined
 
-type FlowStatus =
+type OrderStatus =
   | 'PENDING_PAYMENT_APPROVAL'
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
@@ -30,20 +30,22 @@ type FlowStatus =
 interface Order {
   id: string
   deliveryAddress: string
-  status: FlowStatus
+  status: OrderStatus | string
   paymentProofUrl?: string | null
+
+  productionPriority?: number | null
+  requestedShipDate?: string | null
+  serialNumber?: string | null
+  shippingMethod?: string | null
 
   poolModel: Maybe<{ name: string }>
   color: Maybe<{ name: string }>
   dealer: Maybe<{ name: string }>
-  factoryLocation: Maybe<{ name: string }>
 
-  createdAt?: string | null
+  // ✅ tu API devuelve factoryLocation (no factory)
+  factoryLocation: Maybe<{ id?: string; name: string }>
 
-  // para producción
-  requestedShipDate?: string | null
-  productionPriority?: number | null
-  serialNumber?: string | null
+  createdAt?: string
 }
 
 type ApiResp = {
@@ -53,60 +55,14 @@ type ApiResp = {
   total: number
 }
 
-const STATUSES: FlowStatus[] = [
-  'PENDING_PAYMENT_APPROVAL',
-  'IN_PRODUCTION',
-  'PRE_SHIPPING',
-  'COMPLETED',
-  'CANCELED',
-]
-
-const STATUS_LABEL: Record<FlowStatus, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending Payment',
-  IN_PRODUCTION: 'In Production',
-  PRE_SHIPPING: 'Pre-Shipping',
-  COMPLETED: 'Completed',
-  CANCELED: 'Canceled',
-}
-
-const STATUS_STYLE: Record<
-  FlowStatus,
-  { head: string; bg: string; rail: string; text: string }
-> = {
-  PENDING_PAYMENT_APPROVAL: {
-    head: 'bg-amber-100/70',
-    bg: 'bg-amber-50',
-    rail: 'bg-amber-300',
-    text: 'text-amber-900',
-  },
-  IN_PRODUCTION: {
-    head: 'bg-indigo-100/70',
-    bg: 'bg-indigo-50',
-    rail: 'bg-indigo-300',
-    text: 'text-indigo-900',
-  },
-  PRE_SHIPPING: {
-    head: 'bg-violet-100/70',
-    bg: 'bg-violet-50',
-    rail: 'bg-violet-300',
-    text: 'text-violet-900',
-  },
-  COMPLETED: {
-    head: 'bg-emerald-100/70',
-    bg: 'bg-emerald-50',
-    rail: 'bg-emerald-300',
-    text: 'text-emerald-900',
-  },
-  CANCELED: {
-    head: 'bg-rose-100/70',
-    bg: 'bg-rose-50',
-    rail: 'bg-rose-300',
-    text: 'text-rose-900',
-  },
-}
-
 const aqua = '#00B2CA'
 const deep = '#007A99'
+
+const MAX_PAGE_SIZE = 100
+
+function cn(...s: Array<string | false | null | undefined>) {
+  return s.filter(Boolean).join(' ')
+}
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -118,58 +74,40 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   }
 }
 
-// trae TODAS las órdenes respetando tu API paginada
-async function fetchAllOrders(): Promise<Order[]> {
-  const pageSize = 200
-  const first = await fetch(`/api/admin/orders?page=1&pageSize=${pageSize}`, { cache: 'no-store' })
-  if (!first.ok) throw new Error('Failed to load orders')
-  const firstData = await safeJson<ApiResp>(first)
-  const items = firstData?.items ?? []
-  const total = firstData?.total ?? items.length
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
-  if (totalPages <= 1) return items
-
-  const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2)
-  const rest = await Promise.all(
-    restPages.map(async (p) => {
-      const r = await fetch(`/api/admin/orders?page=${p}&pageSize=${pageSize}`, { cache: 'no-store' })
-      if (!r.ok) return []
-      const d = await safeJson<ApiResp>(r)
-      return d?.items ?? []
-    })
-  )
-
-  return items.concat(...rest)
-}
-
-function formatDate(d?: string | null) {
-  if (!d) return null
+function fmtDate(d?: string | null) {
+  if (!d) return '—'
   const x = new Date(d)
-  if (isNaN(x.getTime())) return null
+  if (Number.isNaN(+x)) return '—'
   return x.toLocaleDateString()
 }
 
-function sortForProduction(a: Order, b: Order) {
-  const pa = typeof a.productionPriority === 'number' ? a.productionPriority : Number.POSITIVE_INFINITY
-  const pb = typeof b.productionPriority === 'number' ? b.productionPriority : Number.POSITIVE_INFINITY
-  if (pa !== pb) return pa - pb
-
-  const sa = a.requestedShipDate ? +new Date(a.requestedShipDate) : Number.POSITIVE_INFINITY
-  const sb = b.requestedShipDate ? +new Date(b.requestedShipDate) : Number.POSITIVE_INFINITY
-  if (sa !== sb) return sa - sb
-
-  const ca = a.createdAt ? +new Date(a.createdAt) : 0
-  const cb = b.createdAt ? +new Date(b.createdAt) : 0
-  return ca - cb
+function fmtDateTime(d?: string | null) {
+  if (!d) return '—'
+  const x = new Date(d)
+  if (Number.isNaN(+x)) return '—'
+  return x.toLocaleString()
 }
 
-function clampText(s?: string | null) {
-  if (!s) return ''
-  return s.length > 38 ? s.slice(0, 38) + '…' : s
+function StatusPill({ status }: { status: string }) {
+  const base = 'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border'
+  switch (status) {
+    case 'PENDING_PAYMENT_APPROVAL':
+      return <span className={cn(base, 'bg-amber-50 text-amber-800 border-amber-200')}>Pending</span>
+    case 'IN_PRODUCTION':
+      return <span className={cn(base, 'bg-indigo-50 text-indigo-800 border-indigo-200')}>In Production</span>
+    case 'PRE_SHIPPING':
+      return <span className={cn(base, 'bg-violet-50 text-violet-800 border-violet-200')}>Pre-Shipping</span>
+    case 'COMPLETED':
+      return <span className={cn(base, 'bg-emerald-50 text-emerald-800 border-emerald-200')}>Completed</span>
+    case 'CANCELED':
+      return <span className={cn(base, 'bg-rose-50 text-rose-800 border-rose-200')}>Canceled</span>
+    default:
+      return <span className={cn(base, 'bg-slate-50 text-slate-700 border-slate-200')}>{status.replaceAll('_', ' ')}</span>
+  }
 }
 
-export default function ProductionBoardPage() {
+/** ---------- main ---------- */
+export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -178,47 +116,87 @@ export default function ProductionBoardPage() {
   const [auto, setAuto] = useState(true)
   const [fs, setFs] = useState(false)
 
-  // collapsed groups
-  const [openFactories, setOpenFactories] = useState<Record<string, boolean>>({})
-  const [showDone, setShowDone] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
   const [showCanceled, setShowCanceled] = useState(false)
 
-  // modal
+  // Modal state
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState<Order | null>(null)
-  const [busy, setBusy] = useState(false)
   const modalRef = useRef<HTMLDivElement | null>(null)
 
-  const [editPriority, setEditPriority] = useState<string>('')
-  const [editShipDate, setEditShipDate] = useState<string>('') // yyyy-mm-dd
+  const loadAllOrders = async () => {
+    // ✅ paga la deuda técnica: no pedir pageSize > 100 y traer TODO
+    const pageSize = MAX_PAGE_SIZE
+    let page = 1
+    let all: Order[] = []
+    let keepGoing = true
+
+    while (keepGoing) {
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
+      params.set('sort', 'createdAt')
+      params.set('dir', 'desc')
+
+      const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
+      const payload = await safeJson<any>(res)
+
+      if (!res.ok) {
+        throw new Error(payload?.message || `Failed to load orders (${res.status})`)
+      }
+
+      const data: ApiResp | null =
+        payload && Array.isArray(payload?.items) ? (payload as ApiResp) : null
+
+      const items = data?.items ?? []
+      all = all.concat(items)
+
+      if (items.length < pageSize) keepGoing = false
+      else page += 1
+
+      // safety valve
+      if (page > 50) keepGoing = false
+    }
+
+    return all
+  }
 
   const load = async () => {
     try {
+      setLoading(true)
       setError(null)
-      const list = await fetchAllOrders()
-      setOrders(list)
+      const all = await loadAllOrders()
+      setOrders(all)
     } catch (e: any) {
+      console.error('Production Board load error:', e)
       setOrders([])
-      setError(e?.message || 'Failed to load')
+      setError(e?.message || 'Failed to load orders')
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      await load()
-      setLoading(false)
-    })()
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (!auto) return
     const t = setInterval(async () => {
-      setRefreshing(true)
-      await load()
-      setRefreshing(false)
+      try {
+        setRefreshing(true)
+        const all = await loadAllOrders()
+        setOrders(all)
+        setError(null)
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load orders')
+      } finally {
+        setRefreshing(false)
+      }
     }, 20000)
     return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto])
 
   const toggleFS = async () => {
@@ -230,71 +208,58 @@ export default function ProductionBoardPage() {
         await document.exitFullscreen()
         setFs(false)
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
-  // Group: Factory -> Status -> Orders
-  const factories = useMemo(() => {
-    const map: Record<string, Record<FlowStatus, Order[]>> = {}
-
-    const getFactory = (o: Order) => o.factoryLocation?.name || 'Unknown Factory'
-    const statusAllowed = (s: FlowStatus) => {
-      if (s === 'COMPLETED') return showDone
-      if (s === 'CANCELED') return showCanceled
+  /** Filters for the board (we schedule production, so defaults hide completed/canceled) */
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      if (!showCompleted && o.status === 'COMPLETED') return false
+      if (!showCanceled && o.status === 'CANCELED') return false
       return true
-    }
+    })
+  }, [orders, showCompleted, showCanceled])
 
-    for (const o of orders) {
-      if (!statusAllowed(o.status)) continue
-      const f = getFactory(o)
-      map[f] ||= {
-        PENDING_PAYMENT_APPROVAL: [],
-        IN_PRODUCTION: [],
-        PRE_SHIPPING: [],
-        COMPLETED: [],
-        CANCELED: [],
-      }
-      map[f][o.status].push(o)
-    }
+  /** Group by factory */
+  const byFactory = useMemo(() => {
+    const map: Record<string, Order[]> = {}
+    filteredOrders.forEach((o) => {
+      const key = o.factoryLocation?.name || 'Unknown Factory'
+      ;(map[key] ||= []).push(o)
+    })
 
-    const names = Object.keys(map).sort((a, b) => a.localeCompare(b))
-    // default open (solo la primera vez)
-    setTimeout(() => {
-      setOpenFactories((prev) => {
-        if (Object.keys(prev).length) return prev
-        const next: Record<string, boolean> = {}
-        names.forEach((n) => (next[n] = true))
-        return next
+    // Sort inside each factory by: Priority -> Requested ship date -> Created
+    Object.keys(map).forEach((k) => {
+      map[k].sort((a, b) => {
+        const pa = typeof a.productionPriority === 'number' ? a.productionPriority : 999999
+        const pb = typeof b.productionPriority === 'number' ? b.productionPriority : 999999
+        if (pa !== pb) return pa - pb
+
+        const sa = a.requestedShipDate ? +new Date(a.requestedShipDate) : 9999999999999
+        const sb = b.requestedShipDate ? +new Date(b.requestedShipDate) : 9999999999999
+        if (sa !== sb) return sa - sb
+
+        const ca = a.createdAt ? +new Date(a.createdAt) : 0
+        const cb = b.createdAt ? +new Date(b.createdAt) : 0
+        return ca - cb
       })
-    }, 0)
+    })
 
-    // sort within each column
-    for (const f of names) {
-      for (const st of STATUSES) {
-        map[f][st].sort(sortForProduction)
-      }
-    }
+    return map
+  }, [filteredOrders])
 
-    return { map, names }
-  }, [orders, showDone, showCanceled])
+  const factories = useMemo(() => Object.keys(byFactory).sort(), [byFactory])
 
+  /** Modal handlers */
   const openModal = (o: Order) => {
     setActive(o)
-    setEditPriority(typeof o.productionPriority === 'number' ? String(o.productionPriority) : '')
-    if (o.requestedShipDate) {
-      const d = new Date(o.requestedShipDate)
-      setEditShipDate(!isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '')
-    } else {
-      setEditShipDate('')
-    }
     setOpen(true)
   }
-
   const closeModal = () => {
     setOpen(false)
     setActive(null)
-    setEditPriority('')
-    setEditShipDate('')
   }
 
   useEffect(() => {
@@ -312,270 +277,204 @@ export default function ProductionBoardPage() {
       document.removeEventListener('keydown', onKey)
       document.removeEventListener('mousedown', onClick)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // ⚠️ IMPORTANTE:
-  // Esto usa tu endpoint /factory (el que ya guarda productionPriority en History page)
-  // NECESITAS que el backend trate campos ausentes como "no changes" (no pisar con null).
-  const saveProductionMeta = async () => {
-    if (!active) return
-    setBusy(true)
-    try {
-      const body: any = {}
-      if (editPriority === '') body.productionPriority = null
-      else body.productionPriority = Number(editPriority)
-
-      if (editShipDate === '') body.requestedShipDate = null
-      else body.requestedShipDate = editShipDate
-
-      const res = await fetch(`/api/admin/orders/${active.id}/factory`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const updated = await safeJson<Order>(res)
-      if (!res.ok) throw new Error('Failed to save')
-      if (updated?.id) {
-        setOrders((prev) => prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)))
-        setActive((prev) => (prev ? { ...prev, ...updated } : prev))
-      } else {
-        // si tu endpoint no devuelve order completo, por lo menos refrescamos
-        await load()
-      }
-      closeModal()
-    } catch {
-      alert('Could not save production settings')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const headerBg = `radial-gradient(1100px 700px at 80% 0%, #E6F7FA 0%, transparent 60%),
-    radial-gradient(800px 500px at 10% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
-    linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`
-
   return (
-    <div className="min-h-screen p-6" style={{ background: headerBg }}>
-      {/* Header */}
-      <div className="mb-5 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-        <div>
-          <div className="inline-flex items-center gap-2 text-sm font-semibold rounded-full px-3 py-1 border border-slate-200 bg-white/70 text-slate-700">
-            <FactoryIcon size={16} />
-            Production Board
+    <div
+      className="min-h-screen"
+      style={{
+        background: `radial-gradient(1100px 700px at 80% 0%, #E6F7FA 0%, transparent 60%),
+          radial-gradient(800px 500px at 10% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
+          linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
+      }}
+    >
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-6 space-y-5">
+        {/* Header */}
+        <div className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase rounded-full px-3 py-1 border border-slate-200 bg-white text-slate-700">
+                <FactoryIcon size={14} />
+                Production Board
+              </div>
+
+              <h1 className="mt-2 text-2xl sm:text-3xl font-black text-slate-900">
+                Order of fabrication by factory
+              </h1>
+
+              <p className="text-slate-600 mt-1">
+                Sorts by <span className="font-semibold">Priority</span> → <span className="font-semibold">Ship date</span> →{' '}
+                <span className="font-semibold">Created</span>.
+              </p>
+
+              {error && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  <AlertTriangle size={16} />
+                  <span className="font-semibold">Failed to load orders:</span> {error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={async () => {
+                  setRefreshing(true)
+                  try {
+                    const all = await loadAllOrders()
+                    setOrders(all)
+                    setError(null)
+                  } catch (e: any) {
+                    setError(e?.message || 'Failed to load orders')
+                  } finally {
+                    setRefreshing(false)
+                  }
+                }}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                title="Refresh"
+              >
+                <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
+                Refresh
+              </button>
+
+              <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="accent-sky-600"
+                  checked={auto}
+                  onChange={(e) => setAuto(e.target.checked)}
+                />
+                Auto
+              </label>
+
+              <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="accent-sky-600"
+                  checked={showCompleted}
+                  onChange={(e) => setShowCompleted(e.target.checked)}
+                />
+                Show completed
+              </label>
+
+              <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="accent-sky-600"
+                  checked={showCanceled}
+                  onChange={(e) => setShowCanceled(e.target.checked)}
+                />
+                Show canceled
+              </label>
+
+              <button
+                onClick={toggleFS}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                title={fs ? 'Exit full screen' : 'Full screen'}
+              >
+                {fs ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                {fs ? 'Exit' : 'Full screen'}
+              </button>
+
+              <div className="h-1 w-28 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }} />
+            </div>
           </div>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-black text-slate-900">
-            Order of fabrication by factory
-          </h1>
-          <p className="text-slate-600">
-            Sorts by <span className="font-semibold">Priority</span> → Ship date → Created.
-          </p>
-          {error && (
-            <p className="mt-2 text-sm text-rose-700 inline-flex items-center gap-2">
-              <AlertTriangle size={16} /> {error}
-            </p>
-          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={async () => {
-              setRefreshing(true)
-              await load()
-              setRefreshing(false)
-            }}
-            className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-            title="Refresh"
-          >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} />
-            Refresh
-          </button>
-
-          <label className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-800 font-semibold cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-sky-600"
-              checked={auto}
-              onChange={(e) => setAuto(e.target.checked)}
-            />
-            Auto
-          </label>
-
-          <label className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-800 font-semibold cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-emerald-600"
-              checked={showDone}
-              onChange={(e) => setShowDone(e.target.checked)}
-            />
-            Show completed
-          </label>
-
-          <label className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-800 font-semibold cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-rose-600"
-              checked={showCanceled}
-              onChange={(e) => setShowCanceled(e.target.checked)}
-            />
-            Show canceled
-          </label>
-
-          <button
-            onClick={toggleFS}
-            className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold"
-            title={fs ? 'Exit full screen' : 'Full screen'}
-          >
-            {fs ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            {fs ? 'Exit' : 'Full screen'}
-          </button>
-
-          <div
-            className="h-1 w-24 rounded-full"
-            style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
-          />
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="space-y-4">
+        {/* Content */}
         {loading ? (
-          <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl p-6 shadow-[0_12px_40px_rgba(0,122,153,0.10)]">
-            <div className="h-4 w-56 bg-slate-200/70 rounded animate-pulse" />
-            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="h-56 rounded-2xl bg-slate-200/60 animate-pulse" />
-              ))}
-            </div>
+          <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4"
+              >
+                <div className="h-6 w-40 rounded bg-slate-200/70 animate-pulse" />
+                <div className="mt-4 space-y-2">
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <div key={j} className="h-14 rounded-2xl bg-slate-200/50 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : factories.names.length === 0 ? (
-          <div className="p-10 text-center rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)]">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-              <PackageSearch size={28} className="text-slate-500" />
+        ) : factories.length === 0 ? (
+          <div className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-10 text-center">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+              <PackageSearch size={26} className="text-slate-500" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No orders</h3>
-            <p className="text-slate-600">Nothing to schedule. Lucky you.</p>
+            <div className="text-xl font-black text-slate-900">No orders</div>
+            <div className="text-slate-600">Nothing to schedule. Lucky you.</div>
           </div>
         ) : (
-          factories.names.map((fname) => {
-            const isOpen = openFactories[fname] ?? true
-            const toggle = () =>
-              setOpenFactories((prev) => ({ ...prev, [fname]: !(prev[fname] ?? true) }))
+          <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
+            {factories.map((factoryName) => {
+              const items = byFactory[factoryName] || []
+              return (
+                <section
+                  key={factoryName}
+                  className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] ring-1 ring-white/60 overflow-hidden flex flex-col"
+                >
+                  <header className="px-4 py-3 bg-slate-50/70 border-b border-white/70 sticky top-0 z-10">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="font-extrabold text-slate-900 truncate">{factoryName}</h2>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/80 border border-slate-200">
+                        {items.length}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      Priority → Ship date → Created
+                    </div>
+                  </header>
 
-            const columns = factories.map[fname]
-
-            // counts (solo visibles)
-            const count =
-              columns.PENDING_PAYMENT_APPROVAL.length +
-              columns.IN_PRODUCTION.length +
-              columns.PRE_SHIPPING.length +
-              (showDone ? columns.COMPLETED.length : 0) +
-              (showCanceled ? columns.CANCELED.length : 0)
-
-            return (
-              <section
-                key={fname}
-                className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] overflow-hidden"
-              >
-                <header className="px-4 py-3 bg-slate-50/60 border-b border-white/60 flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      onClick={toggle}
-                      className="rounded-lg p-1.5 hover:bg-white border border-transparent hover:border-slate-200 transition"
-                      aria-label="Toggle factory"
-                    >
-                      {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    </button>
-                    <h2 className="font-black text-slate-900 truncate">{fname}</h2>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/80 border border-white">
-                      {count} orders
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-600 hidden sm:block">
-                    Click a card to set priority / ship date.
-                  </div>
-                </header>
-
-                {isOpen && (
-                  <div className="p-4">
-                    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-                      {STATUSES.filter((s) => {
-                        if (s === 'COMPLETED') return showDone
-                        if (s === 'CANCELED') return showCanceled
-                        return true
-                      }).map((st) => {
-                        const items = columns[st] || []
-                        const style = STATUS_STYLE[st]
-
-                        return (
-                          <div
-                            key={st}
-                            className="rounded-2xl border border-white bg-white/70 overflow-hidden shadow-[0_10px_28px_rgba(0,0,0,0.06)]"
-                          >
-                            <div className={`px-3 py-2 ${style.head} border-b border-white/60`}>
-                              <div className="flex items-center justify-between">
-                                <div className={`font-extrabold ${style.text}`}>{STATUS_LABEL[st]}</div>
-                                <div className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/80 border border-white">
-                                  {items.length}
-                                </div>
+                  <div className="p-3 space-y-2 max-h-[72vh] overflow-y-auto overscroll-contain">
+                    {items.map((o) => (
+                      <button
+                        key={o.id}
+                        onClick={() => openModal(o)}
+                        className="group w-full text-left rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+                      >
+                        <div className="p-3 flex items-start gap-3">
+                          <div className="mt-1 h-9 w-1.5 rounded-full bg-slate-200 group-hover:bg-sky-300 transition shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-bold text-slate-900 truncate">
+                                {o.poolModel?.name || 'Model'}{' '}
+                                <span className="text-slate-400 font-extrabold">•</span>{' '}
+                                <span className="text-slate-700">{o.color?.name || '-'}</span>
                               </div>
+                              <StatusPill status={String(o.status)} />
                             </div>
 
-                            <div className={`${style.bg} p-2 space-y-2 min-h-[160px] max-h-[62vh] overflow-y-auto overscroll-contain`}>
-                              {items.length === 0 ? (
-                                <div className="text-center text-slate-500 text-sm py-6">Empty</div>
-                              ) : (
-                                items.map((o) => (
-                                  <button
-                                    key={o.id}
-                                    onClick={() => openModal(o)}
-                                    className="group w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2 ring-1 ring-slate-100 hover:shadow-md transition"
-                                  >
-                                    <div className="flex items-start gap-2">
-                                      <span className={`mt-0.5 h-8 w-1.5 rounded-full ${style.rail} shrink-0`} />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <div className="font-semibold text-slate-900 truncate">
-                                            {o.poolModel?.name || '—'}
-                                          </div>
-                                          {typeof o.productionPriority === 'number' && (
-                                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white shrink-0">
-                                              <Hash size={12} /> {o.productionPriority}
-                                            </span>
-                                          )}
-                                        </div>
+                            <div className="mt-1 text-sm text-slate-600 truncate">
+                              {o.dealer?.name || 'Dealer'} • {o.deliveryAddress || '—'}
+                            </div>
 
-                                        <div className="text-[12px] text-slate-600 truncate">
-                                          {o.dealer?.name || 'Dealer'} • {o.color?.name || '—'}
-                                        </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1">
+                                <CheckCircle2 size={14} />
+                                Priority: <span className="font-semibold text-slate-900">{typeof o.productionPriority === 'number' ? o.productionPriority : '—'}</span>
+                              </span>
 
-                                        <div className="mt-1 flex items-center gap-2 text-[12px] text-slate-600">
-                                          {o.requestedShipDate ? (
-                                            <span className="inline-flex items-center gap-1">
-                                              <CalendarDays size={14} />
-                                              {formatDate(o.requestedShipDate) ?? '—'}
-                                            </span>
-                                          ) : (
-                                            <span className="text-slate-500">Ship: —</span>
-                                          )}
-                                          <span className="text-slate-300">•</span>
-                                          <span className="truncate">{clampText(o.deliveryAddress)}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </button>
-                                ))
-                              )}
+                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1">
+                                <Calendar size={14} />
+                                Ship: <span className="font-semibold text-slate-900">{fmtDate(o.requestedShipDate)}</span>
+                              </span>
+
+                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1">
+                                <Clock size={14} />
+                                Created: <span className="font-semibold text-slate-900">{fmtDate(o.createdAt)}</span>
+                              </span>
                             </div>
                           </div>
-                        )
-                      })}
-                    </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                )}
-              </section>
-            )
-          })
+                </section>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -584,21 +483,25 @@ export default function ProductionBoardPage() {
         <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             ref={modalRef}
-            className="w-full max-w-2xl rounded-2xl border border-white bg-white/90 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,0,0,.15)] overflow-hidden"
+            className="w-full max-w-2xl rounded-3xl border border-white bg-white/90 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,0,0,.15)] overflow-hidden"
           >
             <header className="px-5 py-4 border-b bg-white/80 sticky top-0 z-10">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Order
+                  </div>
                   <h3 className="font-black text-slate-900 truncate">
-                    {active.poolModel?.name || 'Order'} • {active.color?.name || '—'}
+                    {active.poolModel?.name || 'Order'} • {active.color?.name || '-'}
                   </h3>
                   <p className="text-sm text-slate-600 truncate">
                     {active.dealer?.name || 'Dealer'} • {active.factoryLocation?.name || 'Factory'}
                   </p>
                 </div>
+
                 <button
                   onClick={closeModal}
-                  className="rounded-lg p-2 hover:bg-slate-100"
+                  className="rounded-2xl p-2 hover:bg-slate-100"
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -607,83 +510,55 @@ export default function ProductionBoardPage() {
             </header>
 
             <div className="p-5 grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Field label="Order ID">{active.id}</Field>
-                <Field label="Status">
-                  <StatusPill status={active.status} />
-                </Field>
-                <Field label="Created">
-                  {active.createdAt ? new Date(active.createdAt).toLocaleString() : '—'}
-                </Field>
-                <Field label="Delivery address" wrap>
-                  {active.deliveryAddress || '—'}
-                </Field>
-              </div>
+              <Field label="Order ID">{active.id}</Field>
+              <Field label="Status">
+                <StatusPill status={String(active.status)} />
+              </Field>
 
-              <div className="space-y-4">
-                <div className="rounded-xl border bg-white p-3">
-                  <div className="text-sm font-semibold text-slate-900 mb-3">Production settings</div>
+              <Field label="Priority">{typeof active.productionPriority === 'number' ? active.productionPriority : '—'}</Field>
+              <Field label="Requested ship date">{fmtDate(active.requestedShipDate)}</Field>
 
-                  <label className="block mb-3">
-                    <div className="text-xs font-semibold text-slate-600 mb-1">Priority (1 = highest)</div>
-                    <input
-                      type="number"
-                      min={1}
-                      value={editPriority}
-                      onChange={(e) => setEditPriority(e.target.value)}
-                      className="w-full h-10 rounded-xl border border-slate-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                      placeholder="Leave blank to clear"
-                      disabled={busy}
-                    />
-                  </label>
+              <Field label="Created">{fmtDateTime(active.createdAt)}</Field>
+              <Field label="Delivery address" wrap>
+                {active.deliveryAddress || '—'}
+              </Field>
 
-                  <label className="block">
-                    <div className="text-xs font-semibold text-slate-600 mb-1">Requested ship date</div>
-                    <input
-                      type="date"
-                      value={editShipDate}
-                      onChange={(e) => setEditShipDate(e.target.value)}
-                      className="w-full h-10 rounded-xl border border-slate-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                      disabled={busy}
-                    />
-                  </label>
+              <Field label="Payment proof">
+                {active.paymentProofUrl ? (
+                  <a
+                    href={active.paymentProofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+                  >
+                    <ExternalLink size={16} /> View file
+                  </a>
+                ) : (
+                  'Not uploaded'
+                )}
+              </Field>
 
-                  <div className="mt-3 flex items-center justify-end gap-2">
-                    <button
-                      onClick={closeModal}
-                      disabled={busy}
-                      className="h-10 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={saveProductionMeta}
-                      disabled={busy}
-                      className="h-10 px-4 rounded-xl bg-sky-700 text-white font-semibold hover:bg-sky-800 disabled:opacity-60"
-                    >
-                      {busy ? 'Saving…' : 'Save'}
-                    </button>
-                  </div>
+              <Field label="Links">
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href={`/admin/orders/${active.id}/history`}
+                    className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+                  >
+                    <ExternalLink size={16} /> Open order history
+                  </Link>
+                  <Link
+                    href={`/admin/orders/${active.id}/media`}
+                    className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+                  >
+                    <ExternalLink size={16} /> Open files
+                  </Link>
                 </div>
+              </Field>
+            </div>
 
-                <div className="rounded-xl border bg-white p-3">
-                  <div className="text-sm font-semibold text-slate-900 mb-2">Links</div>
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/admin/orders/${active.id}/history`}
-                      className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-800"
-                    >
-                      <ExternalLink size={16} /> History
-                    </Link>
-
-                    <Link
-                      href={`/admin/orders/${active.id}/media`}
-                      className="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-800"
-                    >
-                      <ExternalLink size={16} /> Files
-                    </Link>
-                  </div>
-                </div>
+            <div className="px-5 pb-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                Status buttons (Start/Pre-Ship/Complete/Cancel) los dejamos para después, como pediste. Acá la prioridad es el scheduling por fábrica.
               </div>
             </div>
           </div>
@@ -691,12 +566,15 @@ export default function ProductionBoardPage() {
       )}
 
       <style jsx global>{`
-        .animate-spin-slow { animation: spin 1.2s linear infinite; }
+        .animate-spin-slow {
+          animation: spin 1.2s linear infinite;
+        }
       `}</style>
     </div>
   )
 }
 
+/** ---------- UI bits ---------- */
 function Field({
   label,
   children,
@@ -709,25 +587,7 @@ function Field({
   return (
     <div className="text-sm">
       <div className="text-slate-500">{label}</div>
-      <div className={`font-medium text-slate-900 ${wrap ? '' : 'truncate'}`}>{children}</div>
+      <div className={cn('font-medium text-slate-900', wrap ? '' : 'truncate')}>{children}</div>
     </div>
   )
-}
-
-function StatusPill({ status }: { status: FlowStatus }) {
-  const base = 'inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border'
-  switch (status) {
-    case 'PENDING_PAYMENT_APPROVAL':
-      return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
-    case 'IN_PRODUCTION':
-      return <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>In Production</span>
-    case 'PRE_SHIPPING':
-      return <span className={`${base} bg-violet-50 text-violet-800 border-violet-200`}>Pre-Shipping</span>
-    case 'COMPLETED':
-      return <span className={`${base} bg-emerald-50 text-emerald-800 border-emerald-200`}>Completed</span>
-    case 'CANCELED':
-      return <span className={`${base} bg-rose-50 text-rose-800 border-rose-200`}>Canceled</span>
-    default:
-      return <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>{status}</span>
-  }
 }
