@@ -3,26 +3,85 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ReactNode, useMemo } from 'react'
+import { ReactNode, useMemo, useState } from 'react'
 import { SessionProvider } from 'next-auth/react'
-import NotificationsBell from '../dealer/notifications/bell'
 import { signOut } from 'next-auth/react'
+
+import NotificationsBell from '../dealer/notifications/bell'
+
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Users,
+  Factory,
+  BookOpen,
+  Palette,
+  ChevronDown,
+  Shield,
+  UserCog,
+} from 'lucide-react'
+
+type NavItem = {
+  label: string
+  href: string
+  icon?: any
+  badge?: string
+}
+
+type NavSection =
+  | { type: 'link'; item: NavItem }
+  | {
+      type: 'group'
+      label: string
+      icon?: any
+      defaultOpen?: boolean
+      items: NavItem[]
+    }
 
 function AdminNav() {
   const pathname = usePathname()
 
-  const navItems = useMemo(
+  const sections = useMemo<NavSection[]>(
     () => [
-      { label: 'Dashboard', href: '/admin' },
-      { label: 'Orders', href: '/admin/orders' },
-      { label: 'Dealers', href: '/admin/dealers' },
-      { label: 'Catalog: Pool Models', href: '/admin/catalog/pool-models' },
-      { label: 'Catalog: Pool Colors', href: '/admin/catalog/colors' },
-      { label: 'Board', href: '/admin/board' },
-      { label: 'Users', href: '/admin/users' },
+      // --- Ops ---
+      { type: 'link', item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard } },
+      { type: 'link', item: { label: 'Orders', href: '/admin/orders', icon: ClipboardList } },
+
+      // ✅ Nuevo Board “pro”
+      { type: 'link', item: { label: 'Production Board', href: '/admin/board', icon: Factory } },
+
+      // --- People ---
+      { type: 'link', item: { label: 'Dealers', href: '/admin/dealers', icon: Users } },
+
+      // --- Catalog group ---
+      {
+        type: 'group',
+        label: 'Catalog',
+        icon: BookOpen,
+        defaultOpen: true,
+        items: [
+          { label: 'Pool Models', href: '/admin/catalog/pool-models', icon: BookOpen },
+          { label: 'Pool Colors', href: '/admin/catalog/colors', icon: Palette },
+        ],
+      },
+
+      // --- System ---
+      {
+        type: 'group',
+        label: 'System',
+        icon: Shield,
+        defaultOpen: false,
+        items: [
+          { label: 'Users', href: '/admin/users', icon: UserCog },
+          // futuro: settings, audit logs, etc
+          // { label: 'Settings', href: '/admin/settings', icon: Settings },
+        ],
+      },
     ],
     [],
   )
+
+  const isActive = (href: string) => pathname === href || (href !== '/admin' && pathname?.startsWith(href + '/')) || (href !== '/admin' && pathname?.startsWith(href))
 
   return (
     <aside className="lg:sticky lg:top-20">
@@ -31,23 +90,14 @@ function AdminNav() {
           <div className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Admin Menu
           </div>
+
           <div className="space-y-1">
-            {navItems.map((item) => {
-              const active = pathname === item.href || (item.href !== '/admin' && pathname?.startsWith(item.href))
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={[
-                    'group flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition',
-                    active
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-700 hover:bg-white/70',
-                  ].join(' ')}
-                >
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              )
+            {sections.map((sec, idx) => {
+              if (sec.type === 'link') {
+                return <NavLink key={sec.item.href} item={sec.item} active={isActive(sec.item.href)} />
+              }
+
+              return <NavGroup key={`${sec.label}-${idx}`} section={sec} isActive={isActive} />
             })}
           </div>
         </div>
@@ -64,6 +114,84 @@ function AdminNav() {
         </div>
       </nav>
     </aside>
+  )
+}
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon
+  return (
+    <Link
+      href={item.href}
+      className={[
+        'group flex items-center justify-between rounded-xl px-3 py-2 text-[15px] transition',
+        active ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/70' : 'text-slate-700 hover:bg-white/70',
+      ].join(' ')}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        {Icon && (
+          <span
+            className={[
+              'grid h-9 w-9 place-items-center rounded-xl transition shrink-0',
+              active
+                ? 'bg-sky-50 text-sky-700'
+                : 'bg-slate-100 text-slate-600 group-hover:bg-sky-50 group-hover:text-sky-700',
+            ].join(' ')}
+          >
+            <Icon size={18} />
+          </span>
+        )}
+        <span className="font-semibold truncate">{item.label}</span>
+      </div>
+
+      {item.badge && (
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+          {item.badge}
+        </span>
+      )}
+    </Link>
+  )
+}
+
+function NavGroup({
+  section,
+  isActive,
+}: {
+  section: Extract<NavSection, { type: 'group' }>
+  isActive: (href: string) => boolean
+}) {
+  const Icon = section.icon
+  const anyChildActive = section.items.some((i) => isActive(i.href))
+  const [open, setOpen] = useState(section.defaultOpen ?? anyChildActive)
+
+  return (
+    <div className="rounded-2xl border border-slate-200/70 bg-white/60 overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          'w-full flex items-center justify-between px-3 py-2 text-[13px] font-extrabold uppercase tracking-wide transition',
+          anyChildActive ? 'text-slate-900 bg-white/70' : 'text-slate-600 hover:bg-white/70',
+        ].join(' ')}
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2">
+          {Icon && (
+            <span className={['grid h-8 w-8 place-items-center rounded-xl', anyChildActive ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600'].join(' ')}>
+              <Icon size={16} />
+            </span>
+          )}
+          <span>{section.label}</span>
+        </div>
+        <ChevronDown size={16} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
+      </button>
+
+      {open && (
+        <div className="px-2 pb-2 space-y-1">
+          {section.items.map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -98,7 +226,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[260px_1fr] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
+        <div className="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[280px_1fr] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
           <AdminNav />
           <main className="min-w-0">
             <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-4 sm:p-6">
@@ -114,4 +242,4 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
     </SessionProvider>
   )
-} 
+}
