@@ -48,7 +48,7 @@ function AdminNav() {
       { type: 'link', item: { label: 'Orders', href: '/admin/orders', icon: ClipboardList } },
 
       // ✅ Nuevo Board “pro”
-      { type: 'link', item: { label: 'Production Board', href: '/admin/board', icon: Factory } },
+      { type: 'link', item: { label: 'Production Board', href: '/admin/production', icon: Factory } },
 
       // --- People ---
       { type: 'link', item: { label: 'Dealers', href: '/admin/dealers', icon: Users } },
