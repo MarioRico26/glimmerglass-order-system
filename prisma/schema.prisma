@@ -16,8 +16,10 @@ model User {
   dealerId String? @unique
   dealer   Dealer? @relation(fields: [dealerId], references: [id])
 
-  histories OrderHistory[]
-  createdAt DateTime       @default(now())
+  histories     OrderHistory[]
+  inventoryTxns InventoryTxn[] @relation("InventoryTxnActor")
+
+  createdAt DateTime @default(now())
 }
 
 model Dealer {
@@ -37,8 +39,8 @@ model Dealer {
   notifications Notification[]
   User          User?
 
-  taxDocUrl             String? // W-9 / tax document opcional
-  onboarding            Json      @default("{}") // flags y metadatos (flexible)
+  taxDocUrl             String?
+  onboarding            Json      @default("{}")
   onboardingCompletedAt DateTime?
 }
 
@@ -47,10 +49,10 @@ model Order {
   deliveryAddress String
   status          OrderStatus
   paymentProofUrl String?
-  notes           String? // <- si la estás enviando
+  notes           String?
   createdAt       DateTime    @default(now())
 
-  // 🔽 nuevo hardware checkboxes
+  // hardware checkboxes
   hardwareSkimmer    Boolean @default(false)
   hardwareAutocover  Boolean @default(false)
   hardwareReturns    Boolean @default(false)
@@ -72,10 +74,13 @@ model Order {
   media         OrderMedia[]
   notifications Notification[]
 
-  shippingMethod     String? // 'PICK_UP' o 'QUOTE'
-  requestedShipDate  DateTime? // requested date provided for the dealer
-  serialNumber       String? // serial number of the pool
-  productionPriority Int? // relative order of pool construction
+  shippingMethod     String?
+  requestedShipDate  DateTime?
+  serialNumber       String?
+  productionPriority Int?
+
+  // Inventory (optional link)
+  inventoryTxns InventoryTxn[]
 }
 
 model OrderHistory {
@@ -87,19 +92,19 @@ model OrderHistory {
   createdAt DateTime    @default(now())
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
 }
 
 model OrderMedia {
-  id         String    @id @default(uuid())
+  id         String   @id @default(uuid())
   orderId    String
-  order      Order     @relation(fields: [orderId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
   fileUrl    String
   type       MediaType
-  uploadedAt DateTime  @default(now())
+  uploadedAt DateTime @default(now())
 
   docType         OrderDocType?
-  visibleToDealer Boolean       @default(true)
+  visibleToDealer Boolean @default(true)
 }
 
 model PoolModel {
@@ -115,7 +120,7 @@ model PoolModel {
 model Color {
   id        String  @id @default(uuid())
   name      String  @unique
-  swatchUrl String? // <-- nuevo
+  swatchUrl String?
   orders    Order[]
 }
 
@@ -129,9 +134,8 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // 🔽 opcional para no romper con filas existentes
   orderId String?
-  order   Order?  @relation(fields: [orderId], references: [id])
+  order   Order? @relation(fields: [orderId], references: [id])
 
   @@index([dealerId, createdAt])
 }
@@ -143,7 +147,11 @@ model FactoryLocation {
   city      String?
   state     String?
   active    Boolean  @default(true)
+
   orders    Order[]
+  // ✅ IMPORTANT: inverse relation for InventoryLocation.factoryLocation
+  inventoryLocations InventoryLocation[]
+
   createdAt DateTime @default(now())
 }
 
@@ -165,6 +173,105 @@ model AuditLog {
   @@index([action])
 }
 
+/* =========================
+   INVENTORY
+   ========================= */
+
+enum InventoryLocationType {
+  WAREHOUSE
+  FACTORY
+  TRUCK
+  OTHER
+}
+
+enum InventoryTxnType {
+  IN
+  OUT
+  ADJUST
+}
+
+model InventoryLocation {
+  id   String @id @default(uuid())
+  name String @unique
+
+  type InventoryLocationType @default(WAREHOUSE)
+
+  // optional link to a factory (only when type=FACTORY)
+  factoryLocationId String?
+  factoryLocation   FactoryLocation? @relation(fields: [factoryLocationId], references: [id])
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  stocks InventoryStock[]
+  txns   InventoryTxn[]
+
+  @@index([factoryLocationId])
+  @@index([type])
+}
+
+model InventoryItem {
+  id   String @id @default(uuid())
+
+  sku  String @unique
+  name String
+  unit String @default("ea")
+
+  active   Boolean  @default(true)
+  minStock Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  stocks InventoryStock[]
+  txns   InventoryTxn[]
+}
+
+model InventoryStock {
+  id         String @id @default(uuid())
+  itemId     String
+  locationId String
+
+  onHand Int @default(0)
+
+  item     InventoryItem     @relation(fields: [itemId], references: [id])
+  location InventoryLocation @relation(fields: [locationId], references: [id])
+
+  @@unique([itemId, locationId])
+  @@index([locationId])
+  @@index([itemId])
+}
+
+model InventoryTxn {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  type  InventoryTxnType
+  qty   Int
+  notes String?
+
+  itemId     String
+  locationId String
+
+  item     InventoryItem     @relation(fields: [itemId], references: [id])
+  location InventoryLocation @relation(fields: [locationId], references: [id])
+
+  actorUserId String?
+  actorUser   User? @relation("InventoryTxnActor", fields: [actorUserId], references: [id])
+
+  orderId String?
+  order   Order? @relation(fields: [orderId], references: [id])
+
+  @@index([createdAt])
+  @@index([itemId])
+  @@index([locationId])
+  @@index([orderId])
+  @@index([actorUserId])
+}
+
+/* =========================
+   ENUMS
+   ========================= */
+
 enum Role {
   ADMIN
   DEALER
@@ -173,7 +280,7 @@ enum Role {
 
 enum OrderStatus {
   PENDING_PAYMENT_APPROVAL
-  APPROVED //TEMPORARY ON DATA SCHEME
+  APPROVED // TEMPORARY ON DATA SCHEME
   IN_PRODUCTION
   PRE_SHIPPING
   COMPLETED
