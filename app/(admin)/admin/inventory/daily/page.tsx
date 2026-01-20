@@ -2,122 +2,215 @@
 
 import { useEffect, useState } from 'react'
 
-type Item = {
+type Location = {
   id: string
+  name: string
+}
+
+type Row = {
+  itemId: string
   sku: string
   name: string
   unit: string
+  category: string
   onHand: number
   qtyToOrder: number
 }
 
-type Data = {
-  location: { id: string; name: string }
-  date: string
-  categories: Record<string, Item[]>
-}
-
 export default function InventoryDailyPage() {
-  const today = new Date().toISOString().slice(0, 10)
-
-  const [location, setLocation] = useState('Fort Plain')
-  const [date, setDate] = useState(today)
-  const [data, setData] = useState<Data | null>(null)
+  const [locations, setLocations] = useState<Location[]>([])
+  const [locationId, setLocationId] = useState<string>('')
+  const [date, setDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
 
-  async function load() {
-    setLoading(true)
-    const res = await fetch(
-      `/api/admin/inventory/daily?locationId=${encodeURIComponent(location)}&date=${date}`,
-      { cache: 'no-store' }
-    )
-    const json = await res.json()
-    setData(json)
-    setLoading(false)
-  }
-
+  // ===============================
+  // LOAD LOCATIONS
+  // ===============================
   useEffect(() => {
-    load()
-  }, [location, date])
+    fetch('/api/admin/inventory/locations?active=true')
+      .then(r => r.json())
+      .then(d => {
+        setLocations(d.locations || [])
+        if (d.locations?.length === 1) {
+          setLocationId(d.locations[0].id)
+        }
+      })
+  }, [])
 
-  async function updateQty(itemId: string, qty: number) {
-    await fetch(`/api/admin/inventory/reorder-lines`, {
+  // ===============================
+  // LOAD DAILY SHEET
+  // ===============================
+  useEffect(() => {
+    if (!locationId || !date) return
+
+    setLoading(true)
+    fetch(
+      `/api/admin/inventory/daily?locationId=${locationId}&date=${date}`
+    )
+      .then(r => r.json())
+      .then(d => {
+        setRows(d.rows || [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [locationId, date])
+
+  // ===============================
+  // UPDATE ON HAND
+  // ===============================
+  async function updateOnHand(itemId: string, value: number) {
+    setRows(r =>
+      r.map(row =>
+        row.itemId === itemId ? { ...row, onHand: value } : row
+      )
+    )
+
+    await fetch('/api/admin/inventory/adjust', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        locationName: location,
-        date,
         itemId,
-        qtyToOrder: qty,
+        locationId,
+        newOnHand: value,
       }),
     })
   }
 
+  // ===============================
+  // UPDATE QTY TO ORDER
+  // ===============================
+  async function updateQtyToOrder(itemId: string, value: number) {
+    setRows(r =>
+      r.map(row =>
+        row.itemId === itemId ? { ...row, qtyToOrder: value } : row
+      )
+    )
+
+    await fetch('/api/admin/inventory/reorder-lines', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        locationId,
+        date,
+        itemId,
+        qtyToOrder: value,
+      }),
+    })
+  }
+
+  // ===============================
+  // GROUP BY CATEGORY (EXCEL STYLE)
+  // ===============================
+  const grouped = rows.reduce<Record<string, Row[]>>((acc, row) => {
+    acc[row.category] = acc[row.category] || []
+    acc[row.category].push(row)
+    return acc
+  }, {})
+
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-6 space-y-4">
+      {/* HEADER */}
+      <div className="flex items-center gap-4">
         <select
-          value={location}
-          onChange={e => setLocation(e.target.value)}
-          className="border px-3 py-2 rounded"
+          value={locationId}
+          onChange={e => setLocationId(e.target.value)}
+          className="border rounded px-3 py-2 text-sm"
         >
-          <option>Fort Plain</option>
-          <option>Ashburn</option>
+          <option value="">Select location</option>
+          {locations.map(l => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
         </select>
 
         <input
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
-          className="border px-3 py-2 rounded"
+          className="border rounded px-3 py-2 text-sm"
         />
       </div>
 
-      {loading && <div className="text-gray-500">Loading…</div>}
+      {/* TABLE */}
+      <div className="overflow-x-auto border rounded bg-white">
+        <table className="w-full text-sm border-collapse">
+          <thead className="bg-gray-100 sticky top-0">
+            <tr>
+              <th className="border px-2 py-2 text-left w-[120px]">SKU</th>
+              <th className="border px-2 py-2 text-left">Item</th>
+              <th className="border px-2 py-2 text-left w-[120px]">Unit</th>
+              <th className="border px-2 py-2 text-center w-[140px]">
+                QTY ON HAND
+              </th>
+              <th className="border px-2 py-2 text-center w-[140px]">
+                QTY TO ORDER
+              </th>
+            </tr>
+          </thead>
 
-      {!loading && data && (
-        <div className="overflow-auto border rounded">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-gray-100 z-10">
+          <tbody>
+            {loading && (
               <tr>
-                <th className="text-left px-3 py-2 w-32">SKU</th>
-                <th className="text-left px-3 py-2">Item</th>
-                <th className="text-right px-3 py-2 w-24">On Hand</th>
-                <th className="text-right px-3 py-2 w-32">Qty to Order</th>
+                <td
+                  colSpan={5}
+                  className="text-center py-10 text-gray-400"
+                >
+                  Loading inventory…
+                </td>
               </tr>
-            </thead>
+            )}
 
-            <tbody>
-              {Object.entries(data.categories).map(([category, items]) => (
+            {!loading &&
+              Object.entries(grouped).map(([category, items]) => (
                 <>
+                  {/* CATEGORY ROW */}
                   <tr key={category}>
                     <td
-                      colSpan={4}
-                      className="bg-gray-200 font-semibold px-3 py-2 sticky top-10"
+                      colSpan={5}
+                      className="bg-gray-200 font-semibold px-2 py-2"
                     >
                       {category}
                     </td>
                   </tr>
 
-                  {items.map(item => (
-                    <tr key={item.id} className="border-t">
-                      <td className="px-3 py-2">{item.sku}</td>
-                      <td className="px-3 py-2">
-                        {item.name}
-                        <span className="text-gray-400 ml-2">({item.unit})</span>
+                  {items.map(row => (
+                    <tr key={row.itemId}>
+                      <td className="border px-2 py-1 font-mono">
+                        {row.sku}
                       </td>
-                      <td className="px-3 py-2 text-right">
-                        {item.onHand}
+                      <td className="border px-2 py-1">
+                        {row.name}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="border px-2 py-1 text-gray-600">
+                        {row.unit}
+                      </td>
+                      <td className="border px-2 py-1">
                         <input
                           type="number"
-                          min={0}
-                          defaultValue={item.qtyToOrder}
-                          className="border rounded px-2 py-1 w-24 text-right"
-                          onBlur={e =>
-                            updateQty(item.id, Number(e.target.value))
+                          className="w-full border rounded px-2 py-1 text-right"
+                          value={row.onHand}
+                          onChange={e =>
+                            updateOnHand(
+                              row.itemId,
+                              Number(e.target.value)
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="border px-2 py-1">
+                        <input
+                          type="number"
+                          className="w-full border rounded px-2 py-1 text-right"
+                          value={row.qtyToOrder}
+                          onChange={e =>
+                            updateQtyToOrder(
+                              row.itemId,
+                              Number(e.target.value)
+                            )
                           }
                         />
                       </td>
@@ -125,10 +218,9 @@ export default function InventoryDailyPage() {
                   ))}
                 </>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
