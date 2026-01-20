@@ -6,6 +6,12 @@ datasource db {
   provider = "postgresql"
 }
 
+/**
+ * =========================
+ * CORE
+ * =========================
+ */
+
 model User {
   id       String  @id @default(uuid())
   email    String  @unique
@@ -92,19 +98,19 @@ model OrderHistory {
   createdAt DateTime    @default(now())
 
   userId String
-  user   User @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 }
 
 model OrderMedia {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id])
+  order      Order     @relation(fields: [orderId], references: [id])
   fileUrl    String
   type       MediaType
-  uploadedAt DateTime @default(now())
+  uploadedAt DateTime  @default(now())
 
   docType         OrderDocType?
-  visibleToDealer Boolean @default(true)
+  visibleToDealer Boolean       @default(true)
 }
 
 model PoolModel {
@@ -135,21 +141,22 @@ model Notification {
   createdAt DateTime @default(now())
 
   orderId String?
-  order   Order? @relation(fields: [orderId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
 
   @@index([dealerId, createdAt])
 }
 
 model FactoryLocation {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  address   String?
-  city      String?
-  state     String?
-  active    Boolean  @default(true)
+  id      String  @id @default(uuid())
+  name    String  @unique
+  address String?
+  city    String?
+  state   String?
+  active  Boolean @default(true)
 
-  orders    Order[]
-  // ✅ IMPORTANT: inverse relation for InventoryLocation.factoryLocation
+  orders Order[]
+
+  // inverse relation for InventoryLocation.factoryLocation
   inventoryLocations InventoryLocation[]
 
   createdAt DateTime @default(now())
@@ -173,9 +180,11 @@ model AuditLog {
   @@index([action])
 }
 
-/* =========================
-   INVENTORY
-   ========================= */
+/**
+ * =========================
+ * INVENTORY
+ * =========================
+ */
 
 enum InventoryLocationType {
   WAREHOUSE
@@ -206,24 +215,50 @@ model InventoryLocation {
   stocks InventoryStock[]
   txns   InventoryTxn[]
 
+  // Daily reorder sheets per location (align with Excel "Date" + "QTY TO ORDER")
+  reorderSheets InventoryReorderSheet[]
+
   @@index([factoryLocationId])
   @@index([type])
 }
 
-model InventoryItem {
-  id   String @id @default(uuid())
+model InventoryCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
-  sku  String @unique
+  items InventoryItem[]
+}
+
+model InventoryItem {
+  id String @id @default(uuid())
+
+  // CompOne Product # from the sheet
+  sku String @unique
+
+  // Item from the sheet
   name String
+
+  // UOM from the sheet (ea, gal, lb, roll, etc.)
   unit String @default("ea")
 
-  active   Boolean  @default(true)
-  minStock Int      @default(0)
+  // Category/Section from the sheet
+  categoryId String?
+  category   InventoryCategory? @relation(fields: [categoryId], references: [id])
+
+  active   Boolean @default(true)
+  minStock Int     @default(0)
 
   createdAt DateTime @default(now())
 
   stocks InventoryStock[]
   txns   InventoryTxn[]
+
+  // Daily reorder lines (qtyToOrder) uses the same InventoryItem
+  reorderLines InventoryReorderLine[]
+
+  @@index([categoryId])
 }
 
 model InventoryStock {
@@ -231,6 +266,7 @@ model InventoryStock {
   itemId     String
   locationId String
 
+  // QTY ON HAND
   onHand Int @default(0)
 
   item     InventoryItem     @relation(fields: [itemId], references: [id])
@@ -256,10 +292,10 @@ model InventoryTxn {
   location InventoryLocation @relation(fields: [locationId], references: [id])
 
   actorUserId String?
-  actorUser   User? @relation("InventoryTxnActor", fields: [actorUserId], references: [id])
+  actorUser   User?   @relation("InventoryTxnActor", fields: [actorUserId], references: [id])
 
   orderId String?
-  order   Order? @relation(fields: [orderId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
 
   @@index([createdAt])
   @@index([itemId])
@@ -268,9 +304,39 @@ model InventoryTxn {
   @@index([actorUserId])
 }
 
-/* =========================
-   ENUMS
-   ========================= */
+model InventoryReorderSheet {
+  id         String   @id @default(uuid())
+  locationId String
+  date       DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  location InventoryLocation      @relation(fields: [locationId], references: [id])
+  lines    InventoryReorderLine[]
+
+  @@unique([locationId, date])
+  @@index([date])
+  @@index([locationId])
+}
+
+model InventoryReorderLine {
+  id         String @id @default(uuid())
+  sheetId    String
+  itemId     String
+  qtyToOrder Int    @default(0)
+
+  sheet InventoryReorderSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  item  InventoryItem         @relation(fields: [itemId], references: [id])
+
+  @@unique([sheetId, itemId])
+  @@index([itemId])
+}
+
+/**
+ * =========================
+ * ENUMS
+ * =========================
+ */
 
 enum Role {
   ADMIN
