@@ -1,3 +1,4 @@
+///Users/mariorico/Documents/01. P - Projects/Glimmerglass_OS/glimmerglass-order-system/app/api/admin/inventory/categories/[id]/route.ts:
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'

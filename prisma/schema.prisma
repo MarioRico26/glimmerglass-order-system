@@ -247,6 +247,9 @@ model InventoryItem {
   categoryId String?
   category   InventoryCategory? @relation(fields: [categoryId], references: [id])
 
+  // 🔑 CLAVE para clonar el Excel
+  sortOrder Int @default(9999)
+
   active   Boolean @default(true)
   minStock Int     @default(0)
 
@@ -255,10 +258,10 @@ model InventoryItem {
   stocks InventoryStock[]
   txns   InventoryTxn[]
 
-  // Daily reorder lines (qtyToOrder) uses the same InventoryItem
   reorderLines InventoryReorderLine[]
 
   @@index([categoryId])
+  @@index([sortOrder])
 }
 
 model InventoryStock {
