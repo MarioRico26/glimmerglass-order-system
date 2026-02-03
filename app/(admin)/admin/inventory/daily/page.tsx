@@ -401,7 +401,7 @@ export default function DailyInventoryPage() {
           </div>
 
           <div className="border-t border-black/10 bg-black/[0.02] px-4 py-3 text-xs text-black/60">
-            Tip: edit multiple cells, then hit <b>Save</b> once. Humans love doing the same work twice for no reason.
+            Tip: edit multiple cells, then hit <b>Save</b> once.
           </div>
         </div>
       </div>
