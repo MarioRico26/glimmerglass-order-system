@@ -332,6 +332,11 @@ model InventoryReorderLine {
   id         String @id @default(uuid())
   sheetId    String
   itemId     String
+
+  // ✅ Snapshot diario (lo que contaron ese día)
+  onHand     Int    @default(0)
+
+  // ✅ Lo que quieren ordenar ese día
   qtyToOrder Int    @default(0)
 
   sheet InventoryReorderSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
