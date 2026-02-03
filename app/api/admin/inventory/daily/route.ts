@@ -7,71 +7,84 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
 
 function json(data: any, status = 200) {
-  return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(data, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
+  })
 }
 
-/**
- * Normaliza YYYY-MM-DD a Date UTC (00:00:00Z)
- * Esto evita bugs por timezone donde “2026-01-20” termina siendo 19 o 21.
- */
-function dayStartUTC(dateStr: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
-  if (!m) return null
-  const y = Number(m[1])
-  const mo = Number(m[2])
-  const d = Number(m[3])
-  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null
-  return new Date(Date.UTC(y, mo - 1, d, 0, 0, 0, 0))
+function normalizeDateISO(dateStr: string) {
+  const d = new Date(dateStr)
+  if (Number.isNaN(+d)) return null
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0))
 }
 
-function todayUTCString() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-type DailyRow = {
+type Row = {
   itemId: string
   sku: string
   item: string
   unit: string
   minStock: number
+  createdAt: string
   category: string
   onHand: number
   qtyToOrder: number
 }
 
+const CATEGORY_ORDER = [
+  'PIGMENT',
+  'RESIN',
+  'CHOP/ GUN ROVING',
+  'CHOP/GUN ROVING',
+  'ACETONE',
+  'MOLD RELEASE',
+  'BUFFING COMPOUND',
+  'CATALYST',
+  'HONEYCOMB',
+  'COMBO MAT',
+  'GELCOAT',
+]
+
+function categoryRank(name: string) {
+  const idx = CATEGORY_ORDER.indexOf(name.trim().toUpperCase())
+  return idx === -1 ? 999 : idx
+}
+
+/**
+ * GET /api/admin/inventory/daily?locationId=<uuid>&date=YYYY-MM-DD
+ * ✅ Histórico real por día: onHand + qtyToOrder salen del sheet del día
+ */
 export async function GET(req: NextRequest) {
   const gate = await requireAdmin()
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
-  const { searchParams } = new URL(req.url)
-  const locationId = (searchParams.get('locationId') || '').trim()
-  const dateStr = (searchParams.get('date') || '').trim()
-
-  if (!locationId) return json({ message: 'locationId is required' }, 400)
-  if (!dateStr) return json({ message: 'date is required (YYYY-MM-DD)' }, 400)
-
-  const date = dayStartUTC(dateStr)
-  if (!date) return json({ message: 'invalid date format (YYYY-MM-DD)' }, 400)
-
   try {
+    const { searchParams } = new URL(req.url)
+    const locationId = (searchParams.get('locationId') || '').trim()
+    const dateStr = (searchParams.get('date') || '').trim()
+
+    if (!locationId) return json({ message: 'locationId is required' }, 400)
+    if (!dateStr) return json({ message: 'date is required (YYYY-MM-DD)' }, 400)
+
+    const date = normalizeDateISO(dateStr)
+    if (!date) return json({ message: 'invalid date' }, 400)
+
     const location = await prisma.inventoryLocation.findUnique({
       where: { id: locationId },
       select: { id: true, name: true, type: true, active: true },
     })
-    if (!location) return json({ message: 'Location not found' }, 404)
-    if (!location.active) return json({ message: 'Location is inactive' }, 400)
+    if (!location) return json({ message: 'location not found' }, 404)
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 1) Sheet (1 por location+date)
-      const sheet = await tx.inventoryReorderSheet.upsert({
-        where: { locationId_date: { locationId, date } },
-        create: { locationId, date },
-        update: {},
-        select: { id: true, date: true, locationId: true },
-      })
+    // Sheet (día + location) get-or-create
+    const sheet = await prisma.inventoryReorderSheet.upsert({
+      where: { locationId_date: { locationId, date } },
+      create: { locationId, date },
+      update: {},
+      select: { id: true, locationId: true, date: true },
+    })
 
-      // 2) Items activos (con categoría)
-      const items = await tx.inventoryItem.findMany({
+    const [items, categories, lines] = await Promise.all([
+      prisma.inventoryItem.findMany({
         where: { active: true },
         select: {
           id: true,
@@ -79,86 +92,101 @@ export async function GET(req: NextRequest) {
           name: true,
           unit: true,
           minStock: true,
-          sortOrder: true,
+          createdAt: true,
           categoryId: true,
-          category: { select: { id: true, name: true, active: true } },
         },
-        orderBy: [
-          { category: { name: 'asc' } },
-          { sortOrder: 'asc' },
-          { sku: 'asc' },
-        ],
-      })
-
-      // 3) Stock actual para “prefill”
-      const stocks = await tx.inventoryStock.findMany({
-        where: { locationId, itemId: { in: items.map(i => i.id) } },
-        select: { itemId: true, onHand: true },
-      })
-      const stockMap = new Map(stocks.map(s => [s.itemId, s.onHand]))
-
-      // 4) Líneas existentes para ese día
-      const existing = await tx.inventoryReorderLine.findMany({
+      }),
+      prisma.inventoryCategory.findMany({
+        where: { active: true },
+        select: { id: true, name: true },
+      }),
+      prisma.inventoryReorderLine.findMany({
         where: { sheetId: sheet.id },
-        select: { itemId: true },
-      })
-      const existingSet = new Set(existing.map(e => e.itemId))
+        select: { itemId: true, onHand: true, qtyToOrder: true },
+      }),
+    ])
 
-      // 5) Crear líneas faltantes (una por item) con snapshot inicial = stock actual
-      const missing = items
-        .filter(i => !existingSet.has(i.id))
-        .map(i => ({
+    // Si el sheet es nuevo (o faltan líneas), creamos líneas con snapshot = 0
+    // (Esto evita el “arrastre” automático entre fechas)
+    const lineByItem = new Map(lines.map(l => [l.itemId, l]))
+    const missingItemIds = items.filter(i => !lineByItem.has(i.id)).map(i => i.id)
+
+    if (missingItemIds.length > 0) {
+      await prisma.inventoryReorderLine.createMany({
+        data: missingItemIds.map(itemId => ({
           sheetId: sheet.id,
-          itemId: i.id,
-          onHand: stockMap.get(i.id) ?? 0,
+          itemId,
+          onHand: 0,
           qtyToOrder: 0,
-        }))
+        })),
+        skipDuplicates: true,
+      })
 
-      if (missing.length) {
-        await tx.inventoryReorderLine.createMany({ data: missing })
-      }
-
-      // 6) Traer líneas ya completas
-      const lines = await tx.inventoryReorderLine.findMany({
+      const newLines = await prisma.inventoryReorderLine.findMany({
         where: { sheetId: sheet.id },
         select: { itemId: true, onHand: true, qtyToOrder: true },
       })
-      const lineMap = new Map(lines.map(l => [l.itemId, l]))
+      lineByItem.clear()
+      for (const l of newLines) lineByItem.set(l.itemId, l)
+    }
 
-      // 7) Construir rows + categories
-      const rows: DailyRow[] = items.map(i => {
-        const catName = i.category?.name || 'Uncategorized'
-        const line = lineMap.get(i.id)
-        return {
-          itemId: i.id,
-          sku: i.sku,
-          item: i.name,
-          unit: i.unit,
-          minStock: i.minStock,
-          category: catName,
-          onHand: line?.onHand ?? 0,
-          qtyToOrder: line?.qtyToOrder ?? 0,
-        }
-      })
+    const catById = new Map(categories.map(c => [c.id, c.name]))
 
-      const grouped = new Map<string, DailyRow[]>()
-      for (const r of rows) {
-        if (!grouped.has(r.category)) grouped.set(r.category, [])
-        grouped.get(r.category)!.push(r)
+    const groups = new Map<string, Row[]>()
+    for (const it of items) {
+      const catName = it.categoryId ? (catById.get(it.categoryId) || 'UNCATEGORIZED') : 'UNCATEGORIZED'
+      const line = lineByItem.get(it.id)
+
+      const row: Row = {
+        itemId: it.id,
+        sku: it.sku,
+        item: it.name,
+        unit: it.unit,
+        minStock: it.minStock ?? 0,
+        createdAt: it.createdAt.toISOString(),
+        category: catName,
+        onHand: line?.onHand ?? 0,
+        qtyToOrder: line?.qtyToOrder ?? 0,
       }
 
-      const categories = Array.from(grouped.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([name, items]) => ({ name, items }))
+      if (!groups.has(catName)) groups.set(catName, [])
+      groups.get(catName)!.push(row)
+    }
 
-      return { sheetId: sheet.id, categories }
+    // sort items inside each category by createdAt, fallback sku
+    const groupEntries = Array.from(groups.entries()) as Array<[string, Row[]]>
+    for (const [k, arr] of groupEntries) {
+      arr.sort((a, b) => {
+        const da = +new Date(a.createdAt)
+        const db = +new Date(b.createdAt)
+        if (da !== db) return da - db
+        return String(a.sku).localeCompare(String(b.sku))
+      })
+      groups.set(k, arr)
+    }
+
+    // sort categories to match Excel order, then alphabetical, with UNCATEGORIZED last
+    const categoryNames = Array.from(groups.keys()).sort((a, b) => {
+      const A = a.toUpperCase()
+      const B = b.toUpperCase()
+      if (A === 'UNCATEGORIZED') return 1
+      if (B === 'UNCATEGORIZED') return -1
+      const ra = categoryRank(A)
+      const rb = categoryRank(B)
+      if (ra !== rb) return ra - rb
+      return A.localeCompare(B)
     })
+
+    const categoriesOut = categoryNames.map(name => ({
+      name,
+      items: groups.get(name) || [],
+    }))
 
     return json({
       location,
-      date: dateStr,
-      sheetId: result.sheetId,
-      categories: result.categories,
+      date: date.toISOString().slice(0, 10),
+      sheetId: sheet.id,
+      categories: categoriesOut,
     })
   } catch (e) {
     console.error('GET /api/admin/inventory/daily error:', e)
@@ -166,45 +194,49 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/**
+ * PATCH /api/admin/inventory/daily
+ * Body: { locationId, date(YYYY-MM-DD), itemId, onHand?, qtyToOrder? }
+ * ✅ Guarda snapshots en InventoryReorderLine (por día).
+ */
 export async function PATCH(req: NextRequest) {
   const gate = await requireAdmin()
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
-  const body = await req.json().catch(() => null)
-
-  const locationId = String(body?.locationId || '').trim()
-  const dateStr = String(body?.date || '').trim()
-  const itemId = String(body?.itemId || '').trim()
-
-  if (!locationId || !dateStr || !itemId) {
-    return json({ message: 'locationId, date, itemId are required' }, 400)
-  }
-
-  const date = dayStartUTC(dateStr)
-  if (!date) return json({ message: 'invalid date format (YYYY-MM-DD)' }, 400)
-
-  const hasOnHand = body?.onHand !== undefined
-  const hasQtyToOrder = body?.qtyToOrder !== undefined
-
-  if (!hasOnHand && !hasQtyToOrder) {
-    return json({ message: 'Provide onHand or qtyToOrder' }, 400)
-  }
-
-  const data: any = {}
-  if (hasOnHand) {
-    const v = Number(body.onHand)
-    if (!Number.isFinite(v) || v < 0) return json({ message: 'onHand must be >= 0' }, 400)
-    data.onHand = Math.floor(v)
-  }
-  if (hasQtyToOrder) {
-    const v = Number(body.qtyToOrder)
-    if (!Number.isFinite(v) || v < 0) return json({ message: 'qtyToOrder must be >= 0' }, 400)
-    data.qtyToOrder = Math.floor(v)
-  }
-
   try {
+    const body = await req.json().catch(() => null)
+
+    const locationId = (body?.locationId || '').toString().trim()
+    const dateStr = (body?.date || '').toString().trim()
+    const itemId = (body?.itemId || '').toString().trim()
+
+    if (!locationId || !dateStr || !itemId) {
+      return json({ message: 'locationId, date, itemId are required' }, 400)
+    }
+
+    const date = normalizeDateISO(dateStr)
+    if (!date) return json({ message: 'invalid date' }, 400)
+
+    const onHandRaw = body?.onHand
+    const qtyToOrderRaw = body?.qtyToOrder
+
+    const wantsOnHand = onHandRaw !== undefined
+    const wantsQtyToOrder = qtyToOrderRaw !== undefined
+    if (!wantsOnHand && !wantsQtyToOrder) {
+      return json({ message: 'Provide onHand and/or qtyToOrder' }, 400)
+    }
+
+    const parsedOnHand = wantsOnHand ? Number(onHandRaw) : null
+    const parsedToOrder = wantsQtyToOrder ? Number(qtyToOrderRaw) : null
+
+    if (wantsOnHand && (!Number.isFinite(parsedOnHand!) || parsedOnHand! < 0)) {
+      return json({ message: 'onHand must be a number >= 0' }, 400)
+    }
+    if (wantsQtyToOrder && (!Number.isFinite(parsedToOrder!) || parsedToOrder! < 0)) {
+      return json({ message: 'qtyToOrder must be a number >= 0' }, 400)
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      // sheet upsert
       const sheet = await tx.inventoryReorderSheet.upsert({
         where: { locationId_date: { locationId, date } },
         create: { locationId, date },
@@ -212,30 +244,29 @@ export async function PATCH(req: NextRequest) {
         select: { id: true },
       })
 
-      // line upsert
-      const line = await tx.inventoryReorderLine.upsert({
+      const updateData: { onHand?: number; qtyToOrder?: number } = {}
+      if (wantsOnHand) updateData.onHand = Math.floor(parsedOnHand!)
+      if (wantsQtyToOrder) updateData.qtyToOrder = Math.floor(parsedToOrder!)
+
+      const saved = await tx.inventoryReorderLine.upsert({
         where: { sheetId_itemId: { sheetId: sheet.id, itemId } },
         create: {
           sheetId: sheet.id,
           itemId,
-          onHand: data.onHand ?? 0,
-          qtyToOrder: data.qtyToOrder ?? 0,
+          onHand: updateData.onHand ?? 0,
+          qtyToOrder: updateData.qtyToOrder ?? 0,
         },
-        update: data,
-        select: { itemId: true, onHand: true, qtyToOrder: true },
+        update: updateData,
+        select: { onHand: true, qtyToOrder: true },
       })
 
-      // ✅ Si están editando “hoy”, podemos reflejarlo como stock actual
-      // Si editan días pasados, NO tocamos el stock actual.
-      if (hasOnHand && dateStr === todayUTCString()) {
-        await tx.inventoryStock.upsert({
-          where: { itemId_locationId: { itemId, locationId } },
-          create: { itemId, locationId, onHand: line.onHand },
-          update: { onHand: line.onHand },
-        })
+      return {
+        locationId,
+        date: date.toISOString().slice(0, 10),
+        itemId,
+        onHand: saved.onHand,
+        qtyToOrder: saved.qtyToOrder,
       }
-
-      return line
     })
 
     return json(result, 200)
