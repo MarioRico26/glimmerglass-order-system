@@ -1,11 +1,2 @@
 packages:
   - "."
-
-pnpm:
-  onlyBuiltDependencies:
-    - "@prisma/engines"
-    - "prisma"
-    - "bcrypt"
-    - "sharp"
-    - "@tailwindcss/oxide"
-    - "unrs-resolver"

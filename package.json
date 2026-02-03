@@ -60,5 +60,14 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "prisma",
+      "bcrypt",
+      "@tailwindcss/oxide",
+      "unrs-resolver"
+    ]
   }
 }
