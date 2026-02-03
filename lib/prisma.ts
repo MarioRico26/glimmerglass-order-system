@@ -5,13 +5,11 @@ declare global {
   var __prisma: PrismaClient | undefined
 }
 
-const prisma =
+const prismaClient =
   global.__prisma ??
-  new PrismaClient({
-    // NO metas engineType "client" aquí.
-    // Prisma normal (library/binary) en Node funciona perfecto en Vercel.
-  })
+  new PrismaClient()
 
-if (process.env.NODE_ENV !== 'production') global.__prisma = prisma
+if (process.env.NODE_ENV !== 'production') global.__prisma = prismaClient
 
-export default prisma
+export const prisma = prismaClient
+export default prismaClient
