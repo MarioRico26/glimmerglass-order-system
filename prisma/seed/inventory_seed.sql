@@ -1,139 +1,132 @@
--- =========================
--- LOCATIONS
--- =========================
-insert into "InventoryLocation" (id, name, type, active)
+-- prisma/seed/inventory_seed.sql
+-- Requiere pgcrypto para gen_random_uuid()
+create extension if not exists pgcrypto;
+
+begin;
+
+-- 1) FactoryLocation (si no existen)
+insert into "FactoryLocation" ("id","name","active","createdAt")
 values
-(gen_random_uuid(), 'Fort Plain', 'FACTORY', true),
-(gen_random_uuid(), 'Ashburn', 'FACTORY', true)
-on conflict (name) do nothing;
+  (gen_random_uuid(), 'Fort Plain', true, now()),
+  (gen_random_uuid(), 'Ashburn', true, now())
+on conflict ("name") do update
+set "active" = true;
 
--- =========================
--- CATEGORIES
--- =========================
-insert into "InventoryCategory" (id, name)
+-- 2) InventoryLocation (SOLO estas dos, sin "Main Warehouse" de regalo)
+-- Las marcamos como FACTORY y las linkeamos a FactoryLocation
+insert into "InventoryLocation" ("id","name","type","factoryLocationId","active","createdAt")
+select gen_random_uuid(), f."name", 'FACTORY', f."id", true, now()
+from "FactoryLocation" f
+where f."name" in ('Fort Plain','Ashburn')
+on conflict ("name") do update
+set
+  "type" = excluded."type",
+  "factoryLocationId" = excluded."factoryLocationId",
+  "active" = true;
+
+-- (Opcional) apaga cualquier location vieja que no sea estas dos
+update "InventoryLocation"
+set "active" = false
+where "name" not in ('Fort Plain','Ashburn');
+
+-- 3) Categories con sortOrder como Excel
+-- Nota: esto asume que ya agregaste InventoryCategory.sortOrder y migraste.
+insert into "InventoryCategory" ("id","name","sortOrder","active","createdAt")
 values
-(gen_random_uuid(), 'PIGMENT'),
-(gen_random_uuid(), 'RESIN'),
-(gen_random_uuid(), 'CHOP / GUN ROVING'),
-(gen_random_uuid(), 'ACETONE'),
-(gen_random_uuid(), 'MOLD RELEASE'),
-(gen_random_uuid(), 'BUFFING COMPOUND'),
-(gen_random_uuid(), 'CATALYST'),
-(gen_random_uuid(), 'HONEYCOMB'),
-(gen_random_uuid(), 'COMBO MAT'),
-(gen_random_uuid(), 'GELCOAT')
-on conflict (name) do nothing;
+  (gen_random_uuid(), 'PIGMENT', 10, true, now()),
+  (gen_random_uuid(), 'RESIN', 20, true, now()),
+  (gen_random_uuid(), 'CHOP/ GUN ROVING', 30, true, now()),
+  (gen_random_uuid(), 'ACETONE', 40, true, now()),
+  (gen_random_uuid(), 'MOLD RELEASE', 50, true, now()),
+  (gen_random_uuid(), 'BUFFING COMPOUND', 60, true, now()),
+  (gen_random_uuid(), 'CATALYST', 70, true, now()),
+  (gen_random_uuid(), 'HONEYCOMB', 80, true, now()),
+  (gen_random_uuid(), 'COMBO MAT', 90, true, now()),
+  (gen_random_uuid(), 'GELCOAT', 100, true, now())
+on conflict ("name") do update
+set "active" = true;
 
--- =========================
--- ITEMS
--- =========================
+-- helper: get category id by name
+-- 4) Items (SKU + name + unit + categoryId + sortOrder)
+--    sortOrder aqui respeta exactamente el orden dentro de cada bloque.
+with cat as (
+  select "id","name" from "InventoryCategory"
+),
+ins as (
+  select * from (values
+    -- PIGMENT
+    ('643537','Gray pigment','5 Gal Pail','PIGMENT',10),
+    ('692825','Blue pigment','5 Gal Pail','PIGMENT',20),
 
--- PIGMENT
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'643537','Gray pigment','5 Gal Pail',c.id,1 from "InventoryCategory" c where c.name='PIGMENT'
-on conflict (sku) do nothing;
+    -- RESIN
+    ('626607','GP Resin','Drum','RESIN',10),
+    ('839520','VE resin','Drum','RESIN',20),
 
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'692825','Blue pigment','5 Gal Pail',c.id,2 from "InventoryCategory" c where c.name='PIGMENT'
-on conflict (sku) do nothing;
+    -- CHOP/ GUN ROVING
+    ('557069','Gun Roving','Rolls','CHOP/ GUN ROVING',10),
 
--- RESIN
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'626607','GP Resin','Drum',c.id,1 from "InventoryCategory" c where c.name='RESIN'
-on conflict (sku) do nothing;
+    -- ACETONE
+    ('40001','Acetone','Drum','ACETONE',10),
 
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'839520','VE Resin','Drum',c.id,2 from "InventoryCategory" c where c.name='RESIN'
-on conflict (sku) do nothing;
+    -- MOLD RELEASE
+    ('518121','Frekote WOLO','1 Gal Can','MOLD RELEASE',10),
+    ('508879','Axel Mold Cleaner','1 Gal Can','MOLD RELEASE',20),
 
--- CHOP / GUN ROVING
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'557069','Gun roving','Rolls',c.id,1 from "InventoryCategory" c where c.name='CHOP / GUN ROVING'
-on conflict (sku) do nothing;
+    -- BUFFING COMPOUND
+    ('667281','Aqua Blue buffing compound','5 Gal Pail','BUFFING COMPOUND',10),
+    ('51517','Aqua Buff 2000','2 Gal Pail','BUFFING COMPOUND',20),
+    ('103630','offset to Aqua Buff (LOWER COST)','5 Gal Pail','BUFFING COMPOUND',30),
 
--- ACETONE
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'40001','Acetone','Drum',c.id,1 from "InventoryCategory" c where c.name='ACETONE'
-on conflict (sku) do nothing;
+    -- CATALYST
+    ('82001','L-50A clear','1 Gal Jug','CATALYST',10),
+    ('531575','L-30A clear','1 Gal Jug','CATALYST',20),
+    ('529701','L-50A vanishing red','1 Gal Jug','CATALYST',30),
 
--- MOLD RELEASE
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'518121','Frekote WOLO','1 Gal Can',c.id,1 from "InventoryCategory" c where c.name='MOLD RELEASE'
-on conflict (sku) do nothing;
+    -- HONEYCOMB
+    ('618036','1 inch honeycomb','384 sf Case','HONEYCOMB',10),
+    ('617745','1/2 inch honeycomb','768 sf Case','HONEYCOMB',20),
 
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'508879','Axel Mold Cleaner','1 Gal Can',c.id,2 from "InventoryCategory" c where c.name='MOLD RELEASE'
-on conflict (sku) do nothing;
+    -- COMBO MAT
+    ('699430','Combo Mat','Rolls','COMBO MAT',10),
 
--- BUFFING COMPOUND
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'667281','Aqua Blue buffing compound','5 Gal Pail',c.id,1 from "InventoryCategory" c where c.name='BUFFING COMPOUND'
-on conflict (sku) do nothing;
+    -- GELCOAT
+    ('639819','WHITE','Drum','GELCOAT',10),
+    ('697686','ARCTIC WHITE','Drum','GELCOAT',20),
+    ('698666','GLACIER','Drum','GELCOAT',30),
+    ('697688','STEEL','Drum','GELCOAT',40),
+    ('697689','MIDNIGHT','Drum','GELCOAT',50),
+    ('696937','OCEAN','Drum','GELCOAT',60),
+    ('697685','COASTAL BRONZE','Drum','GELCOAT',70),
+    ('850044','SAPPHIRE','Drum','GELCOAT',80)
+  ) as t(sku,name,unit,catName,sortOrder)
+)
+insert into "InventoryItem" ("id","sku","name","unit","categoryId","sortOrder","active","minStock","createdAt")
+select
+  gen_random_uuid(),
+  ins.sku,
+  ins.name,
+  ins.unit,
+  cat."id",
+  ins.sortOrder,
+  true,
+  0,
+  now()
+from ins
+join cat on cat."name" = ins.catName
+on conflict ("sku") do update
+set
+  "name" = excluded."name",
+  "unit" = excluded."unit",
+  "categoryId" = excluded."categoryId",
+  "sortOrder" = excluded."sortOrder",
+  "active" = true;
 
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'51517','Aqua Buff 2000','2 Gal Pail',c.id,2 from "InventoryCategory" c where c.name='BUFFING COMPOUND'
-on conflict (sku) do nothing;
+-- 5) Stocks: crea fila item x location (onHand 0)
+insert into "InventoryStock" ("id","itemId","locationId","onHand")
+select gen_random_uuid(), i."id", l."id", 0
+from "InventoryItem" i
+cross join "InventoryLocation" l
+where l."active" = true
+on conflict ("itemId","locationId") do nothing;
 
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'103630','Offset to Aqua Buff (lower cost)','5 Gal Pail',c.id,3 from "InventoryCategory" c where c.name='BUFFING COMPOUND'
-on conflict (sku) do nothing;
-
--- CATALYST
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'82001','L-50A clear','1 Gal Jug',c.id,1 from "InventoryCategory" c where c.name='CATALYST'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'531575','L-30A clear','1 Gal Jug',c.id,2 from "InventoryCategory" c where c.name='CATALYST'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'529701','L-50A vanishing red','1 Gal Jug',c.id,3 from "InventoryCategory" c where c.name='CATALYST'
-on conflict (sku) do nothing;
-
--- HONEYCOMB
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'618036','1 inch honeycomb','384 sf Case',c.id,1 from "InventoryCategory" c where c.name='HONEYCOMB'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'617745','1/2 inch honeycomb','768 sf Case',c.id,2 from "InventoryCategory" c where c.name='HONEYCOMB'
-on conflict (sku) do nothing;
-
--- COMBO MAT
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'699430','Combo Mat','Rolls',c.id,1 from "InventoryCategory" c where c.name='COMBO MAT'
-on conflict (sku) do nothing;
-
--- GELCOAT
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'639819','White gelcoat','Drum',c.id,1 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'697686','Arctic White','Drum',c.id,2 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'698666','Glacier','Drum',c.id,3 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'697688','Steel','Drum',c.id,4 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'697689','Midnight','Drum',c.id,5 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'696937','Ocean','Drum',c.id,6 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'697685','Coastal Bronze','Drum',c.id,7 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
-
-insert into "InventoryItem"(id, sku, name, unit, "categoryId", "sortOrder")
-select gen_random_uuid(),'850044','Sapphire','Drum',c.id,8 from "InventoryCategory" c where c.name='GELCOAT'
-on conflict (sku) do nothing;
+commit;

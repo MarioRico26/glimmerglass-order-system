@@ -225,10 +225,16 @@ model InventoryLocation {
 model InventoryCategory {
   id        String   @id @default(uuid())
   name      String   @unique
+
+  // 🔑 orden de secciones como Excel (PIGMENT, RESIN, ...)
+  sortOrder Int      @default(9999)
+
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
   items InventoryItem[]
+
+  @@index([sortOrder])
 }
 
 model InventoryItem {
