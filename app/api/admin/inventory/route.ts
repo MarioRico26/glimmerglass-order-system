@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,14 +9,15 @@ export async function GET() {
   try {
     const locations = await prisma.inventoryLocation.findMany({
       where: { active: true },
-      select: { id: true, name: true, type: true, active: true },
       orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true, active: true },
     })
 
     return NextResponse.json({ locations })
-  } catch (e: any) {
+  } catch (err: any) {
+    console.error('GET /api/admin/inventory error:', err)
     return NextResponse.json(
-      { error: e?.message ?? 'Failed to load inventory metadata' },
+      { error: 'Failed to load inventory locations' },
       { status: 500 }
     )
   }
