@@ -1,3 +1,4 @@
+// glimmerglass-order-system/lib/prisma.ts
 import { PrismaClient } from '@prisma/client'
 
 declare global {
@@ -5,9 +6,7 @@ declare global {
   var __prisma: PrismaClient | undefined
 }
 
-const prismaClient =
-  global.__prisma ??
-  new PrismaClient()
+const prismaClient = global.__prisma ?? new PrismaClient()
 
 if (process.env.NODE_ENV !== 'production') global.__prisma = prismaClient
 

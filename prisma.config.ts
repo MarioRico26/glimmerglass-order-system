@@ -1,7 +1,12 @@
-import { defineConfig, env } from "prisma/config"
+// glimmerglass-order-system/prisma.config.ts
+import { defineConfig, env } from 'prisma/config'
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
-  datasource: { url: env("DATABASE_URL") },
+  schema: 'prisma/schema.prisma',
+  migrations: {
+    path: 'prisma/migrations',
+  },
+  datasource: {
+    url: env('DATABASE_URL'),
+  },
 })
