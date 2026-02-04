@@ -5,11 +5,6 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-/**
- * =========================
- * CORE
- * =========================
- */
 
 model User {
   id       String  @id @default(uuid())

@@ -38,6 +38,7 @@
     "react-dom": "19.1.0",
     "recharts": "^3.1.2",
     "tailwind-merge": "^3.3.1",
+    "ws": "^8.19.0",
     "zod": "^4.0.14"
   },
   "devDependencies": {
@@ -49,6 +50,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.5.12",
     "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
@@ -70,5 +72,6 @@
       "@tailwindcss/oxide",
       "unrs-resolver"
     ]
-  }
+  },
+  "ws": "^8.18.0"
 }
