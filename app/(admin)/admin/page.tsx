@@ -28,6 +28,17 @@ type Metrics = {
   byFactory: FactoryRow[]
 }
 
+type PoolStockSummary = {
+  factoryId: string
+  factoryName: string
+  totals: {
+    READY: number
+    RESERVED: number
+    IN_PRODUCTION: number
+    DAMAGED: number
+  }
+}
+
 const emptyMetrics: Metrics = {
   totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, APPROVED: 0, IN_PRODUCTION: 0, COMPLETED: 0 },
   monthly: [],
@@ -40,6 +51,7 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [metrics, setMetrics] = useState<Metrics>(emptyMetrics)
   const [loading, setLoading] = useState(true)
+  const [poolStock, setPoolStock] = useState<PoolStockSummary[]>([])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -49,12 +61,21 @@ export default function AdminDashboard() {
     }
     ;(async () => {
       try {
-        const res = await fetch('/api/admin/metrics', { cache: 'no-store' })
-        const data = await res.json()
-        if (res.ok) setMetrics(data)
+        const [metricsRes, stockRes] = await Promise.all([
+          fetch('/api/admin/metrics', { cache: 'no-store' }),
+          fetch('/api/admin/pool-stock/summary', { cache: 'no-store' }),
+        ])
+
+        const metricsData = await metricsRes.json().catch(() => null)
+        const stockData = await stockRes.json().catch(() => null)
+
+        if (metricsRes.ok) setMetrics(metricsData)
         else setMetrics(emptyMetrics)
+
+        setPoolStock(Array.isArray(stockData?.items) ? stockData.items : [])
       } catch {
         setMetrics(emptyMetrics)
+        setPoolStock([])
       } finally {
         setLoading(false)
       }
@@ -174,6 +195,40 @@ export default function AdminDashboard() {
               ))}
               {metrics.byFactory.length === 0 && (
                 <tr><td colSpan={6} className="py-3 text-slate-500">No data.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pool stock summary */}
+      <div className="mt-6 rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
+        <h3 className="text-lg font-bold text-slate-900 mb-3">Pool stock by factory</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-slate-600">
+              <tr>
+                <th className="text-left py-2 pr-4">Factory</th>
+                <th className="text-right py-2 px-3">Ready</th>
+                <th className="text-right py-2 px-3">Reserved</th>
+                <th className="text-right py-2 px-3">In Production</th>
+                <th className="text-right py-2 px-3">Damaged</th>
+              </tr>
+            </thead>
+            <tbody>
+              {poolStock.map((row) => (
+                <tr key={row.factoryId} className="border-t border-slate-100">
+                  <td className="py-2 pr-4 font-medium text-slate-900">{row.factoryName}</td>
+                  <td className="py-2 px-3 text-right">{row.totals.READY}</td>
+                  <td className="py-2 px-3 text-right">{row.totals.RESERVED}</td>
+                  <td className="py-2 px-3 text-right">{row.totals.IN_PRODUCTION}</td>
+                  <td className="py-2 px-3 text-right">{row.totals.DAMAGED}</td>
+                </tr>
+              ))}
+              {poolStock.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-3 text-slate-500">No stock data.</td>
+                </tr>
               )}
             </tbody>
           </table>

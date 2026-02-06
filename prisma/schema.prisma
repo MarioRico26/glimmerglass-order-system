@@ -50,6 +50,7 @@ model Order {
   status          OrderStatus
   paymentProofUrl String?
   notes           String?
+  blueprintMarkers Json?
   createdAt       DateTime    @default(now())
 
   // hardware checkboxes
@@ -81,6 +82,9 @@ model Order {
 
   // Inventory (optional link)
   inventoryTxns InventoryTxn[]
+
+  // Pool stock movements (finished pools)
+  poolStockTxns PoolStockTxn[]
 }
 
 model OrderHistory {
@@ -114,7 +118,11 @@ model PoolModel {
   widthFt  Float
   depthFt  Float
   shape    String?
+  imageUrl String?
+  blueprintUrl String?
   orders   Order[]
+
+  poolStocks PoolStock[]
 }
 
 model Color {
@@ -122,6 +130,8 @@ model Color {
   name      String  @unique
   swatchUrl String?
   orders    Order[]
+
+  poolStocks PoolStock[]
 }
 
 model Notification {
@@ -149,11 +159,83 @@ model FactoryLocation {
   active  Boolean @default(true)
 
   orders Order[]
+  poolStocks PoolStock[]
 
   // inverse relation for InventoryLocation.factoryLocation
   inventoryLocations InventoryLocation[]
 
   createdAt DateTime @default(now())
+}
+
+/**
+ * =========================
+ * FINISHED POOL STOCK
+ * =========================
+ */
+
+enum PoolStockStatus {
+  READY
+  RESERVED
+  IN_PRODUCTION
+  DAMAGED
+}
+
+enum PoolStockTxnType {
+  ADD
+  RESERVE
+  RELEASE
+  SHIP
+  ADJUST
+}
+
+model PoolStock {
+  id String @id @default(uuid())
+
+  factoryId   String
+  poolModelId String
+  colorId     String?
+  colorKey    String @default("NONE")
+
+  status   PoolStockStatus
+  quantity Int             @default(0)
+  eta      DateTime?
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  factory   FactoryLocation @relation(fields: [factoryId], references: [id])
+  poolModel PoolModel       @relation(fields: [poolModelId], references: [id])
+  color     Color?          @relation(fields: [colorId], references: [id])
+
+  txns PoolStockTxn[]
+
+  @@unique([factoryId, poolModelId, colorKey, status])
+  @@index([factoryId])
+  @@index([poolModelId])
+  @@index([colorId])
+  @@index([status])
+}
+
+model PoolStockTxn {
+  id String @id @default(uuid())
+
+  stockId String
+  type    PoolStockTxnType
+  quantity Int
+
+  referenceOrderId String?
+  notes            String?
+
+  createdAt DateTime @default(now())
+
+  stock PoolStock @relation(fields: [stockId], references: [id])
+  order Order?    @relation(fields: [referenceOrderId], references: [id])
+
+  @@index([createdAt])
+  @@index([stockId])
+  @@index([referenceOrderId])
+  @@index([type])
 }
 
 model AuditLog {

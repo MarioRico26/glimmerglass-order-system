@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   PlusCircle,
   PackageSearch,
+  CheckCircle2,
   Bell,
   Menu,
   X,
@@ -20,6 +21,7 @@ import {
 const navItems = [
   { label: 'Dashboard', href: '/dealer', icon: LayoutDashboard },
   { label: 'New Order', href: '/dealer/new-order', icon: PlusCircle },
+  { label: 'In Stock', href: '/dealer/in-stock', icon: CheckCircle2 },
   { label: 'My Orders', href: '/dealer/orders', icon: PackageSearch },
   { label: 'Notifications', href: '/dealer/notifications', icon: Bell },
 ]

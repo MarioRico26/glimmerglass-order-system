@@ -5,6 +5,7 @@ export default function PoolModelsPage() {
   const [items, setItems] = useState<any[]>([])
   const [form, setForm] = useState({ name:'', lengthFt: null as any, widthFt: null as any, depthFt: null as any })
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState<Record<string, boolean>>({})
 
   const load = async () => {
     setLoading(true)
@@ -38,6 +39,32 @@ export default function PoolModelsPage() {
       body: JSON.stringify({ id }),
     })
     load()
+  }
+
+  const uploadMedia = async (id: string, type: 'image' | 'blueprint', file: File) => {
+    const key = `${id}:${type}`
+    setUploading(prev => ({ ...prev, [key]: true }))
+    try {
+      const fd = new FormData()
+      fd.append('type', type)
+      fd.append('file', file)
+
+      const res = await fetch(`/api/admin/catalog/pool-models/${id}/media`, {
+        method: 'POST',
+        body: fd,
+      })
+
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.message || 'Upload failed')
+
+      if (data?.item) {
+        setItems(prev => prev.map(m => (m.id === id ? data.item : m)))
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Upload failed')
+    } finally {
+      setUploading(prev => ({ ...prev, [key]: false }))
+    }
   }
 
   return (
@@ -78,13 +105,15 @@ export default function PoolModelsPage() {
                 <th className="p-3 border text-center">Length (ft)</th>
                 <th className="p-3 border text-center">Width (ft)</th>
                 <th className="p-3 border text-center">Depth (ft)</th>
+                <th className="p-3 border text-center">Image</th>
+                <th className="p-3 border text-center">Blueprint</th>
                 <th className="p-3 border text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-4 text-gray-500">
+                  <td colSpan={7} className="text-center py-4 text-gray-500">
                     No pool models found.
                   </td>
                 </tr>
@@ -95,6 +124,53 @@ export default function PoolModelsPage() {
                     <td className="border p-3 text-center">{m.lengthFt ?? '-'}</td>
                     <td className="border p-3 text-center">{m.widthFt ?? '-'}</td>
                     <td className="border p-3 text-center">{m.depthFt ?? '-'}</td>
+                    <td className="border p-3 text-center">
+                      {m.imageUrl ? (
+                        <img alt={m.name} src={m.imageUrl} className="h-14 w-20 object-cover rounded mx-auto border" />
+                      ) : (
+                        <div className="text-xs text-gray-500">No image</div>
+                      )}
+                      <label className="mt-2 inline-flex items-center justify-center px-2 py-1 text-xs rounded bg-slate-800 text-white cursor-pointer">
+                        {uploading[`${m.id}:image`] ? 'Uploading…' : 'Upload image'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) uploadMedia(m.id, 'image', file)
+                            e.currentTarget.value = ''
+                          }}
+                        />
+                      </label>
+                    </td>
+                    <td className="border p-3 text-center">
+                      {m.blueprintUrl ? (
+                        <a
+                          href={m.blueprintUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-700 underline text-sm"
+                        >
+                          View blueprint
+                        </a>
+                      ) : (
+                        <div className="text-xs text-gray-500">No blueprint</div>
+                      )}
+                      <label className="mt-2 inline-flex items-center justify-center px-2 py-1 text-xs rounded bg-slate-800 text-white cursor-pointer">
+                        {uploading[`${m.id}:blueprint`] ? 'Uploading…' : 'Upload blueprint'}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) uploadMedia(m.id, 'blueprint', file)
+                            e.currentTarget.value = ''
+                          }}
+                        />
+                      </label>
+                    </td>
                     <td className="border p-3 text-center">
                       <button
                         onClick={()=>remove(m.id)}

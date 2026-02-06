@@ -222,6 +222,13 @@ export default function MyOrdersPage() {
                   >
                     History & Media
                   </Link>
+
+                  <Link
+                    href="/dealer/wire-instructions"
+                    className="h-9 inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold px-3"
+                  >
+                    Wire Instructions
+                  </Link>
                 </div>
               </div>
             )

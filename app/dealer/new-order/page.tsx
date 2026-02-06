@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Palette,
   Truck,
@@ -8,10 +8,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Ruler,
   CalendarDays,
   Settings2,
 } from 'lucide-react'
+import WireInstructions from '@/components/WireInstructions'
 
 type PoolModel = {
   id: string
@@ -19,6 +19,8 @@ type PoolModel = {
   lengthFt: number | null
   widthFt: number | null
   depthFt: number | null
+  imageUrl?: string | null
+  blueprintUrl?: string | null
 }
 
 type Color = {
@@ -26,6 +28,8 @@ type Color = {
   name: string
   swatchUrl?: string | null
 }
+
+type BlueprintMarker = { type: 'skimmer' | 'return'; x: number; y: number }
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
@@ -52,16 +56,35 @@ export default function NewOrderPage() {
   // data
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
+  const [modelSearch, setModelSearch] = useState('')
+  const [markerType, setMarkerType] = useState<BlueprintMarker['type']>('skimmer')
+  const [markers, setMarkers] = useState<BlueprintMarker[]>([])
+  const blueprintRef = useRef<HTMLDivElement | null>(null)
+  const [inStock, setInStock] = useState<
+    { factory: { name: string }; quantity: number; eta: string | null }[]
+  >([])
+  const [stockLoading, setStockLoading] = useState(false)
 
   // ui
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
-  const selectedModel = useMemo(
+  const activeModel = useMemo(
     () => models.find((m) => m.id === poolModelId) ?? null,
     [models, poolModelId]
   )
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase()
+    if (!q) return models
+    return models.filter((m) => m.name.toLowerCase().includes(q))
+  }, [models, modelSearch])
+
+  const blueprintIsPdf = useMemo(() => {
+    const url = activeModel?.blueprintUrl || ''
+    return url.toLowerCase().includes('.pdf')
+  }, [activeModel?.blueprintUrl])
 
   // fecha mínima: hoy + 28 días
   const minRequestedDate = useMemo(() => {
@@ -111,6 +134,77 @@ export default function NewOrderPage() {
       }
     })()
   }, [])
+
+  useEffect(() => {
+    let abort = false
+
+    if (!poolModelId || !colorId) {
+      setInStock([])
+      return
+    }
+
+    ;(async () => {
+      try {
+        setStockLoading(true)
+        const params = new URLSearchParams({
+          poolModelId,
+          colorId,
+        })
+        const res = await fetch(`/api/dealer/in-stock?${params.toString()}`, {
+          cache: 'no-store',
+        })
+        const json = await res.json().catch(() => null)
+        if (!res.ok) throw new Error(json?.message || 'Failed to load stock')
+
+        if (!abort) {
+          setInStock(
+            Array.isArray(json?.items)
+              ? json.items.map((row: any) => ({
+                  factory: row.factory,
+                  quantity: row.quantity,
+                  eta: row.eta ?? null,
+                }))
+              : []
+          )
+        }
+      } catch {
+        if (!abort) setInStock([])
+      } finally {
+        if (!abort) setStockLoading(false)
+      }
+    })()
+
+    return () => {
+      abort = true
+    }
+  }, [poolModelId, colorId])
+
+  useEffect(() => {
+    setMarkers([])
+  }, [poolModelId])
+
+  const handleBlueprintClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!blueprintRef.current) return
+    const rect = blueprintRef.current.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    const clampedX = Math.min(100, Math.max(0, x))
+    const clampedY = Math.min(100, Math.max(0, y))
+
+    setMarkers((prev) => [
+      ...prev,
+      {
+        type: markerType,
+        x: Number(clampedX.toFixed(2)),
+        y: Number(clampedY.toFixed(2)),
+      },
+    ])
+  }
+
+  const removeMarker = (index: number) => {
+    setMarkers((prev) => prev.filter((_, i) => i !== index))
+  }
 
   function validateRequestedDate(value: string): string | null {
     if (!value) return 'Please select a requested ship date.'
@@ -194,6 +288,10 @@ export default function NewOrderPage() {
       formData.append('hardwareMainDrains', String(hardwareMainDrains))
       formData.append('hardwareAutocover', String(hardwareAutocover))
 
+      if (markers.length) {
+        formData.append('blueprintMarkers', JSON.stringify(markers))
+      }
+
       // Importante: ya no mandamos factoryLocationId desde el dealer
       // el admin la asigna después en el panel de administración
 
@@ -218,6 +316,8 @@ export default function NewOrderPage() {
       setHardwareReturns(false)
       setHardwareMainDrains(false)
       setHardwareAutocover(null)
+      setMarkers([])
+      setMarkerType('skimmer')
     } catch (e: any) {
       setMsg({
         type: 'err',
@@ -274,45 +374,97 @@ export default function NewOrderPage() {
           </div>
         )}
 
+        {msg?.type === 'ok' ? (
+          <div className="mb-6">
+            <a
+              href="/dealer/wire-instructions"
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+            >
+              View Wire Instructions
+            </a>
+          </div>
+        ) : null}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Pool Model */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Pool Model
             </label>
-            <div className="relative">
-              <select
-                value={poolModelId}
-                onChange={(e) => setPoolModelId(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                required
-              >
-                <option value="">Select pool model</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              <Ruler
-                className="pointer-events-none absolute right-3 top-2.5 text-slate-400"
-                size={18}
-              />
-            </div>
 
-            {selectedModel && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  L: {selectedModel.lengthFt ?? '-'} ft
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  W: {selectedModel.widthFt ?? '-'} ft
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                  D: {selectedModel.depthFt ?? '-'} ft
-                </span>
+            <div className="flex flex-col gap-3">
+              <input
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                placeholder="Search model…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {filteredModels.map((m) => {
+                  const selected = poolModelId === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setPoolModelId(m.id)}
+                      className={[
+                        'text-left rounded-2xl border bg-white overflow-hidden shadow-sm transition',
+                        selected
+                          ? 'border-sky-300 ring-2 ring-sky-200'
+                          : 'border-slate-200 hover:border-slate-300',
+                      ].join(' ')}
+                    >
+                      <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
+                        {m.imageUrl ? (
+                          <img
+                            src={m.imageUrl}
+                            alt={m.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-slate-900">{m.name}</div>
+                          {selected ? (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                              Selected
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
+                          <span>L: {m.lengthFt ?? '-'} ft</span>
+                          <span>W: {m.widthFt ?? '-'} ft</span>
+                          <span>D: {m.depthFt ?? '-'} ft</span>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Factory: Assigned by admin
+                        </div>
+                        <div className="mt-2 text-xs">
+                          {m.blueprintUrl ? (
+                            <a
+                              href={m.blueprintUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sky-700 underline"
+                            >
+                              View blueprint
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">No blueprint</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Color */}
@@ -368,6 +520,159 @@ export default function NewOrderPage() {
                 </button>
               ))}
             </div>
+
+            {/* In-stock hint */}
+            {poolModelId && colorId ? (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+                <div className="text-sm font-semibold flex items-center gap-2">
+                  ✅ IN STOCK — READY TO SHIP
+                </div>
+                {stockLoading ? (
+                  <div className="text-sm text-emerald-700 mt-1">Checking availability…</div>
+                ) : inStock.length > 0 ? (
+                  <ul className="mt-2 text-sm text-emerald-900 space-y-1">
+                    {inStock.map((row, idx) => (
+                      <li key={`${row.factory?.name}-${idx}`}>
+                        ✅ Disponible ahora en {row.factory?.name || 'Factory'} ({row.quantity} unidades)
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-emerald-700 mt-1">
+                    No ready stock available right now.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Blueprint markup */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Blueprint Markup (optional)
+            </label>
+
+            {!activeModel?.blueprintUrl ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                No blueprint uploaded for this model yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">Marker type:</span>
+                  <button
+                    type="button"
+                    onClick={() => setMarkerType('skimmer')}
+                    className={[
+                      'px-3 py-1 rounded-full text-xs font-semibold border',
+                      markerType === 'skimmer'
+                        ? 'bg-sky-50 text-sky-700 border-sky-200'
+                        : 'bg-white text-slate-700 border-slate-200',
+                    ].join(' ')}
+                  >
+                    Skimmer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkerType('return')}
+                    className={[
+                      'px-3 py-1 rounded-full text-xs font-semibold border',
+                      markerType === 'return'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-white text-slate-700 border-slate-200',
+                    ].join(' ')}
+                  >
+                    Return
+                  </button>
+                  {markers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMarkers([])}
+                      className="px-3 py-1 rounded-full text-xs font-semibold border border-slate-200 text-slate-600"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  ref={blueprintRef}
+                  className="relative rounded-2xl border border-slate-200 bg-white overflow-hidden"
+                >
+                  {blueprintIsPdf ? (
+                    <object
+                      data={activeModel.blueprintUrl}
+                      type="application/pdf"
+                      className="w-full h-[420px] pointer-events-none"
+                    />
+                  ) : (
+                    <img
+                      src={activeModel.blueprintUrl}
+                      alt={`${activeModel.name} blueprint`}
+                      className="w-full h-[420px] object-contain bg-white pointer-events-none"
+                    />
+                  )}
+
+                  <div
+                    className="absolute inset-0"
+                    onClick={handleBlueprintClick}
+                    role="button"
+                    aria-label="Add marker"
+                  />
+
+                  <div className="absolute inset-0 pointer-events-none">
+                    {markers.map((m, idx) => (
+                      <div
+                        key={`${m.type}-${idx}`}
+                        className={[
+                          'absolute flex items-center justify-center rounded-full text-[10px] font-bold shadow',
+                          m.type === 'skimmer'
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-emerald-600 text-white',
+                        ].join(' ')}
+                        style={{
+                          left: `${m.x}%`,
+                          top: `${m.y}%`,
+                          width: '22px',
+                          height: '22px',
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                      >
+                        {m.type === 'skimmer' ? 'S' : 'R'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-500">
+                  Click on the blueprint to place markers. You can remove markers below before submitting.
+                </div>
+
+                {markers.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-semibold text-slate-600 mb-2">
+                      Markers ({markers.length})
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-700">
+                      {markers.map((m, idx) => (
+                        <div key={`${m.type}-row-${idx}`} className="flex items-center justify-between">
+                          <div>
+                            {m.type} • x:{m.x}% y:{m.y}%
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeMarker(idx)}
+                            className="text-rose-600 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Shipping Method + Requested Ship Date */}
@@ -560,6 +865,9 @@ export default function NewOrderPage() {
               begins.
             </p>
           </div>
+
+          {/* Wire instructions */}
+          <WireInstructions compact />
 
           {/* Submit */}
           <div className="pt-2">

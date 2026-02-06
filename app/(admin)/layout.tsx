@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Shield,
   UserCog,
+  Boxes,
 } from 'lucide-react'
 
 type NavItem = {
@@ -46,6 +47,8 @@ function AdminNav() {
       // --- Ops ---
       { type: 'link', item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard } },
       { type: 'link', item: { label: 'Orders', href: '/admin/orders', icon: ClipboardList } },
+      { type: 'link', item: { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory } },
+      { type: 'link', item: { label: 'Inventory', href: '/admin/inventory/daily', icon: Boxes } },
 
       // ✅ Nuevo Board “pro”
       { type: 'link', item: { label: 'Production Board', href: '/admin/production', icon: Factory } },

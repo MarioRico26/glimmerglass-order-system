@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
     const notes = formData.get('notes')?.toString().trim() || ''
     const shippingMethodRaw = formData.get('shippingMethod')?.toString().trim() || ''
     const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
+    const blueprintMarkersRaw = formData.get('blueprintMarkers')?.toString().trim() || ''
 
     const hardwareSkimmer = toBool(formData.get('hardwareSkimmer'))
     const hardwareAutocover = toBool(formData.get('hardwareAutocover'))
@@ -160,6 +161,40 @@ export async function POST(req: NextRequest) {
       requestedShipDate = parsed
     }
 
+    // Parse blueprint markers (optional)
+    let blueprintMarkers: Array<{ type: 'skimmer' | 'return'; x: number; y: number }> | null = null
+    if (blueprintMarkersRaw) {
+      let parsed: any
+      try {
+        parsed = JSON.parse(blueprintMarkersRaw)
+      } catch {
+        return jsonError('Invalid blueprint markers JSON', 400)
+      }
+
+      if (!Array.isArray(parsed)) {
+        return jsonError('Blueprint markers must be an array', 400)
+      }
+
+      try {
+        const normalized = parsed.map((m) => {
+          const type = m?.type
+          const x = Number(m?.x)
+          const y = Number(m?.y)
+          if ((type !== 'skimmer' && type !== 'return') || !Number.isFinite(x) || !Number.isFinite(y)) {
+            throw new Error('Invalid blueprint marker')
+          }
+          if (x < 0 || x > 100 || y < 0 || y > 100) {
+            throw new Error('Blueprint marker out of range')
+          }
+          return { type, x, y }
+        })
+
+        blueprintMarkers = normalized.length ? normalized : null
+      } catch (err: any) {
+        return jsonError(err?.message || 'Invalid blueprint marker', 400)
+      }
+    }
+
     // Subir comprobante de pago a Vercel Blob
     let paymentProofUrl: string | null = null
     if (paymentProof instanceof File && paymentProof.size > 0) {
@@ -178,6 +213,7 @@ export async function POST(req: NextRequest) {
         colorId,
         deliveryAddress,
         notes: notes || null,
+        blueprintMarkers,
         status: 'PENDING_PAYMENT_APPROVAL',
         paymentProofUrl,
         shippingMethod,
