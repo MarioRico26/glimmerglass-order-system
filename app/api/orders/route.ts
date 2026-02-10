@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
  * - shippingMethod ('PICK_UP' | 'QUOTE' | '', optional)
  * - requestedShipDate ('YYYY-MM-DD', opcional, pero si viene debe ser >= 4 semanas adelante)
  * - hardwareSkimmer / hardwareAutocover / hardwareReturns / hardwareMainDrains (on/true/false)
+ * - poolStockId (string, optional): reserva 1 unidad READY del stock terminado
  * - paymentProof (File, required)
  */
 export async function POST(req: NextRequest) {
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
     const shippingMethodRaw = formData.get('shippingMethod')?.toString().trim() || ''
     const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
     const blueprintMarkersRaw = formData.get('blueprintMarkers')?.toString().trim() || ''
+    const poolStockId = formData.get('poolStockId')?.toString().trim() || ''
 
     const hardwareSkimmer = toBool(formData.get('hardwareSkimmer'))
     const hardwareAutocover = toBool(formData.get('hardwareAutocover'))
@@ -205,31 +207,100 @@ export async function POST(req: NextRequest) {
       paymentProofUrl = blob.url
     }
 
-    // Crear orden con status inicial PENDING_PAYMENT_APPROVAL
-    const order = await prisma.order.create({
-      data: {
-        dealerId: dbUser.dealer.id,
-        poolModelId,
-        colorId,
-        deliveryAddress,
-        notes: notes || null,
-        blueprintMarkers,
-        status: 'PENDING_PAYMENT_APPROVAL',
-        paymentProofUrl,
-        shippingMethod,
-        requestedShipDate,
-        // Factory la asigna el admin luego
-        factoryLocationId: null,
+    // Crear orden y, si corresponde, reservar stock terminado en la misma transacción.
+    const order = await prisma.$transaction(async (tx) => {
+      let factoryLocationId: string | null = null
 
-        hardwareSkimmer,
-        hardwareAutocover,
-        hardwareReturns,
-        hardwareMainDrains,
-      },
-      include: {
-        poolModel: { select: { name: true } },
-        color: { select: { name: true } },
-      },
+      if (poolStockId) {
+        const stock = await tx.poolStock.findUnique({
+          where: { id: poolStockId },
+          select: {
+            id: true,
+            poolModelId: true,
+            colorId: true,
+            factoryId: true,
+            status: true,
+            quantity: true,
+          },
+        })
+
+        if (!stock) {
+          throw Object.assign(new Error('Selected stock row not found'), { status: 404 })
+        }
+        if (stock.status !== 'READY') {
+          throw Object.assign(new Error('Selected stock is not READY'), { status: 409 })
+        }
+        if (stock.poolModelId !== poolModelId || stock.colorId !== colorId) {
+          throw Object.assign(new Error('Selected stock does not match model/color'), { status: 400 })
+        }
+
+        const reserved = await tx.poolStock.updateMany({
+          where: {
+            id: poolStockId,
+            status: 'READY',
+            quantity: { gte: 1 },
+          },
+          data: {
+            quantity: { decrement: 1 },
+          },
+        })
+
+        if (reserved.count !== 1) {
+          throw Object.assign(new Error('Stock is no longer available'), { status: 409 })
+        }
+
+        factoryLocationId = stock.factoryId
+      } else {
+        const poolModel = await tx.poolModel.findUnique({
+          where: { id: poolModelId },
+          select: { id: true, defaultFactoryLocationId: true },
+        })
+
+        if (!poolModel) {
+          throw Object.assign(new Error('Pool model not found'), { status: 404 })
+        }
+
+        factoryLocationId = poolModel.defaultFactoryLocationId ?? null
+      }
+
+      const created = await tx.order.create({
+        data: {
+          dealerId: dbUser.dealer.id,
+          poolModelId,
+          colorId,
+          deliveryAddress,
+          notes: notes || null,
+          blueprintMarkers,
+          status: 'PENDING_PAYMENT_APPROVAL',
+          paymentProofUrl,
+          shippingMethod,
+          requestedShipDate,
+          factoryLocationId,
+          hardwareSkimmer,
+          hardwareAutocover,
+          hardwareReturns,
+          hardwareMainDrains,
+        },
+        include: {
+          poolModel: { select: { name: true } },
+          color: { select: { name: true } },
+          factoryLocation: { select: { id: true, name: true } },
+        },
+      })
+
+      if (poolStockId) {
+        await tx.poolStockTxn.create({
+          data: {
+            stockId: poolStockId,
+            type: 'RESERVE',
+            quantity: 1,
+            referenceOrderId: created.id,
+            notes: 'Reserved from dealer order flow',
+          },
+        })
+      }
+
+      return created
     })
 
     // Audit log
@@ -252,6 +323,8 @@ export async function POST(req: NextRequest) {
           hardwareAutocover,
           hardwareReturns,
           hardwareMainDrains,
+          poolStockId: poolStockId || null,
+          reservedFromStock: Boolean(poolStockId),
         },
       })
     } catch (e) {
@@ -270,13 +343,16 @@ export async function POST(req: NextRequest) {
           requestedShipDate: order.requestedShipDate,
           poolModel: order.poolModel ? { name: order.poolModel.name } : null,
           color: order.color ? { name: order.color.name } : null,
+          factory: order.factoryLocation ? { id: order.factoryLocation.id, name: order.factoryLocation.name } : null,
         },
       },
       { status: 201 }
     )
   } catch (err) {
     console.error('POST /api/orders error:', err)
-    return jsonError('Internal Server Error', 500)
+    const status = (err as any)?.status || 500
+    const message = status === 500 ? 'Internal Server Error' : (err as any)?.message || 'Order creation failed'
+    return jsonError(message, status)
   }
 }
 

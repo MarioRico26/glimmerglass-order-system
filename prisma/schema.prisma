@@ -120,9 +120,13 @@ model PoolModel {
   shape    String?
   imageUrl String?
   blueprintUrl String?
+  defaultFactoryLocationId String?
+  defaultFactoryLocation FactoryLocation? @relation("PoolModelDefaultFactory", fields: [defaultFactoryLocationId], references: [id])
   orders   Order[]
 
   poolStocks PoolStock[]
+
+  @@index([defaultFactoryLocationId])
 }
 
 model Color {
@@ -160,6 +164,7 @@ model FactoryLocation {
 
   orders Order[]
   poolStocks PoolStock[]
+  defaultForPoolModels PoolModel[] @relation("PoolModelDefaultFactory")
 
   // inverse relation for InventoryLocation.factoryLocation
   inventoryLocations InventoryLocation[]
@@ -200,6 +205,7 @@ model PoolStock {
   quantity Int             @default(0)
   eta      DateTime?
   notes    String?
+  imageUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

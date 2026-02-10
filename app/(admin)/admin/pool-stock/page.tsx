@@ -20,6 +20,7 @@ type PoolStockItem = {
   quantity: number
   eta: string | null
   notes: string | null
+  imageUrl: string | null
   updatedAt: string
   factory: Factory
   poolModel: PoolModel
@@ -68,6 +69,10 @@ function statusBadge(status: PoolStockItem['status']) {
   }
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
+
 export default function AdminPoolStockPage() {
   const [items, setItems] = useState<PoolStockItem[]>([])
   const [factories, setFactories] = useState<Factory[]>([])
@@ -104,6 +109,7 @@ export default function AdminPoolStockPage() {
   const [txnsById, setTxnsById] = useState<Record<string, Txn[]>>({})
   const [txnOpenId, setTxnOpenId] = useState<string | null>(null)
   const [txnLoadingId, setTxnLoadingId] = useState<string | null>(null)
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -136,8 +142,8 @@ export default function AdminPoolStockPage() {
       if (!createForm.factoryId && factoryJson?.items?.length) {
         setCreateForm((prev) => ({ ...prev, factoryId: factoryJson.items[0].id }))
       }
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load data')
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Failed to load data'))
       setItems([])
     } finally {
       setLoading(false)
@@ -196,8 +202,8 @@ export default function AdminPoolStockPage() {
       }))
 
       await load()
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create stock row')
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Failed to create stock row'))
     } finally {
       setCreating(false)
     }
@@ -247,8 +253,8 @@ export default function AdminPoolStockPage() {
       }
 
       setEditingId(null)
-    } catch (e: any) {
-      setError(e?.message || 'Failed to update stock row')
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Failed to update stock row'))
     }
   }
 
@@ -267,10 +273,36 @@ export default function AdminPoolStockPage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.message || 'Failed to load transactions')
       setTxnsById((prev) => ({ ...prev, [id]: json?.items || [] }))
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load transactions')
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Failed to load transactions'))
     } finally {
       setTxnLoadingId(null)
+    }
+  }
+
+  const uploadPhoto = async (id: string, file: File) => {
+    setError('')
+    setUploadingPhotoId(id)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`/api/admin/pool-stock/${id}/photo`, {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || 'Failed to upload photo')
+
+      const imageUrl = json?.item?.imageUrl ?? null
+      setItems((prev) =>
+        prev.map((it) => (it.id === id ? { ...it, imageUrl } : it))
+      )
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to upload photo'
+      setError(message)
+    } finally {
+      setUploadingPhotoId(null)
     }
   }
 
@@ -289,7 +321,7 @@ export default function AdminPoolStockPage() {
 
       <form onSubmit={submitCreate} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="text-sm font-semibold text-slate-900 mb-3">Add Stock Row</div>
-        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-9">
           <select
             value={createForm.factoryId}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, factoryId: e.target.value }))}
@@ -419,6 +451,7 @@ export default function AdminPoolStockPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b">
+                  <th className="py-2 pr-3">Photo</th>
                   <th className="py-2 pr-3">Factory</th>
                   <th className="py-2 pr-3">Model</th>
                   <th className="py-2 pr-3">Color</th>
@@ -439,6 +472,39 @@ export default function AdminPoolStockPage() {
                   return (
                     <Fragment key={it.id}>
                       <tr className="border-t">
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-11 w-16 overflow-hidden rounded border border-slate-200 bg-slate-50">
+                              {it.imageUrl ? (
+                                <img
+                                  src={it.imageUrl}
+                                  alt={`${it.poolModel?.name} stock`}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full text-[10px] text-slate-400 flex items-center justify-center">
+                                  No photo
+                                </div>
+                              )}
+                            </div>
+                            <label
+                              className={`inline-flex h-8 cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-2 text-xs ${uploadingPhotoId === it.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                              {uploadingPhotoId === it.id ? 'Uploading…' : 'Upload'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingPhotoId === it.id}
+                                onChange={(e) => {
+                                  const file = e.currentTarget.files?.[0]
+                                  if (file) void uploadPhoto(it.id, file)
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </td>
                         <td className="py-3 pr-3 font-semibold text-slate-900">{it.factory?.name}</td>
                         <td className="py-3 pr-3">{it.poolModel?.name}</td>
                         <td className="py-3 pr-3">{it.color?.name || '—'}</td>
@@ -535,7 +601,7 @@ export default function AdminPoolStockPage() {
 
                       {txnsOpen && (
                         <tr className="border-t bg-slate-50/50">
-                          <td colSpan={9} className="py-3">
+                          <td colSpan={10} className="py-3">
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                               <div className="text-xs font-semibold text-slate-700 mb-2">Last movements</div>
                               {txnLoadingId === it.id ? (

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
 
-const STATUSES = ['READY', 'RESERVED', 'IN_PRODUCTION', 'DAMAGED'] as const
+type PoolStockStatus = 'READY' | 'RESERVED' | 'IN_PRODUCTION' | 'DAMAGED'
 
 export async function GET() {
   try {
@@ -30,7 +30,7 @@ export async function GET() {
             RESERVED: 0,
             IN_PRODUCTION: 0,
             DAMAGED: 0,
-          } as Record<(typeof STATUSES)[number], number>,
+          } as Record<PoolStockStatus, number>,
         },
       ])
     )
@@ -38,15 +38,23 @@ export async function GET() {
     for (const row of groups) {
       const entry = map.get(row.factoryId)
       if (!entry) continue
-      const status = row.status as (typeof STATUSES)[number]
+      const status = row.status as PoolStockStatus
       entry.totals[status] = row._sum.quantity || 0
     }
 
     return NextResponse.json({ items: Array.from(map.values()) })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message =
+      typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string'
+        ? e.message
+        : 'Internal Server Error'
+    const status =
+      typeof e === 'object' && e !== null && 'status' in e && typeof e.status === 'number'
+        ? e.status
+        : 500
     return NextResponse.json(
-      { message: e?.message ?? 'Internal Server Error' },
-      { status: e?.status ?? 500 }
+      { message },
+      { status }
     )
   }
 }

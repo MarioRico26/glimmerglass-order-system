@@ -13,16 +13,19 @@ import {
   PackageSearch,
   CheckCircle2,
   Bell,
+  Landmark,
   Menu,
   X,
   LogOut,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
-const navItems = [
+const navItems: Array<{ label: string; href: string; icon: LucideIcon }> = [
   { label: 'Dashboard', href: '/dealer', icon: LayoutDashboard },
-  { label: 'New Order', href: '/dealer/new-order', icon: PlusCircle },
   { label: 'In Stock', href: '/dealer/in-stock', icon: CheckCircle2 },
+  { label: 'New Order', href: '/dealer/new-order', icon: PlusCircle },
   { label: 'My Orders', href: '/dealer/orders', icon: PackageSearch },
+  { label: 'Wire Instructions', href: '/dealer/wire-instructions', icon: Landmark },
   { label: 'Notifications', href: '/dealer/notifications', icon: Bell },
 ]
 
@@ -60,7 +63,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
     href,
     label,
     Icon,
-  }: { href: string; label: string; Icon: any }) => {
+  }: { href: string; label: string; Icon: LucideIcon }) => {
     const active =
       pathname === href || (href !== '/dealer' && pathname?.startsWith(href))
     return (

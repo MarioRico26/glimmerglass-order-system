@@ -3,15 +3,23 @@ import { useEffect, useState } from 'react'
 
 export default function PoolModelsPage() {
   const [items, setItems] = useState<any[]>([])
-  const [form, setForm] = useState({ name:'', lengthFt: null as any, widthFt: null as any, depthFt: null as any })
+  const [factories, setFactories] = useState<any[]>([])
+  const [form, setForm] = useState({
+    name:'', lengthFt: null as any, widthFt: null as any, depthFt: null as any, defaultFactoryLocationId: '',
+  })
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<Record<string, boolean>>({})
 
   const load = async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/catalog/pool-models')
-    const data = await res.json()
+    const [modelsRes, factoriesRes] = await Promise.all([
+      fetch('/api/admin/catalog/pool-models'),
+      fetch('/api/catalog/factories'),
+    ])
+    const data = await modelsRes.json()
+    const factoriesData = await factoriesRes.json()
     setItems(data.items || [])
+    setFactories(factoriesData.items || [])
     setLoading(false)
   }
   useEffect(()=>{ load() }, [])
@@ -24,7 +32,7 @@ export default function PoolModelsPage() {
       body: JSON.stringify(form),
     })
     if (res.ok) {
-      setForm({name:'', lengthFt:null, widthFt:null, depthFt:null})
+      setForm({name:'', lengthFt:null, widthFt:null, depthFt:null, defaultFactoryLocationId: ''})
       load()
     } else {
       alert('Error saving pool model')
@@ -67,6 +75,24 @@ export default function PoolModelsPage() {
     }
   }
 
+  const updateDefaultFactory = async (id: string, defaultFactoryLocationId: string) => {
+    const res = await fetch('/api/admin/catalog/pool-models', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        defaultFactoryLocationId: defaultFactoryLocationId || null,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      alert(data?.message || 'Failed to update default factory')
+      return
+    }
+    load()
+  }
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">🏊‍♂️ Manage Pool Models</h1>
@@ -89,6 +115,16 @@ export default function PoolModelsPage() {
           value={form.depthFt ?? ''}
           onChange={e=>setForm(f=>({...f, depthFt: e.target.value ? Number(e.target.value) : null}))}
         />
+        <select
+          className="border border-gray-300 rounded p-2"
+          value={form.defaultFactoryLocationId}
+          onChange={e => setForm(f => ({ ...f, defaultFactoryLocationId: e.target.value }))}
+        >
+          <option value="">Default factory (optional)</option>
+          {factories.map((f:any) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
         <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
           Add Model
         </button>
@@ -105,6 +141,7 @@ export default function PoolModelsPage() {
                 <th className="p-3 border text-center">Length (ft)</th>
                 <th className="p-3 border text-center">Width (ft)</th>
                 <th className="p-3 border text-center">Depth (ft)</th>
+                <th className="p-3 border text-center">Default Factory</th>
                 <th className="p-3 border text-center">Image</th>
                 <th className="p-3 border text-center">Blueprint</th>
                 <th className="p-3 border text-center">Actions</th>
@@ -113,7 +150,7 @@ export default function PoolModelsPage() {
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-4 text-gray-500">
+                  <td colSpan={8} className="text-center py-4 text-gray-500">
                     No pool models found.
                   </td>
                 </tr>
@@ -124,6 +161,18 @@ export default function PoolModelsPage() {
                     <td className="border p-3 text-center">{m.lengthFt ?? '-'}</td>
                     <td className="border p-3 text-center">{m.widthFt ?? '-'}</td>
                     <td className="border p-3 text-center">{m.depthFt ?? '-'}</td>
+                    <td className="border p-3 text-center">
+                      <select
+                        className="border border-gray-300 rounded p-1.5 text-sm"
+                        value={m.defaultFactoryLocationId || ''}
+                        onChange={(e) => updateDefaultFactory(m.id, e.target.value)}
+                      >
+                        <option value="">No default</option>
+                        {factories.map((f:any) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="border p-3 text-center">
                       {m.imageUrl ? (
                         <img alt={m.name} src={m.imageUrl} className="h-14 w-20 object-cover rounded mx-auto border" />

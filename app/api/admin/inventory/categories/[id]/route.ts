@@ -4,28 +4,31 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 
-function json(message: string, status = 400, extra?: any) {
+function json(message: string, status = 400, extra?: unknown) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
-function isAdmin(role: any) {
+function isAdmin(role: unknown) {
   return role === 'ADMIN' || role === 'SUPERADMIN'
 }
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getId(ctx: Ctx) {
-  const p: any = ctx.params
+  const p = ctx.params as { id: string } | Promise<{ id: string }>
   return ('then' in p ? (await p).id : p.id) as string
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as { email?: string | null; role?: string } | undefined
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdmin(user.role)) return json('Forbidden', 403)
 
     const id = await getId(ctx)
-    const item = await prisma.inventoryCategory.findUnique({ where: { id } })
+    const item = await prisma.inventoryCategory.findUnique({
+      where: { id },
+      include: { _count: { select: { items: true } } },
+    })
     if (!item) return json('Not found', 404)
 
     return NextResponse.json(item, { headers: { 'Cache-Control': 'no-store' } })
@@ -38,7 +41,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as { email?: string | null; role?: string } | undefined
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdmin(user.role)) return json('Forbidden', 403)
 
@@ -50,20 +53,24 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       body?.sortOrder !== undefined
         ? Number(body.sortOrder)
         : undefined
+    const active = body?.active !== undefined ? Boolean(body.active) : undefined
 
     const updated = await prisma.inventoryCategory.update({
       where: { id },
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(sortOrder !== undefined && Number.isFinite(sortOrder) ? { sortOrder } : {}),
+        ...(active !== undefined ? { active } : {}),
       },
     })
 
     return NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('PATCH /api/admin/inventory/categories/[id] error:', e)
-    if (e?.code === 'P2025') return json('Not found', 404)
-    if (e?.code === 'P2002') return json('Category name already exists', 400)
+    const code =
+      typeof e === 'object' && e !== null && 'code' in e ? String(e.code) : ''
+    if (code === 'P2025') return json('Not found', 404)
+    if (code === 'P2002') return json('Category name already exists', 400)
     return json('Internal server error', 500)
   }
 }
@@ -71,7 +78,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as { email?: string | null; role?: string } | undefined
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdmin(user.role)) return json('Forbidden', 403)
 
@@ -85,9 +92,11 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
 
     await prisma.inventoryCategory.delete({ where: { id } })
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('DELETE /api/admin/inventory/categories/[id] error:', e)
-    if (e?.code === 'P2025') return json('Not found', 404)
+    const code =
+      typeof e === 'object' && e !== null && 'code' in e ? String(e.code) : ''
+    if (code === 'P2025') return json('Not found', 404)
     return json('Internal server error', 500)
   }
 }

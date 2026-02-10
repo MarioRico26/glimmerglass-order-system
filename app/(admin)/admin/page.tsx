@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { PackageSearch, CheckCircle2, Clock, CircleCheckBig, CircleX } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -89,7 +90,7 @@ export default function AdminDashboard() {
   if (loading) return <div className="p-2 text-slate-600">Loading…</div>
 
   const Stat = ({ label, value, Icon }:{
-    label: string; value: number | string; Icon: any
+    label: string; value: number | string; Icon: LucideIcon
   }) => (
     <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
       <div className="flex items-center justify-between">

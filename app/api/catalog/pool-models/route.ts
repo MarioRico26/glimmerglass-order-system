@@ -12,6 +12,8 @@ export async function GET() {
       depthFt: true,
       imageUrl: true,
       blueprintUrl: true,
+      defaultFactoryLocationId: true,
+      defaultFactoryLocation: { select: { id: true, name: true } },
     },
   })
   return NextResponse.json({ items })
