@@ -73,6 +73,13 @@ export default function NewOrderPage() {
     }[]
   >([])
   const [selectedStockId, setSelectedStockId] = useState('')
+  const [prefillStockId, setPrefillStockId] = useState('')
+  const [prefillApplied, setPrefillApplied] = useState(false)
+  const [prefillQuery, setPrefillQuery] = useState({
+    poolModelId: '',
+    colorId: '',
+    poolStockId: '',
+  })
   const [stockLoading, setStockLoading] = useState(false)
 
   // ui
@@ -106,6 +113,16 @@ export default function NewOrderPage() {
     return `${year}-${month}-${day}`
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    setPrefillQuery({
+      poolModelId: params.get('poolModelId') || '',
+      colorId: params.get('colorId') || '',
+      poolStockId: params.get('poolStockId') || '',
+    })
+  }, [])
+
   // fetch initial
   useEffect(() => {
     ;(async () => {
@@ -137,13 +154,35 @@ export default function NewOrderPage() {
 
         setModels(mJson.items || [])
         setColors(cJson.items || [])
-      } catch (e: any) {
-        setMsg({ type: 'err', text: e?.message || 'Error fetching data' })
+      } catch (e: unknown) {
+        setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Error fetching data' })
       } finally {
         setLoading(false)
       }
     })()
   }, [])
+
+  useEffect(() => {
+    if (loading || prefillApplied) return
+
+    if (prefillQuery.poolModelId && models.some((m) => m.id === prefillQuery.poolModelId)) {
+      setPoolModelId(prefillQuery.poolModelId)
+    }
+    if (prefillQuery.colorId && colors.some((c) => c.id === prefillQuery.colorId)) {
+      setColorId(prefillQuery.colorId)
+    }
+    if (prefillQuery.poolStockId) {
+      setPrefillStockId(prefillQuery.poolStockId)
+    }
+
+    setPrefillApplied(true)
+  }, [
+    loading,
+    prefillApplied,
+    prefillQuery,
+    models,
+    colors,
+  ])
 
   useEffect(() => {
     let abort = false
@@ -169,7 +208,13 @@ export default function NewOrderPage() {
         if (!abort) {
           setInStock(
             Array.isArray(json?.items)
-              ? json.items.map((row: any) => ({
+              ? json.items.map((row: {
+                  id: string
+                  factory: { id?: string; name: string }
+                  quantity: number
+                  eta: string | null
+                  status: 'READY'
+                }) => ({
                   id: row.id,
                   factory: row.factory,
                   quantity: row.quantity,
@@ -204,6 +249,14 @@ export default function NewOrderPage() {
     const exists = inStock.some((row) => row.id === selectedStockId)
     if (!exists) setSelectedStockId('')
   }, [inStock, selectedStockId])
+
+  useEffect(() => {
+    if (!prefillStockId) return
+    if (inStock.some((row) => row.id === prefillStockId)) {
+      setSelectedStockId(prefillStockId)
+      setPrefillStockId('')
+    }
+  }, [inStock, prefillStockId])
 
   const handleBlueprintClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!blueprintRef.current) return
@@ -352,10 +405,10 @@ export default function NewOrderPage() {
       setMarkers([])
       setMarkerType('skimmer')
       setSelectedStockId('')
-    } catch (e: any) {
+    } catch (e: unknown) {
       setMsg({
         type: 'err',
-        text: e?.message || 'Network error during order creation.',
+        text: e instanceof Error ? e.message : 'Network error during order creation.',
       })
     } finally {
       setSubmitting(false)

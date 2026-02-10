@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as { email?: string | null; role?: string } | undefined
 
     if (!user?.email || user?.role !== 'DEALER') {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
     const poolModelId = searchParams.get('poolModelId') || undefined
     const colorId = searchParams.get('colorId') || undefined
 
-    const where: any = {
+    const where: {
+      status: 'READY'
+      quantity: { gt: number }
+      factoryId?: string
+      poolModelId?: string
+      colorId?: string
+    } = {
       status: 'READY',
       quantity: { gt: 0 },
     }
@@ -43,11 +49,12 @@ export async function GET(req: NextRequest) {
         factory: { select: { id: true, name: true, city: true, state: true } },
         poolModel: { select: { id: true, name: true, lengthFt: true, widthFt: true, depthFt: true } },
         color: { select: { id: true, name: true, swatchUrl: true } },
+        imageUrl: true,
       },
     })
 
     return NextResponse.json({ items })
-  } catch (e) {
+  } catch (e: unknown) {
     console.error('GET /api/dealer/in-stock error:', e)
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
   }

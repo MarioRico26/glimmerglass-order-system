@@ -20,12 +20,15 @@ import {
   Shield,
   UserCog,
   Boxes,
+  PackageCheck,
+  SlidersHorizontal,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 type NavItem = {
   label: string
   href: string
-  icon?: any
+  icon?: LucideIcon
   badge?: string
 }
 
@@ -34,7 +37,7 @@ type NavSection =
   | {
       type: 'group'
       label: string
-      icon?: any
+      icon?: LucideIcon
       defaultOpen?: boolean
       items: NavItem[]
     }
@@ -44,17 +47,20 @@ function AdminNav() {
 
   const sections = useMemo<NavSection[]>(
     () => [
-      // --- Ops ---
-      { type: 'link', item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard } },
-      { type: 'link', item: { label: 'Orders', href: '/admin/orders', icon: ClipboardList } },
-      { type: 'link', item: { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory } },
-      { type: 'link', item: { label: 'Inventory', href: '/admin/inventory/daily', icon: Boxes } },
-
-      // ✅ Nuevo Board “pro”
-      { type: 'link', item: { label: 'Production Board', href: '/admin/production', icon: Factory } },
-
-      // --- People ---
-      { type: 'link', item: { label: 'Dealers', href: '/admin/dealers', icon: Users } },
+      {
+        type: 'group',
+        label: 'Operations',
+        icon: PackageCheck,
+        defaultOpen: true,
+        items: [
+          { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+          { label: 'Orders', href: '/admin/orders', icon: ClipboardList },
+          { label: 'Production Board', href: '/admin/production', icon: Factory },
+          { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory },
+          { label: 'Inventory', href: '/admin/inventory/daily', icon: Boxes },
+          { label: 'Inventory Setup', href: '/admin/inventory/master', icon: SlidersHorizontal },
+        ],
+      },
 
       // --- Catalog group ---
       {
@@ -68,6 +74,16 @@ function AdminNav() {
         ],
       },
 
+      {
+        type: 'group',
+        label: 'People',
+        icon: Users,
+        defaultOpen: true,
+        items: [
+          { label: 'Dealers', href: '/admin/dealers', icon: Users },
+        ],
+      },
+
       // --- System ---
       {
         type: 'group',
@@ -76,7 +92,7 @@ function AdminNav() {
         defaultOpen: false,
         items: [
           { label: 'Users', href: '/admin/users', icon: UserCog },
-          // futuro: settings, audit logs, etc
+          // reservado para futuros ajustes globales
           // { label: 'Settings', href: '/admin/settings', icon: Settings },
         ],
       },

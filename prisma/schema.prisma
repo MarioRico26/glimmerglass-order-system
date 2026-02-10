@@ -205,6 +205,7 @@ model PoolStock {
   quantity Int             @default(0)
   eta      DateTime?
   notes    String?
+  imageUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -8,6 +8,7 @@ type StockRow = {
   status: 'READY'
   quantity: number
   eta: string | null
+  imageUrl: string | null
   factory: { id: string; name: string; city?: string | null; state?: string | null }
   poolModel: { id: string; name: string; lengthFt?: number | null; widthFt?: number | null; depthFt?: number | null }
   color: { id: string; name: string; swatchUrl?: string | null } | null
@@ -36,8 +37,8 @@ export default function DealerInStockPage() {
         const json = await res.json().catch(() => null)
         if (!res.ok) throw new Error(json?.message || 'Failed to load stock')
         setItems(Array.isArray(json?.items) ? json.items : [])
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load stock')
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load stock')
         setItems([])
       } finally {
         setLoading(false)
@@ -95,16 +96,33 @@ export default function DealerInStockPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b">
+                  <th className="py-2 pr-3">Photo</th>
                   <th className="py-2 pr-3">Factory</th>
                   <th className="py-2 pr-3">Model</th>
                   <th className="py-2 pr-3">Color</th>
                   <th className="py-2 pr-3 text-right">Qty</th>
                   <th className="py-2 pr-3">ETA</th>
+                  <th className="py-2 pr-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((it) => (
                   <tr key={it.id} className="border-t">
+                    <td className="py-3 pr-3">
+                      <div className="h-12 w-16 overflow-hidden rounded border border-slate-200 bg-slate-50">
+                        {it.imageUrl ? (
+                          <img
+                            src={it.imageUrl}
+                            alt={`${it.poolModel?.name} stock`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full text-[10px] text-slate-400 flex items-center justify-center">
+                            No photo
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 pr-3">
                       <div className="flex items-center gap-2 text-slate-900 font-semibold">
                         <Factory size={16} className="text-slate-400" />
@@ -136,6 +154,18 @@ export default function DealerInStockPage() {
                         <Timer size={14} className="text-slate-400" />
                         {toDate(it.eta)}
                       </div>
+                    </td>
+                    <td className="py-3 pr-3 text-right">
+                      {it.color?.id ? (
+                        <a
+                          href={`/dealer/new-order?poolModelId=${encodeURIComponent(it.poolModel.id)}&colorId=${encodeURIComponent(it.color.id)}&poolStockId=${encodeURIComponent(it.id)}`}
+                          className="inline-flex h-8 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                        >
+                          Order this stock
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400">Select in order form</span>
+                      )}
                     </td>
                   </tr>
                 ))}
