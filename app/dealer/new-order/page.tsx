@@ -12,6 +12,7 @@ import {
   Settings2,
 } from 'lucide-react'
 import WireInstructions from '@/components/WireInstructions'
+import ShippingNotice from '@/components/ShippingNotice'
 
 type PoolModel = {
   id: string
@@ -21,6 +22,8 @@ type PoolModel = {
   depthFt: number | null
   imageUrl?: string | null
   blueprintUrl?: string | null
+  defaultFactoryLocationId?: string | null
+  defaultFactoryLocation?: { id: string; name: string } | null
 }
 
 type Color = {
@@ -61,8 +64,15 @@ export default function NewOrderPage() {
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
   const blueprintRef = useRef<HTMLDivElement | null>(null)
   const [inStock, setInStock] = useState<
-    { factory: { name: string }; quantity: number; eta: string | null }[]
+    {
+      id: string
+      factory: { id?: string; name: string }
+      quantity: number
+      eta: string | null
+      status: 'READY'
+    }[]
   >([])
+  const [selectedStockId, setSelectedStockId] = useState('')
   const [stockLoading, setStockLoading] = useState(false)
 
   // ui
@@ -160,9 +170,11 @@ export default function NewOrderPage() {
           setInStock(
             Array.isArray(json?.items)
               ? json.items.map((row: any) => ({
+                  id: row.id,
                   factory: row.factory,
                   quantity: row.quantity,
                   eta: row.eta ?? null,
+                  status: row.status,
                 }))
               : []
           )
@@ -182,6 +194,16 @@ export default function NewOrderPage() {
   useEffect(() => {
     setMarkers([])
   }, [poolModelId])
+
+  useEffect(() => {
+    setSelectedStockId('')
+  }, [poolModelId, colorId])
+
+  useEffect(() => {
+    if (!selectedStockId) return
+    const exists = inStock.some((row) => row.id === selectedStockId)
+    if (!exists) setSelectedStockId('')
+  }, [inStock, selectedStockId])
 
   const handleBlueprintClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!blueprintRef.current) return
@@ -215,6 +237,13 @@ export default function NewOrderPage() {
       return 'Requested ship date must be at least 4 weeks in the future.'
     }
     return null
+  }
+
+  function labelEta(value: string | null) {
+    if (!value) return 'No ETA'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return 'No ETA'
+    return `ETA: ${d.toLocaleDateString()}`
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -292,6 +321,10 @@ export default function NewOrderPage() {
         formData.append('blueprintMarkers', JSON.stringify(markers))
       }
 
+      if (selectedStockId) {
+        formData.append('poolStockId', selectedStockId)
+      }
+
       // Importante: ya no mandamos factoryLocationId desde el dealer
       // el admin la asigna después en el panel de administración
 
@@ -318,6 +351,7 @@ export default function NewOrderPage() {
       setHardwareAutocover(null)
       setMarkers([])
       setMarkerType('skimmer')
+      setSelectedStockId('')
     } catch (e: any) {
       setMsg({
         type: 'err',
@@ -375,13 +409,16 @@ export default function NewOrderPage() {
         )}
 
         {msg?.type === 'ok' ? (
-          <div className="mb-6">
-            <a
-              href="/dealer/wire-instructions"
-              className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
-            >
-              View Wire Instructions
-            </a>
+          <div className="mb-6 space-y-3">
+            <ShippingNotice />
+            <div>
+              <a
+                href="/dealer/wire-instructions"
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+              >
+                View Wire Instructions
+              </a>
+            </div>
           </div>
         ) : null}
 
@@ -443,7 +480,7 @@ export default function NewOrderPage() {
                           <span>D: {m.depthFt ?? '-'} ft</span>
                         </div>
                         <div className="mt-2 text-xs text-slate-500">
-                          Factory: Assigned by admin
+                          Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
                         </div>
                         <div className="mt-2 text-xs">
                           {m.blueprintUrl ? (
@@ -530,18 +567,47 @@ export default function NewOrderPage() {
                 {stockLoading ? (
                   <div className="text-sm text-emerald-700 mt-1">Checking availability…</div>
                 ) : inStock.length > 0 ? (
-                  <ul className="mt-2 text-sm text-emerald-900 space-y-1">
-                    {inStock.map((row, idx) => (
-                      <li key={`${row.factory?.name}-${idx}`}>
-                        ✅ Disponible ahora en {row.factory?.name || 'Factory'} ({row.quantity} unidades)
-                      </li>
+                  <div className="mt-2 space-y-2">
+                    <label className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-sm text-emerald-900">
+                      <input
+                        type="radio"
+                        name="stockSelection"
+                        checked={!selectedStockId}
+                        onChange={() => setSelectedStockId('')}
+                        className="mt-1"
+                      />
+                      <span>
+                        Continue with regular production flow (no stock reservation now)
+                      </span>
+                    </label>
+                    {inStock.map((row) => (
+                      <label
+                        key={row.id}
+                        className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-sm text-emerald-900"
+                      >
+                        <input
+                          type="radio"
+                          name="stockSelection"
+                          checked={selectedStockId === row.id}
+                          onChange={() => setSelectedStockId(row.id)}
+                          className="mt-1"
+                        />
+                        <span>
+                          ✅ Disponible ahora en {row.factory?.name || 'Factory'} ({row.quantity} unidades) • {labelEta(row.eta)}
+                        </span>
+                      </label>
                     ))}
-                  </ul>
+                  </div>
                 ) : (
                   <div className="text-sm text-emerald-700 mt-1">
                     No ready stock available right now.
                   </div>
                 )}
+                {selectedStockId ? (
+                  <div className="mt-2 text-xs text-emerald-900 font-semibold">
+                    Selected stock will be reserved immediately when the order is created.
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -724,6 +790,8 @@ export default function NewOrderPage() {
               </p>
             </div>
           </div>
+
+          <ShippingNotice />
 
           {/* Delivery Address */}
           <div>
