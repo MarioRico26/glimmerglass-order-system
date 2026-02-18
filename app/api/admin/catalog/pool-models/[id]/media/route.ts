@@ -7,6 +7,17 @@ export const runtime = 'nodejs'
 
 const ALLOWED = new Set(['image', 'blueprint'])
 
+function getBlobToken() {
+  const token = process.env.BLOB_READ_WRITE_TOKEN
+  if (!token) {
+    throw Object.assign(
+      new Error('Missing BLOB_READ_WRITE_TOKEN environment variable'),
+      { status: 500 }
+    )
+  }
+  return token
+}
+
 function extFromName(name: string) {
   const parts = name.split('.')
   return parts.length > 1 ? parts.pop()!.toLowerCase() : ''
@@ -40,13 +51,14 @@ export async function POST(
     }
 
     const ext = extFromName(file.name) || (type === 'image' ? 'png' : 'pdf')
+    const token = getBlobToken()
     const blob = await put(
       `pool-models/${params.id}/${type}-${Date.now()}.${ext}`,
       file,
-      { access: 'public' },
+      { access: 'public', token },
     )
 
-    const data: any = {}
+    const data: { imageUrl?: string; blueprintUrl?: string } = {}
     if (type === 'image') data.imageUrl = blob.url
     if (type === 'blueprint') data.blueprintUrl = blob.url
 
@@ -56,8 +68,15 @@ export async function POST(
     })
 
     return NextResponse.json({ item })
-  } catch (e: any) {
-    const status = e?.status ?? 500
-    return NextResponse.json({ message: e?.message ?? 'Internal server error' }, { status })
+  } catch (e: unknown) {
+    const status =
+      typeof e === 'object' && e !== null && 'status' in e && typeof e.status === 'number'
+        ? e.status
+        : 500
+    const message =
+      typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string'
+        ? e.message
+        : 'Internal server error'
+    return NextResponse.json({ message }, { status })
   }
 }

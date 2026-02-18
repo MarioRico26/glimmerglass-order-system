@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
+import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 
 interface OrderHistory {
   id: string
@@ -28,6 +29,7 @@ interface OrderSummary {
   deliveryAddress: string
   status: string
   paymentProofUrl?: string | null
+  blueprintMarkers?: BlueprintMarker[]
 
   dealer?: {
     name: string
@@ -38,7 +40,7 @@ interface OrderSummary {
     state?: string | null
   } | null
 
-  poolModel?: { name: string } | null
+  poolModel?: { name: string; blueprintUrl?: string | null } | null
   color?: { name: string } | null
   factory?: { id: string; name: string } | null
   shippingMethod?: string | null
@@ -80,6 +82,14 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   } catch {
     return null
   }
+}
+
+function extractItems<T>(value: T[] | { items: T[] } | null): T[] {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === 'object' && 'items' in value && Array.isArray(value.items)) {
+    return value.items
+  }
+  return []
 }
 
 export default function OrderHistoryPage() {
@@ -142,19 +152,8 @@ export default function OrderHistoryPage() {
         setMessage('❌ Failed to load order data')
       }
 
-      const historyList = Array.isArray(historyData)
-        ? historyData
-        : Array.isArray((historyData as any)?.items)
-        ? (historyData as any).items
-        : []
-      setHistory(historyList)
-
-      const mediaList = Array.isArray(mediaData)
-        ? mediaData
-        : Array.isArray((mediaData as any)?.items)
-        ? (mediaData as any).items
-        : []
-      setMediaFiles(mediaList)
+      setHistory(extractItems(historyData))
+      setMediaFiles(extractItems(mediaData))
 
       if (Array.isArray(factoriesData)) setFactoryList(factoriesData)
     } catch (err) {
@@ -432,6 +431,15 @@ export default function OrderHistoryPage() {
 
                 {hardwareAllOff && <p className="mt-2 text-xs text-slate-500">None selected.</p>}
               </div>
+            </div>
+
+            <div className="px-6 pb-6">
+              <BlueprintMarkersCard
+                title="Blueprint Markers"
+                subtitle="Marker positions captured by dealer during order creation."
+                blueprintUrl={summary.poolModel?.blueprintUrl ?? null}
+                markers={summary.blueprintMarkers ?? []}
+              />
             </div>
           </div>
 

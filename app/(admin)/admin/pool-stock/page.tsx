@@ -321,11 +321,11 @@ export default function AdminPoolStockPage() {
 
       <form onSubmit={submitCreate} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="text-sm font-semibold text-slate-900 mb-3">Add Stock Row</div>
-        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-9">
+        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-12">
           <select
             value={createForm.factoryId}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, factoryId: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
             required
           >
             <option value="">Factory</option>
@@ -337,7 +337,7 @@ export default function AdminPoolStockPage() {
           <select
             value={createForm.poolModelId}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, poolModelId: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
             required
           >
             <option value="">Pool model</option>
@@ -349,7 +349,7 @@ export default function AdminPoolStockPage() {
           <select
             value={createForm.colorId}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, colorId: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
           >
             <option value="">No color</option>
             {colors.map((c) => (
@@ -360,7 +360,7 @@ export default function AdminPoolStockPage() {
           <select
             value={createForm.status}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, status: e.target.value as PoolStockItem['status'] }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>
@@ -372,7 +372,7 @@ export default function AdminPoolStockPage() {
             min={0}
             value={createForm.quantity}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-right"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-right xl:col-span-1"
             placeholder="Qty"
           />
 
@@ -380,20 +380,20 @@ export default function AdminPoolStockPage() {
             type="date"
             value={createForm.eta}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, eta: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-3"
           />
 
           <input
             value={createForm.notes}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, notes: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm md:col-span-2 xl:col-span-9"
             placeholder="Notes"
           />
 
           <button
             type="submit"
             disabled={creating}
-            className="h-10 w-full rounded-lg bg-black text-white px-4 text-sm font-semibold disabled:opacity-60 xl:col-span-1"
+            className="h-10 w-full rounded-lg bg-black text-white px-4 text-sm font-semibold disabled:opacity-60 md:col-span-2 xl:col-span-3"
           >
             {creating ? 'Adding…' : 'Add'}
           </button>

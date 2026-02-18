@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckCircle2, Factory, Palette, Timer } from 'lucide-react'
 
 type StockRow = {
@@ -26,6 +27,29 @@ export default function DealerInStockPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreviewImage(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!previewImage) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [previewImage])
 
   useEffect(() => {
     ;(async () => {
@@ -57,6 +81,47 @@ export default function DealerInStockPage() {
       )
     })
   }, [items, search])
+
+  const previewModal =
+    mounted && previewImage
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/82 p-4 backdrop-blur-[2px]"
+            onClick={() => setPreviewImage(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Stock photo preview"
+          >
+            <div
+              className="w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_30px_100px_rgba(2,8,23,0.45)] sm:p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0 text-sm font-semibold text-slate-800 truncate">
+                  {previewImage.title}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  aria-label="Close image preview"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex h-[68vh] min-h-[320px] max-h-[760px] items-center justify-center overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-2">
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.title}
+                  className="h-auto max-h-full w-auto max-w-full object-contain"
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null
 
   return (
     <div className="space-y-6">
@@ -111,11 +176,23 @@ export default function DealerInStockPage() {
                     <td className="py-3 pr-3">
                       <div className="h-12 w-16 overflow-hidden rounded border border-slate-200 bg-slate-50">
                         {it.imageUrl ? (
-                          <img
-                            src={it.imageUrl}
-                            alt={`${it.poolModel?.name} stock`}
-                            className="h-full w-full object-cover"
-                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImage({
+                                url: it.imageUrl as string,
+                                title: `${it.poolModel?.name || 'Pool'} • ${it.color?.name || 'No color'}`,
+                              })
+                            }
+                            className="h-full w-full cursor-zoom-in"
+                            title="Click to view full photo"
+                          >
+                            <img
+                              src={it.imageUrl}
+                              alt={`${it.poolModel?.name} stock`}
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
                         ) : (
                           <div className="h-full w-full text-[10px] text-slate-400 flex items-center justify-center">
                             No photo
@@ -174,6 +251,8 @@ export default function DealerInStockPage() {
           </div>
         )}
       </div>
+
+      {previewModal}
     </div>
   )
 }

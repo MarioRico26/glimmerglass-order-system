@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { Role, OrderDocType } from '@prisma/client'
+import { Role, OrderDocType, type OrderStatus } from '@prisma/client'
 
 import {
   FLOW_ORDER,
@@ -17,8 +17,12 @@ import {
 } from '@/lib/orderFlow'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
+type SessionUser = { email?: string | null; role?: unknown }
+const FLOW_STATUSES: FlowStatus[] = [...FLOW_ORDER, 'CANCELED']
+type BlueprintMarkerType = 'skimmer' | 'return' | 'drain'
+type BlueprintMarker = { type: BlueprintMarkerType; x: number; y: number }
 
-function json(message: string, status = 400, extra?: Record<string, any>) {
+function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json(
     { message, ...(extra ?? {}) },
     { status, headers: { 'Cache-Control': 'no-store' } }
@@ -26,17 +30,22 @@ function json(message: string, status = 400, extra?: Record<string, any>) {
 }
 
 async function getOrderId(ctx: Ctx) {
-  const p: any = ctx.params
-  return ('then' in p ? (await p).id : p.id) as string
+  const params = await Promise.resolve(ctx.params)
+  return params.id
 }
 
-function isAdminRole(role: any) {
+function isAdminRole(role: unknown) {
   return role === Role.ADMIN || role === Role.SUPERADMIN
 }
 
 function flowIndex(s: FlowStatus) {
   // FLOW_ORDER no incluye CANCELED, por eso puede retornar -1
-  return FLOW_ORDER.indexOf(s as any)
+  if (s === 'CANCELED') return -1
+  return FLOW_ORDER.indexOf(s)
+}
+
+function isFlowStatus(value: string): value is FlowStatus {
+  return FLOW_STATUSES.includes(value as FlowStatus)
 }
 
 function isForwardMove(from: FlowStatus, to: FlowStatus) {
@@ -48,6 +57,27 @@ function isForwardMove(from: FlowStatus, to: FlowStatus) {
   return b > a
 }
 
+function normalizeBlueprintMarkers(raw: unknown): BlueprintMarker[] {
+  if (!Array.isArray(raw)) return []
+
+  const out: BlueprintMarker[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+
+    const maybe = item as { type?: unknown; x?: unknown; y?: unknown }
+    if (maybe.type !== 'skimmer' && maybe.type !== 'return' && maybe.type !== 'drain') continue
+    if (typeof maybe.x !== 'number' || typeof maybe.y !== 'number') continue
+    if (!Number.isFinite(maybe.x) || !Number.isFinite(maybe.y)) continue
+
+    out.push({
+      type: maybe.type,
+      x: Math.max(0, Math.min(100, maybe.x)),
+      y: Math.max(0, Math.min(100, maybe.y)),
+    })
+  }
+  return out
+}
+
 async function getOrderSummary(orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -56,6 +86,7 @@ async function getOrderSummary(orderId: string) {
       deliveryAddress: true,
       status: true,
       paymentProofUrl: true,
+      blueprintMarkers: true,
 
       shippingMethod: true,
       requestedShipDate: true,
@@ -70,7 +101,7 @@ async function getOrderSummary(orderId: string) {
       dealer: {
         select: { name: true, email: true, phone: true, address: true, city: true, state: true },
       },
-      poolModel: { select: { name: true } },
+      poolModel: { select: { name: true, blueprintUrl: true } },
       color: { select: { name: true } },
       factoryLocation: { select: { id: true, name: true } },
     },
@@ -83,6 +114,7 @@ async function getOrderSummary(orderId: string) {
     deliveryAddress: order.deliveryAddress,
     status: order.status,
     paymentProofUrl: order.paymentProofUrl ?? null,
+    blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),
 
     dealer: order.dealer ?? null,
     poolModel: order.poolModel ?? null,
@@ -114,13 +146,17 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   const needFields = REQUIRED_FIELDS_FOR[targetStatus] ?? []
 
   if (needDocs.length === 0 && needFields.length === 0) {
-    return { ok: true, missingDocs: [], missingFields: [] }
+    return {
+      ok: true,
+      missingDocs: [],
+      missingFields: [],
+    }
   }
 
   const [order, media] = await Promise.all([
     prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, serialNumber: true },
+      select: { id: true, serialNumber: true, paymentProofUrl: true },
     }),
     needDocs.length
       ? prisma.orderMedia.findMany({
@@ -135,6 +171,12 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   const present = new Set(
     media.map((m) => m.docType).filter(Boolean) as OrderDocType[]
   )
+
+  // Dealer order creation already requires payment proof.
+  // If it exists on the order, treat PROOF_OF_PAYMENT as satisfied.
+  if (order.paymentProofUrl) {
+    present.add('PROOF_OF_PAYMENT')
+  }
 
   const missingDocs = needDocs.filter((d) => !present.has(d as unknown as OrderDocType))
 
@@ -152,13 +194,47 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as SessionUser | undefined
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdminRole(user.role)) return json('Forbidden', 403)
 
     const orderId = await getOrderId(ctx)
     const summary = await getOrderSummary(orderId)
     if (!summary) return json('Order not found', 404)
+
+    const targetStatusRaw = _req.nextUrl.searchParams.get('targetStatus')?.trim() || ''
+    if (targetStatusRaw) {
+      if (!isFlowStatus(targetStatusRaw)) {
+        return json('Invalid targetStatus', 400)
+      }
+
+      const targetStatus = targetStatusRaw as FlowStatus
+      const requiredDocs = (REQUIRED_FOR[targetStatus] ?? []) as OrderDocTypeKey[]
+      const requiredFields = REQUIRED_FIELDS_FOR[targetStatus] ?? []
+      const missing = await getMissingForTarget(orderId, targetStatus)
+      if (!missing.ok) return json('Order not found', 404)
+
+      const missingDocs = missing.missingDocs
+      const missingFields = missing.missingFields
+      const satisfiedDocs = requiredDocs.filter((d) => !missingDocs.includes(d))
+      const satisfiedFields = requiredFields.filter((f) => !missingFields.includes(f))
+
+      return NextResponse.json(
+        {
+          ...summary,
+          requirements: {
+            targetStatus,
+            requiredDocs,
+            requiredFields,
+            missingDocs,
+            missingFields,
+            satisfiedDocs,
+            satisfiedFields,
+          },
+        },
+        { headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
 
     return NextResponse.json(summary, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
@@ -174,7 +250,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
-    const user = session?.user as any
+    const user = session?.user as SessionUser | undefined
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdminRole(user.role)) return json('Forbidden', 403)
 
@@ -200,9 +276,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       if (!missing.ok) return json('Order not found', 404)
 
       if (missing.missingDocs.length || missing.missingFields.length) {
+        const requiredDocs = (REQUIRED_FOR[nextStatus] ?? []) as OrderDocTypeKey[]
+        const requiredFields = REQUIRED_FIELDS_FOR[nextStatus] ?? []
         return json('Missing required documents/fields to move forward', 400, {
           code: 'MISSING_REQUIREMENTS',
           targetStatus: nextStatus,
+          required: {
+            docs: requiredDocs,
+            fields: requiredFields,
+          },
           missing: {
             docs: missing.missingDocs,
             fields: missing.missingFields,
@@ -222,13 +304,13 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
-        data: { status: nextStatus as any },
+        data: { status: nextStatus as OrderStatus },
       })
 
       await tx.orderHistory.create({
         data: {
           orderId,
-          status: nextStatus as any,
+          status: nextStatus as OrderStatus,
           comment: finalComment,
           userId: dbUser.id,
         },

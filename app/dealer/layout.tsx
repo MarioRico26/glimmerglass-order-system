@@ -56,9 +56,6 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
-  const aqua = '#00B2CA'
-  const deep = '#007A99'
-
   const Item = ({
     href,
     label,
@@ -93,13 +90,13 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
         className="min-h-screen relative flex flex-col"
         style={{
           background:
-            `radial-gradient(1100px 700px at 80% 0%, #E6F7FA 0%, transparent 60%),
-             radial-gradient(800px 500px at 10% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
-             linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
+            `radial-gradient(1100px 700px at 80% 0%, rgba(35,189,215,0.20) 0%, transparent 60%),
+             radial-gradient(800px 500px at 10% 90%, rgba(18,71,100,0.14) 0%, transparent 60%),
+             linear-gradient(180deg, #F5FBFE 0%, #EEF8FC 100%)`,
         }}
       >
         {/* Top bar */}
-        <header className="sticky top-0 z-40 backdrop-blur-md bg-white/60 border-b border-white/70">
+        <header className="sticky top-0 z-40 backdrop-blur-md bg-white/74 border-b [border-color:var(--gg-border)]">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
@@ -109,7 +106,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
               >
                 {open ? <X size={20} /> : <Menu size={20} />}
               </button>
-              <div className="font-black text-[18px]" style={{ color: deep }}>
+              <div className="font-black text-[18px] tracking-tight [font-family:var(--font-heading)] [color:var(--gg-navy-800)]">
                 Glimmerglass • Dealer
               </div>
             </div>
@@ -118,7 +115,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: '/login' })}
-                className="hidden sm:inline-flex items-center gap-2 text-[13px] font-semibold rounded-xl px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50"
+                className="hidden sm:inline-flex items-center gap-2 text-[13px] font-semibold rounded-xl px-3 py-2 border bg-white hover:bg-slate-50 [border-color:var(--gg-border)]"
                 title="Sign out"
               >
                 <LogOut size={16} />
@@ -133,14 +130,14 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
           <aside className="lg:sticky lg:top-20">
             <nav
               className={[
-                'rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.12)] p-3',
+                'rounded-2xl border bg-white/88 backdrop-blur-xl p-3 shadow-[0_18px_46px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]',
                 'flex flex-col justify-between',
                 'lg:h-[calc(100vh-6rem)]',
                 open ? 'block' : 'hidden lg:flex',
               ].join(' ')}
             >
               <div>
-                <div className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] [color:var(--gg-muted)]">
                   Menu
                 </div>
                 <div className="space-y-1">
@@ -156,13 +153,13 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
               </div>
 
               <div className="mt-4">
-                <div className="h-px my-3 bg-slate-200/60" />
-                <div className="px-3 py-2 text-[12px] text-slate-500">
+                <div className="h-px my-3 [background-color:var(--gg-border)]" />
+                <div className="px-3 py-2 text-[12px] [color:var(--gg-muted)]">
                   Need help? <a className="underline" href="#">Support</a>
                 </div>
                 <div
                   className="mt-3 h-2 rounded-xl"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+                  style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
                 />
               </div>
             </nav>
@@ -170,7 +167,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
 
           {/* Main */}
           <main className="min-w-0">
-            <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-4 sm:p-6">
+            <div className="rounded-2xl border bg-white/86 backdrop-blur-xl p-4 sm:p-6 shadow-[0_24px_64px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
               {children}
             </div>
           </main>
@@ -178,7 +175,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
 
         <div
           className="h-1 w-full"
-          style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+          style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
         />
       </div>
     </SessionProvider>

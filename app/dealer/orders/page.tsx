@@ -39,7 +39,7 @@ function labelStatus(status: string) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const base = 'text-xs font-semibold px-2 py-1 rounded-full border'
+  const base = 'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap'
 
   // ✅ APPROVED eliminado
   const map: Partial<Record<FlowStatus, string>> = {
@@ -80,8 +80,8 @@ export default function MyOrdersPage() {
         if (!res.ok) throw new Error(data?.message || 'Failed to load orders')
 
         setOrders(Array.isArray(data?.orders) ? data.orders : [])
-      } catch (e: any) {
-        setError(e?.message || 'Error loading orders')
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Error loading orders')
       } finally {
         setLoading(false)
       }
@@ -95,18 +95,18 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="space-y-6">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">My Orders</h1>
         <p className="text-slate-600">Track your recent orders and open their history.</p>
       </div>
 
       {loading ? (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid xl:grid-cols-2 gap-5">
           {[...Array(4)].map((_, i) => (
             <div
               key={i}
-              className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5"
+              className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6"
             >
               <div className="h-5 w-40 bg-slate-100 rounded mb-3" />
               <div className="h-4 w-28 bg-slate-100 rounded mb-6" />
@@ -131,24 +131,24 @@ export default function MyOrdersPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid xl:grid-cols-2 gap-5">
           {orders.map((o) => {
             const paymentUrl = (o.paymentProofUrl ?? '').trim()
 
             return (
               <div
                 key={o.id}
-                className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5"
+                className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
                     <PackageSearch size={18} className="text-slate-500" />
-                    <h3 className="font-bold text-slate-900">{o.poolModel?.name ?? 'Pool'}</h3>
+                    <h3 className="font-bold text-slate-900 truncate">{o.poolModel?.name ?? 'Pool'}</h3>
                   </div>
                   <StatusBadge status={o.status} />
                 </div>
 
-                <div className="text-sm text-slate-600 space-y-1.5">
+                <div className="text-sm text-slate-600 space-y-2">
                   <div className="flex items-center gap-2">
                     <Palette size={16} className="text-slate-400" />
                     <span>
@@ -156,9 +156,9 @@ export default function MyOrdersPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} className="text-slate-400" />
-                    <span>
+                  <div className="flex items-start gap-2">
+                    <Clock size={16} className="text-slate-400 mt-0.5" />
+                    <span className="leading-snug">
                       <span className="text-slate-500">Created:</span>{' '}
                       {o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'}
                     </span>
@@ -196,20 +196,20 @@ export default function MyOrdersPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {paymentUrl ? (
                     <a
                       href={paymentUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="h-9 inline-flex items-center justify-center rounded-xl text-white font-semibold px-3 shadow-lg hover:shadow-md transition"
+                      className="h-10 inline-flex items-center justify-center rounded-xl text-white text-sm font-semibold px-3 shadow-lg hover:shadow-md transition"
                       style={{ backgroundImage: 'linear-gradient(90deg,#00B2CA,#007A99)' }}
                     >
                       Payment proof
                     </a>
                   ) : (
                     <span
-                      className="h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 font-semibold px-3 cursor-not-allowed"
+                      className="h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm font-semibold px-3 cursor-not-allowed"
                       title="No payment proof uploaded yet"
                     >
                       Payment proof
@@ -218,14 +218,14 @@ export default function MyOrdersPage() {
 
                   <Link
                     href={`/dealer/orders/${o.id}/history`}
-                    className="h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold px-3"
+                    className="h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-semibold px-3"
                   >
                     History & Media
                   </Link>
 
                   <Link
                     href="/dealer/wire-instructions"
-                    className="h-9 inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold px-3"
+                    className="h-10 inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-sm font-semibold px-3 sm:col-span-2"
                   >
                     Wire Instructions
                   </Link>

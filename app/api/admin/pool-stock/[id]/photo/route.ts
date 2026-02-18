@@ -5,6 +5,17 @@ import { requireRole } from '@/lib/requireRole'
 
 export const runtime = 'nodejs'
 
+function getBlobToken() {
+  const token = process.env.BLOB_READ_WRITE_TOKEN
+  if (!token) {
+    throw Object.assign(
+      new Error('Missing BLOB_READ_WRITE_TOKEN environment variable'),
+      { status: 500 }
+    )
+  }
+  return token
+}
+
 function extFromName(name: string) {
   const parts = name.split('.')
   return parts.length > 1 ? parts.pop()!.toLowerCase() : 'jpg'
@@ -38,10 +49,11 @@ export async function POST(
     }
 
     const ext = extFromName(file.name)
+    const token = getBlobToken()
     const blob = await put(
       `pool-stock/${params.id}/photo-${Date.now()}.${ext}`,
       file,
-      { access: 'public' },
+      { access: 'public', token },
     )
 
     const item = await prisma.poolStock.update({

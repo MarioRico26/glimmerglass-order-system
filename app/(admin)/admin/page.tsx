@@ -1,6 +1,7 @@
 // app/(admin)/admin/page.tsx
 'use client'
 
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
@@ -86,6 +87,18 @@ export default function AdminDashboard() {
   const aqua = '#00B2CA'
   const deep = '#007A99'
   const t = useMemo(() => metrics.totals, [metrics])
+  const poolStockTotals = useMemo(() => {
+    return poolStock.reduce(
+      (acc, row) => {
+        acc.READY += row.totals.READY || 0
+        acc.RESERVED += row.totals.RESERVED || 0
+        acc.IN_PRODUCTION += row.totals.IN_PRODUCTION || 0
+        acc.DAMAGED += row.totals.DAMAGED || 0
+        return acc
+      },
+      { READY: 0, RESERVED: 0, IN_PRODUCTION: 0, DAMAGED: 0 }
+    )
+  }, [poolStock])
 
   if (loading) return <div className="p-2 text-slate-600">Loading…</div>
 
@@ -117,6 +130,37 @@ export default function AdminDashboard() {
         <Stat label="Approved" value={t.APPROVED || 0} Icon={CheckCircle2} />
         <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
         <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
+      </div>
+
+      {/* Pool stock snapshot (always visible near top) */}
+      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="text-lg font-bold text-slate-900">Pool Stock Snapshot</h3>
+          <Link
+            href="/admin/pool-stock"
+            className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Open Pool Stock
+          </Link>
+        </div>
+        <div className="grid sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Ready</div>
+            <div className="text-2xl font-black text-emerald-800">{poolStockTotals.READY}</div>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Reserved</div>
+            <div className="text-2xl font-black text-amber-800">{poolStockTotals.RESERVED}</div>
+          </div>
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2">
+            <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">In Production</div>
+            <div className="text-2xl font-black text-indigo-800">{poolStockTotals.IN_PRODUCTION}</div>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+            <div className="text-xs font-semibold text-rose-700 uppercase tracking-wide">Damaged</div>
+            <div className="text-2xl font-black text-rose-800">{poolStockTotals.DAMAGED}</div>
+          </div>
+        </div>
       </div>
 
       {/* Chart + Recent */}
@@ -204,7 +248,7 @@ export default function AdminDashboard() {
 
       {/* Pool stock summary */}
       <div className="mt-6 rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-        <h3 className="text-lg font-bold text-slate-900 mb-3">Pool stock by factory</h3>
+        <h3 className="text-lg font-bold text-slate-900 mb-3">Pool stock by factory (detail)</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="text-slate-600">

@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse blueprint markers (optional)
-    let blueprintMarkers: Array<{ type: 'skimmer' | 'return'; x: number; y: number }> | null = null
+    let blueprintMarkers: Array<{ type: 'skimmer' | 'return' | 'drain'; x: number; y: number }> | null = null
     if (blueprintMarkersRaw) {
       let parsed: any
       try {
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
           const type = m?.type
           const x = Number(m?.x)
           const y = Number(m?.y)
-          if ((type !== 'skimmer' && type !== 'return') || !Number.isFinite(x) || !Number.isFinite(y)) {
+          if ((type !== 'skimmer' && type !== 'return' && type !== 'drain') || !Number.isFinite(x) || !Number.isFinite(y)) {
             throw new Error('Invalid blueprint marker')
           }
           if (x < 0 || x > 100 || y < 0 || y > 100) {

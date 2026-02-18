@@ -5,19 +5,12 @@ import { LogIn, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Home() {
-  const aqua = '#00B2CA'
-  const deep = '#007A99'
-  const mist = '#E6F7FA'
+  const aqua = 'var(--gg-aqua-600)'
+  const deep = 'var(--gg-navy-800)'
 
   return (
     <main
-      className="min-h-screen relative overflow-hidden flex items-center justify-center p-6"
-      style={{
-        background:
-          `radial-gradient(1100px 700px at 80% 0%, ${mist} 0%, transparent 60%),
-           radial-gradient(800px 500px at 10% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
-           linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
-      }}
+      className="gg-shell-bg min-h-screen relative overflow-hidden flex items-center justify-center p-6"
     >
       {/* spotlight */}
       <div

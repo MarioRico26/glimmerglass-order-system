@@ -16,9 +16,11 @@ function LoginInner() {
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Si YA hay sesión y entran a /login, llévalos a post-login sin pintar el form
+  // If user already has a session, move to post-login immediately.
   useEffect(() => {
-    if (status === 'authenticated') router.replace('/post-login')
+    if (status === 'authenticated') {
+      router.replace('/post-login')
+    }
   }, [status, router])
 
   // Mensajes de error por query (?error=...)
@@ -46,9 +48,8 @@ function LoginInner() {
       redirect: false,
     })
 
-    setLoading(false)
-
     if (res?.error) {
+      setLoading(false)
       // Puede venir "PENDING_APPROVAL" (nuestro) o "CredentialsSignin" (credenciales malas)
       if (res.error === 'PENDING_APPROVAL') {
         setError('⏳ Your dealer account is pending admin approval.')
@@ -60,35 +61,30 @@ function LoginInner() {
       return
     }
 
-    // Éxito: navega a /post-login (centraliza la decisión de destino y evita flicker)
+    // Success: centralize destination in post-login.
     router.replace('/post-login')
   }
 
   // Paleta / estilos
-  const text = '#0f172a'
-  const aqua = '#00B2CA'
-  const deep = '#007A99'
+  const text = 'var(--gg-ink)'
+  const aqua = 'var(--gg-aqua-600)'
+  const deep = 'var(--gg-navy-800)'
 
-  // Mientras verifica sesión o si ya hay sesión, no pintes el form (evita parpadeo)
-  if (status === 'loading' || status === 'authenticated') {
+  // While session is loading, keep a stable shell.
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6"
-           style={{ background: 'linear-gradient(180deg, #f2f7f9 0%, #e9f2f5 100%)' }}>
+      <div className="gg-shell-bg min-h-screen flex items-center justify-center p-6">
         <div className="text-slate-600">Loading…</div>
       </div>
     )
   }
 
+  if (status === 'authenticated') {
+    return null
+  }
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6"
-      style={{
-        background:
-          'radial-gradient(1200px 700px at 90% 5%, #e6f7fa 0%, transparent 60%), ' +
-          'radial-gradient(900px 600px at 10% 100%, rgba(0,178,202,.10) 0%, transparent 60%), ' +
-          'linear-gradient(180deg, #f2f7f9 0%, #e9f2f5 100%)'
-      }}
-    >
+    <div className="gg-shell-bg min-h-screen flex items-center justify-center p-6">
       <div className="relative w-full max-w-md">
         <div className="absolute -inset-[1.5px] rounded-[28px] blur-sm"
              style={{ background: `linear-gradient(120deg, ${aqua}, ${deep})` }} />
@@ -116,8 +112,7 @@ function LoginInner() {
                   required
                   autoComplete="email"
                   placeholder="you@company.com"
-                  className="field-input"
-                  style={{ ['--fi-pl' as any]: '3rem' }}
+                  className="field-input field-input--left-icon"
                 />
               </div>
             </div>
@@ -136,8 +131,7 @@ function LoginInner() {
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="field-input"
-                  style={{ ['--fi-pl' as any]: '3rem', ['--fi-pr' as any]: '3rem' }}
+                  className="field-input field-input--left-icon field-input--right-icon"
                 />
                 <button
                   type="button"
@@ -187,16 +181,15 @@ function LoginInner() {
           border-radius: 0.75rem;
           font-size: 15px;
           height: 44px;
-
-          --fi-pl: 0.75rem; /* default 12px */
-          --fi-pr: 0.75rem;
-          padding: 0.625rem var(--fi-pr) 0.625rem var(--fi-pl);
+          padding: 0.625rem 0.75rem;
         }
+        .field-input--left-icon { padding-left: 3rem; }
+        .field-input--right-icon { padding-right: 3rem; }
         .field-input::placeholder { color: #475569; }
         .field-input:focus {
           outline: none;
-          box-shadow: 0 0 0 2px #00B2CA22;
-          border-color: #007A99;
+          box-shadow: 0 0 0 2px rgba(35, 189, 215, 0.18);
+          border-color: #124764;
         }
       `}</style>
     </div>
@@ -208,8 +201,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center p-6"
-             style={{ background: 'linear-gradient(180deg, #f2f7f9 0%, #e9f2f5 100%)' }}>
+        <div className="gg-shell-bg min-h-screen flex items-center justify-center p-6">
           <div className="text-slate-600">Loading…</div>
         </div>
       }

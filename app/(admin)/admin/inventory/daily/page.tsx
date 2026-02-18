@@ -15,6 +15,10 @@ type ItemRow = {
 }
 type CategoryBlock = { name: string; items: ItemRow[] }
 
+function toErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
+
 function yyyyMmDd(d: Date) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -51,8 +55,8 @@ export default function DailyInventoryPage() {
         // default: Fort Plain si existe
         const fort = locs.find(l => l.name.toLowerCase() === 'fort plain')
         setLocationId((fort?.id ?? locs[0]?.id) || '')
-      } catch (e: any) {
-        setError(e?.message ?? 'Failed to load locations')
+      } catch (e: unknown) {
+        setError(toErrorMessage(e, 'Failed to load locations'))
       }
     })()
   }, [])
@@ -73,10 +77,10 @@ export default function DailyInventoryPage() {
       setSheetId(json?.sheetId ?? '')
       setCategories(json?.categories ?? [])
       setPending({}) // limpiar cambios al refrescar
-    } catch (e: any) {
+    } catch (e: unknown) {
       setCategories([])
       setSheetId('')
-      setError(e?.message ?? 'Failed to load daily inventory')
+      setError(toErrorMessage(e, 'Failed to load daily inventory'))
     } finally {
       setLoading(false)
     }
@@ -106,6 +110,33 @@ export default function DailyInventoryPage() {
     )
   }
 
+  function applyEquilibrium() {
+    // Punto de equilibrio operativo: sugerir pedido para volver a minStock.
+    // qtyToOrder = max(minStock - onHand, 0)
+    setCategories(prev =>
+      prev.map(cat => ({
+        ...cat,
+        items: cat.items.map(it => ({
+          ...it,
+          qtyToOrder: Math.max((it.minStock ?? 0) - (it.onHand ?? 0), 0),
+        })),
+      }))
+    )
+
+    setPending(prev => {
+      const next = { ...prev }
+      categories.forEach(cat => {
+        cat.items.forEach(it => {
+          next[it.itemId] = {
+            ...(next[it.itemId] ?? {}),
+            qtyToOrder: Math.max((it.minStock ?? 0) - (it.onHand ?? 0), 0),
+          }
+        })
+      })
+      return next
+    })
+  }
+
   async function save() {
     if (!pendingCount) return
     setSaving(true)
@@ -129,8 +160,8 @@ export default function DailyInventoryPage() {
       setPending({})
       // opcional: reload para asegurar estado
       await loadDaily()
-    } catch (e: any) {
-      setError(e?.message ?? 'Save failed')
+    } catch (e: unknown) {
+      setError(toErrorMessage(e, 'Save failed'))
     } finally {
       setSaving(false)
     }
@@ -165,12 +196,22 @@ export default function DailyInventoryPage() {
                   Fill <span className="font-semibold">QTY ON HAND</span> and{' '}
                   <span className="font-semibold">QTY TO ORDER</span>. Google Sheets vibes, but with less chaos.
                 </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  `Auto To Min` uses `Min` as equilibrium point and suggests `Qty To Order`.
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
                   Pending changes: {pendingCount}
                 </div>
+                <button
+                  onClick={applyEquilibrium}
+                  disabled={loading || categories.length === 0}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Auto To Min
+                </button>
                 <button
                   onClick={save}
                   disabled={saving || pendingCount === 0}

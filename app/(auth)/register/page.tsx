@@ -50,33 +50,24 @@ export default function RegisterPage() {
     }
 
     // paleta de alto contraste
-    const text = '#0f172a'      // slate-900
-    const textSub = '#334155'   // slate-700
-    const line = '#94a3b8'      // slate-400
-    const aqua = '#00B2CA'
-    const deep = '#007A99'
+    const text = 'var(--gg-ink)'
+    const textSub = 'var(--gg-muted)'
+    const line = 'var(--gg-border)'
+    const aqua = 'var(--gg-aqua-600)'
+    const deep = 'var(--gg-navy-800)'
 
     const pwdLen = formData.password.length
     const pwdPct = Math.min(100, pwdLen * 12)
     const strengthColor = pwdLen >= 10 ? '#16a34a' : pwdLen >= 6 ? '#eab308' : '#ef4444'
 
     return (
-        <div
-            className="min-h-screen flex items-center justify-center p-6"
-            style={{
-                // Fondo claro, suave, sin negro
-                background:
-                    'radial-gradient(1200px 700px at 85% -10%, #E6F7FA 0%, transparent 60%), ' +
-                    'radial-gradient(900px 600px at 10% 100%, rgba(0,178,202,.10) 0%, transparent 60%), ' +
-                    'linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)'
-            }}
-        >
+        <div className="gg-shell-bg min-h-screen flex items-center justify-center p-6">
             <div
                 className="w-full max-w-5xl rounded-3xl border overflow-hidden"
                 style={{
-                    borderColor: '#e2e8f0',
+                    borderColor: line,
                     background: 'rgba(255,255,255,0.85)',
-                    boxShadow: '0 24px 60px rgba(0,122,153,0.13)',
+                    boxShadow: '0 24px 60px rgba(13,47,69,0.14)',
                     backdropFilter: 'blur(8px)'
                 }}
             >
@@ -290,8 +281,8 @@ export default function RegisterPage() {
         .field-input::placeholder { color: #64748b; } /* slate-500/600 */
         .field-input:focus {
           outline: none;
-          box-shadow: 0 0 0 3px #00B2CA22;
-          border-color: #007A99;
+          box-shadow: 0 0 0 3px rgba(35, 189, 215, 0.18);
+          border-color: #124764;
           background: #fff;
         }
       `}</style>

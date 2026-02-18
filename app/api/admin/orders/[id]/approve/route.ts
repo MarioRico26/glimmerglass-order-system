@@ -9,7 +9,7 @@ import { OrderDocType } from '@prisma/client'
 
 const REQUIRED: OrderDocType[] = ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE']
 
-function json(message: string, status = 400, extra?: Record<string, any>) {
+function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
@@ -20,7 +20,7 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
 
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, paymentProofUrl: true },
     })
     if (!order) return json('Order not found', 404)
 
@@ -30,6 +30,9 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     })
 
     const present = new Set(media.map((m) => m.docType).filter(Boolean) as OrderDocType[])
+    if (order.paymentProofUrl) {
+      present.add('PROOF_OF_PAYMENT')
+    }
     const missingDocs = REQUIRED.filter((d) => !present.has(d))
 
     if (missingDocs.length) {
@@ -46,7 +49,7 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     })
 
     return NextResponse.json(updated, { status: 200, headers: { 'Cache-Control': 'no-store' } })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('PATCH /api/admin/orders/[id]/approve error:', e)
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })
   }

@@ -6,8 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -45,6 +45,20 @@
 
 :root {
   --radius: 0.625rem;
+  --font-heading: "Avenir Next", "Montserrat", "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-body: "Avenir Next", "Lato", "Helvetica Neue", "Segoe UI", sans-serif;
+  --gg-navy-900: #0d2f45;
+  --gg-navy-800: #124764;
+  --gg-aqua-600: #00a9ca;
+  --gg-aqua-500: #23bdd7;
+  --gg-seafoam-100: #e7f6fb;
+  --gg-mist-50: #f5fbfe;
+  --gg-ink: #132839;
+  --gg-canvas: #f2f9fc;
+  --gg-panel: #ffffff;
+  --gg-border: #d5e7ef;
+  --gg-muted: #5b7282;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -118,5 +132,67 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-body), "Segoe UI", sans-serif;
+    background-image:
+      radial-gradient(1200px 700px at 85% -10%, rgba(35, 189, 215, 0.22) 0%, transparent 62%),
+      radial-gradient(900px 540px at -10% 95%, rgba(18, 71, 100, 0.16) 0%, transparent 58%),
+      linear-gradient(180deg, var(--gg-mist-50) 0%, var(--gg-canvas) 100%);
+    color: var(--gg-ink);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-heading), "Segoe UI", sans-serif;
+    letter-spacing: 0.01em;
+    color: var(--gg-navy-900);
+  }
+
+  a {
+    color: var(--gg-navy-800);
+    text-underline-offset: 2px;
+  }
+
+  button {
+    font-family: var(--font-body), "Segoe UI", sans-serif;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    border-color: var(--gg-border);
+    color: var(--gg-ink);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--gg-aqua-600);
+    box-shadow: 0 0 0 3px rgba(35, 189, 215, 0.18);
+  }
+
+  th {
+    color: var(--gg-muted);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+}
+
+@layer utilities {
+  .gg-shell-bg {
+    background:
+      radial-gradient(1100px 700px at 80% 0%, rgba(35,189,215,0.20) 0%, transparent 60%),
+      radial-gradient(800px 500px at 10% 90%, rgba(18,71,100,0.14) 0%, transparent 60%),
+      linear-gradient(180deg, #F5FBFE 0%, #EEF8FC 100%);
+  }
+
+  .gg-card {
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid var(--gg-border);
+    box-shadow: 0 24px 64px rgba(13, 47, 69, 0.14);
+    backdrop-filter: blur(10px);
+  }
+
+  .gg-gradient {
+    background-image: linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800));
   }
 }

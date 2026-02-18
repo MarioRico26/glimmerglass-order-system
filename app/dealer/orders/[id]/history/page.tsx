@@ -11,8 +11,10 @@ import {
   BadgeDollarSign,
   AlertCircle,
   FileDown,
+  type LucideIcon,
 } from 'lucide-react'
 
+import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { STATUS_LABELS, labelDocType, type FlowStatus } from '@/lib/orderFlow'
 
 type OrderHistory = {
@@ -31,6 +33,12 @@ type OrderMedia = {
   url?: string
 }
 
+type DealerOrderSummary = {
+  id: string
+  poolModel?: { name: string; blueprintUrl?: string | null } | null
+  blueprintMarkers?: BlueprintMarker[]
+}
+
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
@@ -40,7 +48,7 @@ function toApiUrl(u: string) {
 }
 
 // ✅ APPROVED eliminado
-const STATUS_META: Record<string, { icon: any; badge: string }> = {
+const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
   PENDING_PAYMENT_APPROVAL: {
     icon: BadgeDollarSign,
     badge: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -74,6 +82,7 @@ export default function DealerOrderHistoryPage() {
 
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [media, setMedia] = useState<OrderMedia[]>([])
+  const [summary, setSummary] = useState<DealerOrderSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -95,20 +104,29 @@ export default function DealerOrderHistoryPage() {
         setLoading(true)
         setError(null)
 
-        const hRes = await fetch(`/api/dealer/orders/${orderId}/history`, { cache: 'no-store' })
+        const [hRes, mRes, sRes] = await Promise.all([
+          fetch(`/api/dealer/orders/${orderId}/history`, { cache: 'no-store' }),
+          fetch(`/api/orders/${orderId}/media`, { cache: 'no-store' }),
+          fetch(`/api/dealer/orders/${orderId}/summary`, { cache: 'no-store' }),
+        ])
+
         const hJson = await hRes.json().catch(() => null)
         if (!hRes.ok) throw new Error(hJson?.message || `Failed to load history (${hRes.status})`)
 
-        const mRes = await fetch(`/api/orders/${orderId}/media`, { cache: 'no-store' })
         const mJson = await mRes.json().catch(() => null)
         if (!mRes.ok) throw new Error(mJson?.message || `Failed to load files (${mRes.status})`)
+
+        const sJson = await sRes.json().catch(() => null)
+        if (!sRes.ok) throw new Error(sJson?.message || `Failed to load order summary (${sRes.status})`)
 
         if (!abort) {
           setHistory(Array.isArray(hJson) ? hJson : [])
           setMedia(Array.isArray(mJson) ? mJson : [])
+          setSummary(sJson && typeof sJson === 'object' ? (sJson as DealerOrderSummary) : null)
         }
-      } catch (e: any) {
-        if (!abort) setError(e?.message || 'Error loading data')
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Error loading data'
+        if (!abort) setError(msg)
       } finally {
         if (!abort) setLoading(false)
       }
@@ -124,6 +142,15 @@ export default function DealerOrderHistoryPage() {
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Order History &amp; Files</h1>
         <p className="text-slate-600">Timeline updates and dealer-visible documents for this order.</p>
+      </div>
+
+      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">
+        <BlueprintMarkersCard
+          title="Blueprint Markers"
+          subtitle="Skimmer, return and drain points saved on your order."
+          blueprintUrl={summary?.poolModel?.blueprintUrl ?? null}
+          markers={summary?.blueprintMarkers ?? []}
+        />
       </div>
 
       {/* TIMELINE */}

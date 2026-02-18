@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glimmerglass Order System - Visual Diagrams</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        margin: 0;
+        background: #f5f8fb;
+        color: #0f172a;
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dbe3ef;
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 18px;
+      }
+      h1 { margin: 0 0 6px; }
+      h2 { margin: 0 0 10px; font-size: 18px; }
+      p.meta { margin: 0 0 18px; color: #475569; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Glimmerglass Order System</h1>
+      <p class="meta">Visual architecture and operational flow diagrams</p>
+
+      <div class="card">
+        <h2>System Context</h2>
+        <pre class="mermaid">
+flowchart LR
+  Dealer["Dealer Portal User"]
+  Admin["Admin / Operations User"]
+  System["Glimmerglass Order System (Next.js Monolith)"]
+  DB["PostgreSQL (Neon)"]
+  Blob["Vercel Blob Storage"]
+  Auth["NextAuth (sessions + roles)"]
+  Dealer --> System
+  Admin --> System
+  System --> Auth
+  System --> DB
+  System --> Blob
+        </pre>
+      </div>
+
+      <div class="card">
+        <h2>Order Lifecycle</h2>
+        <pre class="mermaid">
+flowchart LR
+  P["Pending Payment Approval"] --> I["In Production"]
+  I --> S["Pre-Shipping"]
+  S --> C["Completed"]
+  P --> X["Canceled"]
+  I --> X
+  S --> X
+        </pre>
+      </div>
+
+      <div class="card">
+        <h2>Status Gates</h2>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING_PAYMENT_APPROVAL
+  PENDING_PAYMENT_APPROVAL --> IN_PRODUCTION: "PROOF_OF_PAYMENT + QUOTE + INVOICE"
+  IN_PRODUCTION --> PRE_SHIPPING: "BUILD_SHEET + POST_PRODUCTION_MEDIA + serialNumber"
+  PRE_SHIPPING --> COMPLETED: "SHIPPING_CHECKLIST + PRE_SHIPPING_MEDIA + BILL_OF_LADING + PROOF_OF_FINAL_PAYMENT + PAID_INVOICE + serialNumber"
+  PENDING_PAYMENT_APPROVAL --> CANCELED
+  IN_PRODUCTION --> CANCELED
+  PRE_SHIPPING --> CANCELED
+        </pre>
+      </div>
+
+      <div class="card">
+        <h2>Pool Stock Flow</h2>
+        <pre class="mermaid">
+flowchart TD
+  A["Admin Pool Stock Console"] --> B["Create or adjust stock row"]
+  B --> C["Log movement txn"]
+  C --> D["Dealer In-Stock view"]
+  D --> E["Dealer New Order availability hint"]
+        </pre>
+      </div>
+
+      <div class="card">
+        <h2>Inventory Flow</h2>
+        <pre class="mermaid">
+flowchart TD
+  A["Category + Item setup"] --> B["Stock per location"]
+  B --> C["IN / OUT / ADJUST transactions"]
+  C --> D["Daily reorder sheets"]
+        </pre>
+      </div>
+    </div>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+    </script>
+  </body>
+</html>

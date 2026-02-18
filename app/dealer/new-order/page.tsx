@@ -32,7 +32,8 @@ type Color = {
   swatchUrl?: string | null
 }
 
-type BlueprintMarker = { type: 'skimmer' | 'return'; x: number; y: number }
+type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
+type ReadyStockSummary = { poolModel: { id: string } | null; quantity: number }
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
@@ -60,9 +61,11 @@ export default function NewOrderPage() {
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
   const [modelSearch, setModelSearch] = useState('')
+  const [onlyReadyModels, setOnlyReadyModels] = useState(false)
   const [markerType, setMarkerType] = useState<BlueprintMarker['type']>('skimmer')
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
   const blueprintRef = useRef<HTMLDivElement | null>(null)
+  const [readyStockRows, setReadyStockRows] = useState<ReadyStockSummary[]>([])
   const [inStock, setInStock] = useState<
     {
       id: string
@@ -92,11 +95,22 @@ export default function NewOrderPage() {
     [models, poolModelId]
   )
 
-  const filteredModels = useMemo(() => {
+  const readyQtyByModel = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of readyStockRows) {
+      const modelId = row.poolModel?.id
+      if (!modelId) continue
+      map.set(modelId, (map.get(modelId) || 0) + (row.quantity || 0))
+    }
+    return map
+  }, [readyStockRows])
+
+  const visibleModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
-    if (!q) return models
-    return models.filter((m) => m.name.toLowerCase().includes(q))
-  }, [models, modelSearch])
+    const searched = !q ? models : models.filter((m) => m.name.toLowerCase().includes(q))
+    if (!onlyReadyModels) return searched
+    return searched.filter((m) => (readyQtyByModel.get(m.id) || 0) > 0)
+  }, [models, modelSearch, onlyReadyModels, readyQtyByModel])
 
   const blueprintIsPdf = useMemo(() => {
     const url = activeModel?.blueprintUrl || ''
@@ -142,18 +156,24 @@ export default function NewOrderPage() {
           })
         }
 
-        const [mRes, cRes] = await Promise.all([
+        const [mRes, cRes, sRes] = await Promise.all([
           fetch('/api/catalog/pool-models'),
           fetch('/api/catalog/colors'),
+          fetch('/api/dealer/in-stock', { cache: 'no-store' }),
         ])
 
-        const [mJson, cJson] = await Promise.all([mRes.json(), cRes.json()])
+        const [mJson, cJson, sJson] = await Promise.all([
+          mRes.json(),
+          cRes.json(),
+          sRes.json().catch(() => null),
+        ])
 
         if (!mRes.ok) throw new Error(mJson?.message || 'Error loading pool models')
         if (!cRes.ok) throw new Error(cJson?.message || 'Error loading colors')
 
         setModels(mJson.items || [])
         setColors(cJson.items || [])
+        setReadyStockRows(Array.isArray(sJson?.items) ? sJson.items : [])
       } catch (e: unknown) {
         setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Error fetching data' })
       } finally {
@@ -490,69 +510,109 @@ export default function NewOrderPage() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
               />
 
-              <div className="grid gap-3 md:grid-cols-2">
-                {filteredModels.map((m) => {
-                  const selected = poolModelId === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setPoolModelId(m.id)}
-                      className={[
-                        'text-left rounded-2xl border bg-white overflow-hidden shadow-sm transition',
-                        selected
-                          ? 'border-sky-300 ring-2 ring-sky-200'
-                          : 'border-slate-200 hover:border-slate-300',
-                      ].join(' ')}
-                    >
-                      <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
-                        {m.imageUrl ? (
-                          <img
-                            src={m.imageUrl}
-                            alt={m.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm">
-                            No image
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-bold text-slate-900">{m.name}</div>
-                          {selected ? (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                              Selected
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
-                          <span>L: {m.lengthFt ?? '-'} ft</span>
-                          <span>W: {m.widthFt ?? '-'} ft</span>
-                          <span>D: {m.depthFt ?? '-'} ft</span>
-                        </div>
-                        <div className="mt-2 text-xs text-slate-500">
-                          Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
-                        </div>
-                        <div className="mt-2 text-xs">
-                          {m.blueprintUrl ? (
-                            <a
-                              href={m.blueprintUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sky-700 underline"
-                            >
-                              View blueprint
-                            </a>
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={onlyReadyModels}
+                    onChange={(e) => setOnlyReadyModels(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Show available pools only (READY stock)
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">
+                    {visibleModels.length} models shown
+                  </span>
+                  <a
+                    href="/dealer/in-stock"
+                    className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    View In-Stock List
+                  </a>
+                </div>
+              </div>
+
+              {visibleModels.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                  No pool models match the current filters.
+                </div>
+              ) : null}
+
+              <div className="max-h-[36rem] overflow-auto pr-1">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleModels.map((m) => {
+                    const readyQty = readyQtyByModel.get(m.id) || 0
+                    const selected = poolModelId === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setPoolModelId(m.id)}
+                        className={[
+                          'text-left rounded-2xl border bg-white overflow-hidden shadow-sm transition',
+                          selected
+                            ? 'border-sky-300 ring-2 ring-sky-200'
+                            : 'border-slate-200 hover:border-slate-300',
+                        ].join(' ')}
+                      >
+                        <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
+                          {m.imageUrl ? (
+                            <img
+                              src={m.imageUrl}
+                              alt={m.name}
+                              className="h-full w-full object-cover"
+                            />
                           ) : (
-                            <span className="text-slate-400">No blueprint</span>
+                            <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm">
+                              No image
+                            </div>
                           )}
                         </div>
-                      </div>
-                    </button>
-                  )
-                })}
+                        <div className="p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-bold text-slate-900">{m.name}</div>
+                            {readyQty > 0 ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                In stock: {readyQty}
+                              </span>
+                            ) : selected ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                                Selected
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                Build to order
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
+                            <span>L: {m.lengthFt ?? '-'} ft</span>
+                            <span>W: {m.widthFt ?? '-'} ft</span>
+                            <span>D: {m.depthFt ?? '-'} ft</span>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
+                          </div>
+                          <div className="mt-2 text-xs">
+                            {m.blueprintUrl ? (
+                              <a
+                                href={m.blueprintUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sky-700 underline"
+                              >
+                                View blueprint
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">No blueprint</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -646,7 +706,7 @@ export default function NewOrderPage() {
                           className="mt-1"
                         />
                         <span>
-                          ✅ Disponible ahora en {row.factory?.name || 'Factory'} ({row.quantity} unidades) • {labelEta(row.eta)}
+                          ✅ Available now at {row.factory?.name || 'Factory'} ({row.quantity} units) • {labelEta(row.eta)}
                         </span>
                       </label>
                     ))}
@@ -703,6 +763,18 @@ export default function NewOrderPage() {
                   >
                     Return
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkerType('drain')}
+                    className={[
+                      'px-3 py-1 rounded-full text-xs font-semibold border',
+                      markerType === 'drain'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-white text-slate-700 border-slate-200',
+                    ].join(' ')}
+                  >
+                    Main Drain
+                  </button>
                   {markers.length > 0 && (
                     <button
                       type="button"
@@ -747,7 +819,9 @@ export default function NewOrderPage() {
                           'absolute flex items-center justify-center rounded-full text-[10px] font-bold shadow',
                           m.type === 'skimmer'
                             ? 'bg-sky-600 text-white'
-                            : 'bg-emerald-600 text-white',
+                            : m.type === 'return'
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-rose-600 text-white',
                         ].join(' ')}
                         style={{
                           left: `${m.x}%`,
@@ -757,7 +831,7 @@ export default function NewOrderPage() {
                           transform: 'translate(-50%, -50%)',
                         }}
                       >
-                        {m.type === 'skimmer' ? 'S' : 'R'}
+                        {m.type === 'skimmer' ? 'S' : m.type === 'return' ? 'R' : 'D'}
                       </div>
                     ))}
                   </div>

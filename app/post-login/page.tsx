@@ -12,7 +12,7 @@ export default async function PostLoginPage() {
     redirect('/login')
   }
 
-  const u = session.user as any
+  const u = session.user as { role?: string; approved?: boolean }
 
   if (u.role === 'SUPERADMIN') {
     redirect('/superadmin')

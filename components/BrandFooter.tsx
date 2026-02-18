@@ -4,24 +4,22 @@
 import Link from 'next/link'
 
 export default function BrandFooter() {
-  const aqua = '#00B2CA'
-  const deep = '#007A99'
   const year = new Date().getFullYear()
 
   return (
     <footer className="mt-8">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="relative rounded-2xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,122,153,0.12)] overflow-hidden">
+        <div className="relative rounded-2xl border bg-white/82 backdrop-blur-xl shadow-[0_14px_34px_rgba(13,47,69,0.14)] overflow-hidden [border-color:var(--gg-border)]">
           {/* hairline gradient top */}
           <div
             className="h-1 w-full"
-            style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+            style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
           />
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-4">
             {/* Left: Powered by */}
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-600">Powered by</span>
+              <span className="text-sm [color:var(--gg-muted)]">Powered by</span>
 
               {/* ByteNetworks pill */}
               <Link
@@ -34,22 +32,22 @@ export default function BrandFooter() {
                 {/* Simple mark */}
                 <span
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full text-white text-[11px] font-black shadow"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+                  style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
                 >
                   BN
                 </span>
-                <span className="text-sm font-semibold text-slate-800">
+                <span className="text-sm font-semibold [font-family:var(--font-heading)] [color:var(--gg-navy-900)]">
                   ByteNetworks
                 </span>
                 <span
                   className="ml-1 block h-[2px] w-0 group-hover:w-8 rounded-full transition-all"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
+                  style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
                 />
               </Link>
             </div>
 
             {/* Right: tagline */}
-            <div className="text-xs text-slate-500 text-center sm:text-right">
+            <div className="text-xs text-center sm:text-right [color:var(--gg-muted)]">
               Design & Engineering by ByteNetworks • © {year}
             </div>
           </div>
