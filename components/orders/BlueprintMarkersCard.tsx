@@ -93,7 +93,7 @@ export default function BlueprintMarkersCard({
 
           {blueprintUrl && isPdf(blueprintUrl) ? (
             <div className="mb-3 text-xs text-slate-600">
-              Blueprint is a PDF.
+              Dig sheet is a PDF.
               {' '}
               <Link
                 href={blueprintUrl}
@@ -101,7 +101,7 @@ export default function BlueprintMarkersCard({
                 rel="noopener noreferrer"
                 className="text-sky-700 hover:underline font-semibold"
               >
-                Open blueprint
+                Open dig sheet
               </Link>
             </div>
           ) : null}

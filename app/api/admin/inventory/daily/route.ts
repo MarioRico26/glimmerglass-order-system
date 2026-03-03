@@ -118,10 +118,10 @@ export async function GET(req: Request) {
         sku: it.sku,
         item: it.name,
         unit: it.unit,
-        minStock: it.minStock,
+        minStock: Number(it.minStock),
         category: catName,
-        onHand: line?.onHand ?? 0,
-        qtyToOrder: line?.qtyToOrder ?? 0,
+        onHand: Number(line?.onHand ?? 0),
+        qtyToOrder: Number(line?.qtyToOrder ?? 0),
       }
 
       const arr = grouped.get(catName) ?? []

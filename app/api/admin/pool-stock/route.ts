@@ -79,6 +79,12 @@ export async function POST(req: NextRequest) {
     const notesRaw = body?.notes
     const notes = typeof notesRaw === 'string' && notesRaw.trim() !== '' ? notesRaw.trim() : null
     const etaRaw = body?.eta
+    const productionDateRaw = body?.productionDate
+    const serialNumberRaw = body?.serialNumber
+    const serialNumber =
+      typeof serialNumberRaw === 'string' && serialNumberRaw.trim() !== ''
+        ? serialNumberRaw.trim()
+        : null
     const referenceOrderId = body?.referenceOrderId ?? null
 
     if (!factoryId || !poolModelId || !status) {
@@ -94,6 +100,22 @@ export async function POST(req: NextRequest) {
     }
 
     const eta = etaRaw ? parseDateInput(etaRaw) : null
+    const productionDate = productionDateRaw ? parseDateInput(productionDateRaw) : null
+
+    if (status === 'READY' && quantity > 0) {
+      if (!serialNumber) {
+        return NextResponse.json(
+          { message: 'serialNumber is required for READY stock rows' },
+          { status: 400 }
+        )
+      }
+      if (!productionDate) {
+        return NextResponse.json(
+          { message: 'productionDate is required for READY stock rows' },
+          { status: 400 }
+        )
+      }
+    }
     const colorKey = colorKeyOf(colorId)
 
     const item = await prisma.$transaction(async (tx) => {
@@ -114,11 +136,16 @@ export async function POST(req: NextRequest) {
           status,
           quantity,
           eta,
+          productionDate,
+          serialNumber,
           notes,
         },
         update: {
           quantity: quantity > 0 ? { increment: quantity } : undefined,
           eta: etaRaw !== undefined ? eta : undefined,
+          productionDate:
+            productionDateRaw !== undefined ? productionDate : undefined,
+          serialNumber: serialNumberRaw !== undefined ? serialNumber : undefined,
           notes: notesRaw !== undefined ? notes : undefined,
         },
         include: baseInclude,

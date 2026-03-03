@@ -11,6 +11,7 @@ const STATUSES = [
     { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending payment approval' },
     { value: 'APPROVED', label: 'Approved' },
     { value: 'IN_PRODUCTION', label: 'In production' },
+    { value: 'PRE_SHIPPING', label: 'Pre-shipping' },
     { value: 'COMPLETED', label: 'Completed' },
     { value: 'CANCELED', label: 'Canceled' },
 ]

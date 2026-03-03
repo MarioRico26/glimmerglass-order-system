@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   })
 
   if (!item) return json({ message: 'Not found' }, 404)
-  return json(item)
+  return json({ ...item, minStock: Number(item.minStock) })
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     include: { category: { select: { id: true, name: true } } },
   })
 
-  return json(updated)
+  return json({ ...updated, minStock: Number(updated.minStock) })
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {

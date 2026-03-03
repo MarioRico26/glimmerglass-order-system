@@ -132,7 +132,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
               className={[
                 'rounded-2xl border bg-white/88 backdrop-blur-xl p-3 shadow-[0_18px_46px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]',
                 'flex flex-col justify-between',
-                'lg:h-[calc(100vh-6rem)]',
+                'lg:h-[calc(100vh-6rem)] lg:max-h-[calc(100vh-6rem)] overflow-y-auto',
                 open ? 'block' : 'hidden lg:flex',
               ].join(' ')}
             >

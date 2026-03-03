@@ -6,6 +6,44 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
+import { PenetrationMode } from '@prisma/client'
+
+type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
+
+function parseBlueprintMarkers(input: unknown) {
+  if (input === null || input === undefined || input === '') {
+    return { markers: null as BlueprintMarker[] | null, error: null as string | null }
+  }
+
+  let parsed: unknown = input
+  if (typeof input === 'string') {
+    try {
+      parsed = JSON.parse(input)
+    } catch {
+      return { markers: null, error: 'Invalid blueprint markers JSON' }
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { markers: null, error: 'Blueprint markers must be an array' }
+  }
+
+  const normalized: BlueprintMarker[] = []
+  for (const entry of parsed) {
+    const type = (entry as { type?: unknown })?.type
+    const x = Number((entry as { x?: unknown })?.x)
+    const y = Number((entry as { y?: unknown })?.y)
+    if ((type !== 'skimmer' && type !== 'return' && type !== 'drain') || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return { markers: null, error: 'Invalid blueprint marker' }
+    }
+    if (x < 0 || x > 100 || y < 0 || y > 100) {
+      return { markers: null, error: 'Blueprint marker out of range' }
+    }
+    normalized.push({ type, x, y })
+  }
+
+  return { markers: normalized.length ? normalized : null, error: null as string | null }
+}
 
 // GET: obtener lista de pedidos con filtros, paginación y relaciones
 export async function GET(req: NextRequest) {
@@ -108,6 +146,12 @@ export async function GET(req: NextRequest) {
             widthFt: true,
             depthFt: true,
             shape: true,
+            defaultFactoryLocation: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         color: {
@@ -160,11 +204,72 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+    const penetrationModeRaw = body?.penetrationMode
+    const penetrationMode: PenetrationMode =
+      penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
+      penetrationModeRaw === 'NO_PENETRATIONS'
+        ? penetrationModeRaw
+        : 'PENETRATIONS_WITHOUT_INSTALL'
 
     const requiredFields = ['deliveryAddress', 'dealerId', 'poolModelId', 'colorId', 'factoryLocationId']
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json({ message: `Missing required field: ${field}` }, { status: 400 })
+      }
+    }
+
+    const markerResult = parseBlueprintMarkers(body?.blueprintMarkers)
+    if (markerResult.error) {
+      return NextResponse.json({ message: markerResult.error }, { status: 400 })
+    }
+
+    const selectedPoolModel = await prisma.poolModel.findUnique({
+      where: { id: body.poolModelId },
+      select: {
+        id: true,
+        maxSkimmers: true,
+        maxReturns: true,
+        maxMainDrains: true,
+      },
+    })
+    if (!selectedPoolModel) {
+      return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+    }
+
+    let blueprintMarkers = markerResult.markers
+    if (penetrationMode === 'NO_PENETRATIONS') {
+      blueprintMarkers = null
+    } else if (blueprintMarkers?.length) {
+      const countSkimmers = blueprintMarkers.filter((m) => m.type === 'skimmer').length
+      const countReturns = blueprintMarkers.filter((m) => m.type === 'return').length
+      const countDrains = blueprintMarkers.filter((m) => m.type === 'drain').length
+
+      if (
+        typeof selectedPoolModel.maxSkimmers === 'number' &&
+        countSkimmers > selectedPoolModel.maxSkimmers
+      ) {
+        return NextResponse.json(
+          { message: `Skimmer markers exceed model limit (${selectedPoolModel.maxSkimmers})` },
+          { status: 400 }
+        )
+      }
+      if (
+        typeof selectedPoolModel.maxReturns === 'number' &&
+        countReturns > selectedPoolModel.maxReturns
+      ) {
+        return NextResponse.json(
+          { message: `Return markers exceed model limit (${selectedPoolModel.maxReturns})` },
+          { status: 400 }
+        )
+      }
+      if (
+        typeof selectedPoolModel.maxMainDrains === 'number' &&
+        countDrains > selectedPoolModel.maxMainDrains
+      ) {
+        return NextResponse.json(
+          { message: `Main drain markers exceed model limit (${selectedPoolModel.maxMainDrains})` },
+          { status: 400 }
+        )
       }
     }
 
@@ -178,7 +283,9 @@ export async function POST(req: NextRequest) {
         factoryLocationId: body.factoryLocationId,
         notes: body.notes || null,
         paymentProofUrl: body.paymentProofUrl || null,
+        blueprintMarkers,
         shippingMethod: body.shippingMethod || null,
+        penetrationMode,
         hardwareSkimmer: body.hardwareSkimmer || false,
         hardwareAutocover: body.hardwareAutocover || false,
         hardwareReturns: body.hardwareReturns || false,

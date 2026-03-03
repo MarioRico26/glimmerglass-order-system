@@ -142,6 +142,11 @@ function LoginInner() {
                   {show ? <EyeOff size={18}/> : <Eye size={18}/>}
                 </button>
               </div>
+              <div className="text-right">
+                <a href="/forgot-password" className="text-xs font-semibold text-sky-700 hover:underline">
+                  Forgot password?
+                </a>
+              </div>
             </div>
 
             {/* Error */}

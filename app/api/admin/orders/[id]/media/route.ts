@@ -6,13 +6,16 @@ import { NextResponse, NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { MediaType, OrderDocType } from '@prisma/client'
+import { MediaType, OrderDocType, Role } from '@prisma/client'
 import { put } from '@vercel/blob'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
-  const p: any = ctx.params
-  return ('then' in p ? (await p).id : p.id) as string
+  const params = ctx.params
+  if (typeof (params as Promise<{ id: string }>).then === 'function') {
+    return (await (params as Promise<{ id: string }>)).id
+  }
+  return (params as { id: string }).id
 }
 
 function toMediaTypeFromMime(mime?: string): MediaType {
@@ -28,11 +31,18 @@ function toBool(v: FormDataEntryValue | null, fallback = true) {
   return s === 'true' || s === '1' || s === 'on' || s === 'yes'
 }
 
+function isAdminRole(role: unknown) {
+  return role === Role.ADMIN || role === Role.SUPERADMIN
+}
+
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (!isAdminRole((session.user as { role?: unknown }).role)) {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const orderId = await getOrderId(ctx)
@@ -63,6 +73,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (!session?.user?.email) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
     }
+    if (!isAdminRole((session.user as { role?: unknown }).role)) {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
+    }
 
     const orderId = await getOrderId(ctx)
     const form = await req.formData()
@@ -74,6 +87,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     // ✅ IMPORTANT: this is the business category you care about
     const docTypeRaw = (form.get('docType')?.toString() || '').trim()
+    const validDocTypes = new Set(Object.values(OrderDocType))
+    if (docTypeRaw && !validDocTypes.has(docTypeRaw as OrderDocType)) {
+      return NextResponse.json(
+        { message: 'Invalid docType' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
     const docType = docTypeRaw ? (docTypeRaw as OrderDocType) : null
 
     // ✅ dealer visibility

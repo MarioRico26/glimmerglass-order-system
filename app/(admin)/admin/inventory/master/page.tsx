@@ -354,6 +354,7 @@ export default function InventoryMasterPage() {
           />
           <input
             type="number"
+            step="0.01"
             value={itemMinStock}
             onChange={(e) => setItemMinStock(Number(e.target.value))}
             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
@@ -478,11 +479,12 @@ export default function InventoryMasterPage() {
                       />
                     </td>
                     <td className="py-3 pr-3 text-right">
-                      <input
-                        type="number"
-                        value={item.minStock}
-                        onChange={(e) =>
-                          setItems((prev) =>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.minStock}
+                              onChange={(e) =>
+                                setItems((prev) =>
                             prev.map((row) =>
                               row.id === item.id ? { ...row, minStock: Number(e.target.value) } : row
                             )

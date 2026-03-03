@@ -17,8 +17,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 
   PROOF_OF_PAYMENT: 'Proof of Payment',
-  QUOTE: 'Quote',
-  INVOICE: 'Invoice',
+  QUOTE: 'Order Form',
+  INVOICE: 'Invoice with deposit applied',
   PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
   PAID_INVOICE: 'Paid Invoice',
   BILL_OF_LADING: 'Bill of Lading',

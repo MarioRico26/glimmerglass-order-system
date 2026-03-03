@@ -18,8 +18,23 @@ model User {
 
   histories     OrderHistory[]
   inventoryTxns InventoryTxn[] @relation("InventoryTxnActor")
+  passwordResetTokens PasswordResetToken[]
 
   createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Dealer {
@@ -51,6 +66,7 @@ model Order {
   paymentProofUrl String?
   notes           String?
   blueprintMarkers Json?
+  penetrationMode PenetrationMode @default(PENETRATIONS_WITHOUT_INSTALL)
   createdAt       DateTime    @default(now())
 
   // hardware checkboxes
@@ -111,6 +127,15 @@ model OrderMedia {
   visibleToDealer Boolean       @default(true)
 }
 
+model OrderStatusRequirementTemplate {
+  id             String       @id @default(uuid())
+  status         OrderStatus  @unique
+  requiredDocs   OrderDocType[] @default([])
+  requiredFields String[]     @default([])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
 model PoolModel {
   id       String  @id @default(uuid())
   name     String
@@ -120,6 +145,9 @@ model PoolModel {
   shape    String?
   imageUrl String?
   blueprintUrl String?
+  maxSkimmers Int?
+  maxReturns Int?
+  maxMainDrains Int?
   defaultFactoryLocationId String?
   defaultFactoryLocation FactoryLocation? @relation("PoolModelDefaultFactory", fields: [defaultFactoryLocationId], references: [id])
   orders   Order[]
@@ -204,6 +232,8 @@ model PoolStock {
   status   PoolStockStatus
   quantity Int             @default(0)
   eta      DateTime?
+  productionDate DateTime?
+  serialNumber   String?
   notes    String?
   imageUrl String?
 
@@ -221,6 +251,7 @@ model PoolStock {
   @@index([poolModelId])
   @@index([colorId])
   @@index([status])
+  @@index([serialNumber])
 }
 
 model PoolStockTxn {
@@ -339,7 +370,7 @@ model InventoryItem {
   sortOrder Int @default(9999)
 
   active   Boolean @default(true)
-  minStock Int     @default(0)
+  minStock Decimal @default(0) @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
 
@@ -358,7 +389,7 @@ model InventoryStock {
   locationId String
 
   // QTY ON HAND
-  onHand Int @default(0)
+  onHand Decimal @default(0) @db.Decimal(12, 2)
 
   item     InventoryItem     @relation(fields: [itemId], references: [id])
   location InventoryLocation @relation(fields: [locationId], references: [id])
@@ -373,7 +404,7 @@ model InventoryTxn {
   createdAt DateTime @default(now())
 
   type  InventoryTxnType
-  qty   Int
+  qty   Decimal @db.Decimal(12, 2)
   notes String?
 
   itemId     String
@@ -416,10 +447,10 @@ model InventoryReorderLine {
   itemId     String
 
   // ✅ Snapshot diario (lo que contaron ese día)
-  onHand     Int    @default(0)
+  onHand     Decimal @default(0) @db.Decimal(12, 2)
 
   // ✅ Lo que quieren ordenar ese día
-  qtyToOrder Int    @default(0)
+  qtyToOrder Decimal @default(0) @db.Decimal(12, 2)
 
   sheet InventoryReorderSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
   item  InventoryItem         @relation(fields: [itemId], references: [id])
@@ -447,6 +478,12 @@ enum OrderStatus {
   PRE_SHIPPING
   COMPLETED
   CANCELED
+}
+
+enum PenetrationMode {
+  PENETRATIONS_WITH_INSTALL
+  PENETRATIONS_WITHOUT_INSTALL
+  NO_PENETRATIONS
 }
 
 enum MediaType {

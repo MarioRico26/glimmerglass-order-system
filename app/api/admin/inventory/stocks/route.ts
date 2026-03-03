@@ -40,5 +40,14 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return NextResponse.json({ stocks }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(
+    {
+      stocks: stocks.map((s) => ({
+        ...s,
+        onHand: Number(s.onHand),
+        item: s.item ? { ...s.item, minStock: Number(s.item.minStock) } : s.item,
+      })),
+    },
+    { headers: { 'Cache-Control': 'no-store' } }
+  )
 }

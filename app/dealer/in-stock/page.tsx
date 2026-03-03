@@ -9,6 +9,7 @@ type StockRow = {
   status: 'READY'
   quantity: number
   eta: string | null
+  productionDate: string | null
   imageUrl: string | null
   factory: { id: string; name: string; city?: string | null; state?: string | null }
   poolModel: { id: string; name: string; lengthFt?: number | null; widthFt?: number | null; depthFt?: number | null }
@@ -166,7 +167,7 @@ export default function DealerInStockPage() {
                   <th className="py-2 pr-3">Model</th>
                   <th className="py-2 pr-3">Color</th>
                   <th className="py-2 pr-3 text-right">Qty</th>
-                  <th className="py-2 pr-3">ETA</th>
+                  <th className="py-2 pr-3">Production Date</th>
                   <th className="py-2 pr-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -229,7 +230,7 @@ export default function DealerInStockPage() {
                     <td className="py-3 pr-3">
                       <div className="flex items-center gap-2 text-slate-700">
                         <Timer size={14} className="text-slate-400" />
-                        {toDate(it.eta)}
+                        {toDate(it.productionDate ?? it.eta)}
                       </div>
                     </td>
                     <td className="py-3 pr-3 text-right">

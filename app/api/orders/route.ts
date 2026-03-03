@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
-import { AuditAction, Role } from '@prisma/client'
+import { AuditAction, PenetrationMode, Role } from '@prisma/client'
 import { auditLog } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
@@ -116,6 +116,8 @@ export async function POST(req: NextRequest) {
     const deliveryAddress = formData.get('deliveryAddress')?.toString().trim() || ''
     const notes = formData.get('notes')?.toString().trim() || ''
     const shippingMethodRaw = formData.get('shippingMethod')?.toString().trim() || ''
+    const penetrationModeRaw =
+      formData.get('penetrationMode')?.toString().trim() || 'PENETRATIONS_WITHOUT_INSTALL'
     const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
     const blueprintMarkersRaw = formData.get('blueprintMarkers')?.toString().trim() || ''
     const poolStockId = formData.get('poolStockId')?.toString().trim() || ''
@@ -143,6 +145,17 @@ export async function POST(req: NextRequest) {
         return jsonError('Invalid shipping method', 400)
       }
       shippingMethod = shippingMethodRaw
+    }
+
+    let penetrationMode: PenetrationMode
+    if (
+      penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
+      penetrationModeRaw === 'PENETRATIONS_WITHOUT_INSTALL' ||
+      penetrationModeRaw === 'NO_PENETRATIONS'
+    ) {
+      penetrationMode = penetrationModeRaw
+    } else {
+      return jsonError('Invalid penetration mode', 400)
     }
 
     // Validar requestedShipDate (mínimo 4 semanas en el futuro)
@@ -194,6 +207,47 @@ export async function POST(req: NextRequest) {
         blueprintMarkers = normalized.length ? normalized : null
       } catch (err: any) {
         return jsonError(err?.message || 'Invalid blueprint marker', 400)
+      }
+    }
+
+    const selectedPoolModel = await prisma.poolModel.findUnique({
+      where: { id: poolModelId },
+      select: {
+        id: true,
+        defaultFactoryLocationId: true,
+        maxSkimmers: true,
+        maxReturns: true,
+        maxMainDrains: true,
+      },
+    })
+    if (!selectedPoolModel) {
+      return jsonError('Pool model not found', 404)
+    }
+
+    if (penetrationMode === 'NO_PENETRATIONS') {
+      blueprintMarkers = null
+    } else if (blueprintMarkers?.length) {
+      const countSkimmers = blueprintMarkers.filter((m) => m.type === 'skimmer').length
+      const countReturns = blueprintMarkers.filter((m) => m.type === 'return').length
+      const countDrains = blueprintMarkers.filter((m) => m.type === 'drain').length
+
+      if (
+        typeof selectedPoolModel.maxSkimmers === 'number' &&
+        countSkimmers > selectedPoolModel.maxSkimmers
+      ) {
+        return jsonError(`Skimmer markers exceed model limit (${selectedPoolModel.maxSkimmers})`, 400)
+      }
+      if (
+        typeof selectedPoolModel.maxReturns === 'number' &&
+        countReturns > selectedPoolModel.maxReturns
+      ) {
+        return jsonError(`Return markers exceed model limit (${selectedPoolModel.maxReturns})`, 400)
+      }
+      if (
+        typeof selectedPoolModel.maxMainDrains === 'number' &&
+        countDrains > selectedPoolModel.maxMainDrains
+      ) {
+        return jsonError(`Main drain markers exceed model limit (${selectedPoolModel.maxMainDrains})`, 400)
       }
     }
 
@@ -251,16 +305,7 @@ export async function POST(req: NextRequest) {
 
         factoryLocationId = stock.factoryId
       } else {
-        const poolModel = await tx.poolModel.findUnique({
-          where: { id: poolModelId },
-          select: { id: true, defaultFactoryLocationId: true },
-        })
-
-        if (!poolModel) {
-          throw Object.assign(new Error('Pool model not found'), { status: 404 })
-        }
-
-        factoryLocationId = poolModel.defaultFactoryLocationId ?? null
+        factoryLocationId = selectedPoolModel.defaultFactoryLocationId ?? null
       }
 
       const created = await tx.order.create({
@@ -271,6 +316,7 @@ export async function POST(req: NextRequest) {
           deliveryAddress,
           notes: notes || null,
           blueprintMarkers,
+          penetrationMode,
           status: 'PENDING_PAYMENT_APPROVAL',
           paymentProofUrl,
           shippingMethod,
@@ -323,6 +369,7 @@ export async function POST(req: NextRequest) {
           hardwareAutocover,
           hardwareReturns,
           hardwareMainDrains,
+          penetrationMode,
           poolStockId: poolStockId || null,
           reservedFromStock: Boolean(poolStockId),
         },

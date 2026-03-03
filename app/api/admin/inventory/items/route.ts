@@ -46,7 +46,12 @@ export async function GET(req: NextRequest) {
     orderBy: [{ active: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
   })
 
-  return json({ items })
+  return json({
+    items: items.map((item) => ({
+      ...item,
+      minStock: Number(item.minStock),
+    })),
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -85,5 +90,11 @@ export async function POST(req: NextRequest) {
     include: { category: { select: { id: true, name: true } } },
   })
 
-  return json(created, 201)
+  return json(
+    {
+      ...created,
+      minStock: Number(created.minStock),
+    },
+    201
+  )
 }

@@ -41,9 +41,9 @@ function labelStatus(status: string) {
 function StatusBadge({ status }: { status: string }) {
   const base = 'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap'
 
-  // ✅ APPROVED eliminado
   const map: Partial<Record<FlowStatus, string>> = {
     PENDING_PAYMENT_APPROVAL: 'bg-amber-50 text-amber-800 border-amber-200',
+    APPROVED: 'bg-sky-50 text-sky-800 border-sky-200',
     IN_PRODUCTION: 'bg-indigo-50 text-indigo-800 border-indigo-200',
     PRE_SHIPPING: 'bg-violet-50 text-violet-800 border-violet-200',
     COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',

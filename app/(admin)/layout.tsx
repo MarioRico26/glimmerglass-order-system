@@ -17,11 +17,13 @@ import {
   BookOpen,
   Palette,
   ChevronDown,
-  Shield,
   UserCog,
   Boxes,
-  PackageCheck,
   SlidersHorizontal,
+  PlusCircle,
+  Warehouse,
+  Menu,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -42,27 +44,38 @@ type NavSection =
       items: NavItem[]
     }
 
-function AdminNav() {
+function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
   const sections = useMemo<NavSection[]>(
     () => [
       {
+        type: 'link',
+        item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+      },
+      {
         type: 'group',
-        label: 'Operations',
-        icon: PackageCheck,
+        label: 'Orders',
+        icon: ClipboardList,
         defaultOpen: true,
         items: [
-          { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-          { label: 'Orders', href: '/admin/orders', icon: ClipboardList },
-          { label: 'Production Board', href: '/admin/production', icon: Factory },
-          { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory },
-          { label: 'Inventory', href: '/admin/inventory/daily', icon: Boxes },
-          { label: 'Inventory Setup', href: '/admin/inventory/master', icon: SlidersHorizontal },
+          { label: 'Order List', href: '/admin/orders', icon: ClipboardList },
+          { label: 'New Order', href: '/admin/orders/new', icon: PlusCircle },
+          { label: 'Production Schedule', href: '/admin/production', icon: Factory },
+          { label: 'Workflow Requirements', href: '/admin/order-flow', icon: ClipboardList },
         ],
       },
-
-      // --- Catalog group ---
+      {
+        type: 'group',
+        label: 'Inventory',
+        icon: Warehouse,
+        defaultOpen: true,
+        items: [
+          { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory },
+          { label: 'Daily Sheet', href: '/admin/inventory/daily', icon: Boxes },
+          { label: 'Master Setup', href: '/admin/inventory/master', icon: SlidersHorizontal },
+        ],
+      },
       {
         type: 'group',
         label: 'Catalog',
@@ -73,7 +86,6 @@ function AdminNav() {
           { label: 'Pool Colors', href: '/admin/catalog/colors', icon: Palette },
         ],
       },
-
       {
         type: 'group',
         label: 'People',
@@ -81,19 +93,7 @@ function AdminNav() {
         defaultOpen: true,
         items: [
           { label: 'Dealers', href: '/admin/dealers', icon: Users },
-        ],
-      },
-
-      // --- System ---
-      {
-        type: 'group',
-        label: 'System',
-        icon: Shield,
-        defaultOpen: false,
-        items: [
           { label: 'Users', href: '/admin/users', icon: UserCog },
-          // reservado para futuros ajustes globales
-          // { label: 'Settings', href: '/admin/settings', icon: Settings },
         ],
       },
     ],
@@ -104,7 +104,7 @@ function AdminNav() {
 
   return (
     <aside className="lg:sticky lg:top-20">
-      <nav className="rounded-2xl border bg-white/88 backdrop-blur-xl p-3 lg:h-[calc(100vh-6rem)] flex flex-col justify-between shadow-[0_18px_46px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
+      <nav className="rounded-2xl border bg-white/88 backdrop-blur-xl p-3 lg:h-[calc(100vh-6rem)] lg:max-h-[calc(100vh-6rem)] overflow-y-auto flex flex-col justify-between shadow-[0_18px_46px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
         <div>
           <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] [color:var(--gg-muted)]">
             Admin Menu
@@ -113,10 +113,10 @@ function AdminNav() {
           <div className="space-y-1">
             {sections.map((sec, idx) => {
               if (sec.type === 'link') {
-                return <NavLink key={sec.item.href} item={sec.item} active={isActive(sec.item.href)} />
+                return <NavLink key={sec.item.href} item={sec.item} active={isActive(sec.item.href)} onNavigate={onNavigate} />
               }
 
-              return <NavGroup key={`${sec.label}-${idx}`} section={sec} isActive={isActive} />
+              return <NavGroup key={`${sec.label}-${idx}`} section={sec} isActive={isActive} onNavigate={onNavigate} />
             })}
           </div>
         </div>
@@ -136,11 +136,12 @@ function AdminNav() {
   )
 }
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   const Icon = item.icon
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={[
         'group flex items-center justify-between rounded-xl px-3 py-2 text-[15px] transition',
         active ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/70' : 'text-slate-700 hover:bg-white/70',
@@ -174,9 +175,11 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function NavGroup({
   section,
   isActive,
+  onNavigate,
 }: {
   section: Extract<NavSection, { type: 'group' }>
   isActive: (href: string) => boolean
+  onNavigate?: () => void
 }) {
   const Icon = section.icon
   const anyChildActive = section.items.some((i) => isActive(i.href))
@@ -206,7 +209,7 @@ function NavGroup({
       {open && (
         <div className="px-2 pb-2 space-y-1">
           {section.items.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+            <NavLink key={item.href} item={item} active={isActive(item.href)} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -215,6 +218,8 @@ function NavGroup({
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <SessionProvider>
       <div
@@ -229,8 +234,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Top bar */}
         <header className="sticky top-0 z-40 backdrop-blur-md bg-white/74 border-b [border-color:var(--gg-border)]">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="font-black text-[18px] tracking-tight [font-family:var(--font-heading)] [color:var(--gg-navy-800)]">
-              Glimmerglass FiberGlass Pools • Admin • Portal
+            <div className="flex items-center gap-3">
+              <button
+                className="lg:hidden -ml-1 rounded-lg p-2 hover:bg-white transition"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Toggle admin menu"
+              >
+                {menuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+              <div className="font-black text-[18px] tracking-tight [font-family:var(--font-heading)] [color:var(--gg-navy-800)]">
+                Glimmerglass FiberGlass Pools • Admin • Portal
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <NotificationsBell />
@@ -246,7 +260,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </header>
 
         <div className="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[280px_1fr] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
-          <AdminNav />
+          <div className={menuOpen ? 'block lg:block' : 'hidden lg:block'}>
+            <AdminNav onNavigate={() => setMenuOpen(false)} />
+          </div>
           <main className="min-w-0">
             <div className="rounded-2xl border bg-white/86 backdrop-blur-xl p-4 sm:p-6 shadow-[0_24px_64px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
               {children}

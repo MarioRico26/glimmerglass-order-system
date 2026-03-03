@@ -1,57 +1,295 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import { useEffect, useMemo, useState } from 'react'
+
+type Factory = {
+  id: string
+  name: string
+  city?: string | null
+  state?: string | null
+}
+
+type PoolModel = {
+  id: string
+  name: string
+  lengthFt: number | null
+  widthFt: number | null
+  depthFt: number | null
+  imageUrl?: string | null
+  blueprintUrl?: string | null
+  defaultFactoryLocationId?: string | null
+  defaultFactoryLocation?: { id: string; name: string } | null
+  maxSkimmers?: number | null
+  maxReturns?: number | null
+  maxMainDrains?: number | null
+}
+
+type ModelDraft = {
+  name: string
+  lengthFt: string
+  widthFt: string
+  depthFt: string
+  defaultFactoryLocationId: string
+  maxSkimmers: string
+  maxReturns: string
+  maxMainDrains: string
+}
+
+type CreateForm = {
+  name: string
+  lengthFt: string
+  widthFt: string
+  depthFt: string
+  defaultFactoryLocationId: string
+  maxSkimmers: string
+  maxReturns: string
+  maxMainDrains: string
+}
+
+const EMPTY_FORM: CreateForm = {
+  name: '',
+  lengthFt: '',
+  widthFt: '',
+  depthFt: '',
+  defaultFactoryLocationId: '',
+  maxSkimmers: '',
+  maxReturns: '',
+  maxMainDrains: '',
+}
+
+function toDraft(model: PoolModel): ModelDraft {
+  return {
+    name: model.name ?? '',
+    lengthFt: model.lengthFt == null ? '' : String(model.lengthFt),
+    widthFt: model.widthFt == null ? '' : String(model.widthFt),
+    depthFt: model.depthFt == null ? '' : String(model.depthFt),
+    defaultFactoryLocationId: model.defaultFactoryLocationId ?? '',
+    maxSkimmers: model.maxSkimmers == null ? '' : String(model.maxSkimmers),
+    maxReturns: model.maxReturns == null ? '' : String(model.maxReturns),
+    maxMainDrains: model.maxMainDrains == null ? '' : String(model.maxMainDrains),
+  }
+}
+
+function parseDecimal(raw: string): number | null {
+  const value = raw.trim()
+  if (!value) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return parsed
+}
+
+function parseDecimalForPatch(raw: string): number | undefined {
+  const value = raw.trim()
+  if (!value) return undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined
+  return parsed
+}
+
+function parseIntOrNull(raw: string): number | null {
+  const value = raw.trim()
+  if (!value) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) return null
+  return parsed
+}
 
 export default function PoolModelsPage() {
-  const [items, setItems] = useState<any[]>([])
-  const [factories, setFactories] = useState<any[]>([])
-  const [form, setForm] = useState({
-    name:'', lengthFt: null as any, widthFt: null as any, depthFt: null as any, defaultFactoryLocationId: '',
-  })
-  const [loading, setLoading] = useState(false)
+  const [items, setItems] = useState<PoolModel[]>([])
+  const [factories, setFactories] = useState<Factory[]>([])
+  const [form, setForm] = useState<CreateForm>(EMPTY_FORM)
+  const [drafts, setDrafts] = useState<Record<string, ModelDraft>>({})
+  const [search, setSearch] = useState('')
+
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [savingId, setSavingId] = useState<string | null>(null)
   const [uploading, setUploading] = useState<Record<string, boolean>>({})
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
-    setLoading(true)
-    const [modelsRes, factoriesRes] = await Promise.all([
-      fetch('/api/admin/catalog/pool-models'),
-      fetch('/api/catalog/factories'),
-    ])
-    const data = await modelsRes.json()
-    const factoriesData = await factoriesRes.json()
-    setItems(data.items || [])
-    setFactories(factoriesData.items || [])
-    setLoading(false)
-  }
-  useEffect(()=>{ load() }, [])
+    try {
+      setLoading(true)
+      setError(null)
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const res = await fetch('/api/admin/catalog/pool-models', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    })
-    if (res.ok) {
-      setForm({name:'', lengthFt:null, widthFt:null, depthFt:null, defaultFactoryLocationId: ''})
-      load()
-    } else {
-      alert('Error saving pool model')
+      const [modelsRes, factoriesRes] = await Promise.all([
+        fetch('/api/admin/catalog/pool-models', { cache: 'no-store' }),
+        fetch('/api/catalog/factories', { cache: 'no-store' }),
+      ])
+
+      const [modelsJson, factoriesJson] = await Promise.all([
+        modelsRes.json().catch(() => null),
+        factoriesRes.json().catch(() => null),
+      ])
+
+      if (!modelsRes.ok) {
+        throw new Error(modelsJson?.message || 'Failed to load pool models')
+      }
+      if (!factoriesRes.ok) {
+        throw new Error(factoriesJson?.message || 'Failed to load factories')
+      }
+
+      const nextItems: PoolModel[] = Array.isArray(modelsJson?.items) ? modelsJson.items : []
+      const nextFactories: Factory[] = Array.isArray(factoriesJson?.items) ? factoriesJson.items : []
+
+      setItems(nextItems)
+      setFactories(nextFactories)
+      setDrafts(
+        nextItems.reduce<Record<string, ModelDraft>>((acc, item) => {
+          acc[item.id] = toDraft(item)
+          return acc
+        }, {})
+      )
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load pool models')
+      setItems([])
+    } finally {
+      setLoading(false)
     }
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this pool model?')) return
-    await fetch('/api/admin/catalog/pool-models', {
-      method:'DELETE',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id }),
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return items
+    return items.filter((m) => {
+      const factoryName = m.defaultFactoryLocation?.name || ''
+      return (
+        m.name.toLowerCase().includes(q) ||
+        factoryName.toLowerCase().includes(q)
+      )
     })
-    load()
+  }, [items, search])
+
+  const onCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreating(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const payload = {
+        name: form.name.trim(),
+        lengthFt: parseDecimal(form.lengthFt),
+        widthFt: parseDecimal(form.widthFt),
+        depthFt: parseDecimal(form.depthFt),
+        defaultFactoryLocationId: form.defaultFactoryLocationId || null,
+        maxSkimmers: parseIntOrNull(form.maxSkimmers),
+        maxReturns: parseIntOrNull(form.maxReturns),
+        maxMainDrains: parseIntOrNull(form.maxMainDrains),
+      }
+
+      if (!payload.name) throw new Error('Model name is required')
+
+      const res = await fetch('/api/admin/catalog/pool-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || 'Failed to create pool model')
+
+      setForm(EMPTY_FORM)
+      setMessage('Pool model created.')
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create pool model')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const setDraftField = (id: string, field: keyof ModelDraft, value: string) => {
+    const source = items.find((m) => m.id === id)
+    setDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ||
+          (source
+            ? toDraft(source)
+            : {
+                name: '',
+                lengthFt: '',
+                widthFt: '',
+                depthFt: '',
+                defaultFactoryLocationId: '',
+                maxSkimmers: '',
+                maxReturns: '',
+                maxMainDrains: '',
+              })),
+        [field]: value,
+      },
+    }))
+  }
+
+  const onSaveRow = async (id: string) => {
+    const draft = drafts[id]
+    if (!draft) return
+
+    setSavingId(id)
+    setError(null)
+    setMessage(null)
+    try {
+      const payload = {
+        id,
+        name: draft.name.trim(),
+        lengthFt: parseDecimalForPatch(draft.lengthFt),
+        widthFt: parseDecimalForPatch(draft.widthFt),
+        depthFt: parseDecimalForPatch(draft.depthFt),
+        defaultFactoryLocationId: draft.defaultFactoryLocationId || null,
+        maxSkimmers: parseIntOrNull(draft.maxSkimmers),
+        maxReturns: parseIntOrNull(draft.maxReturns),
+        maxMainDrains: parseIntOrNull(draft.maxMainDrains),
+      }
+
+      if (!payload.name) throw new Error('Model name is required')
+
+      const res = await fetch('/api/admin/catalog/pool-models', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || 'Failed to update pool model')
+
+      setMessage('Pool model updated.')
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update pool model')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const onDelete = async (id: string) => {
+    const ok = window.confirm('Delete this pool model? This cannot be undone.')
+    if (!ok) return
+
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/catalog/pool-models', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || 'Failed to delete pool model')
+      setMessage('Pool model deleted.')
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to delete pool model')
+    }
   }
 
   const uploadMedia = async (id: string, type: 'image' | 'blueprint', file: File) => {
     const key = `${id}:${type}`
-    setUploading(prev => ({ ...prev, [key]: true }))
+    setUploading((prev) => ({ ...prev, [key]: true }))
+    setError(null)
+    setMessage(null)
     try {
       const fd = new FormData()
       fd.append('type', type)
@@ -61,180 +299,345 @@ export default function PoolModelsPage() {
         method: 'POST',
         body: fd,
       })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || 'Upload failed')
 
-      const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.message || 'Upload failed')
-
-      if (data?.item) {
-        setItems(prev => prev.map(m => (m.id === id ? data.item : m)))
-      }
-    } catch (e: any) {
-      alert(e?.message || 'Upload failed')
+      setMessage(type === 'image' ? 'Model image uploaded.' : 'Dig sheet uploaded.')
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
-      setUploading(prev => ({ ...prev, [key]: false }))
+      setUploading((prev) => ({ ...prev, [key]: false }))
     }
-  }
-
-  const updateDefaultFactory = async (id: string, defaultFactoryLocationId: string) => {
-    const res = await fetch('/api/admin/catalog/pool-models', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id,
-        defaultFactoryLocationId: defaultFactoryLocationId || null,
-      }),
-    })
-
-    const data = await res.json().catch(() => null)
-    if (!res.ok) {
-      alert(data?.message || 'Failed to update default factory')
-      return
-    }
-    load()
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">🏊‍♂️ Manage Pool Models</h1>
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
+        <h1 className="text-3xl md:text-4xl font-black text-slate-900">Pool Catalog</h1>
+        <p className="text-slate-600 mt-1">
+          Create and maintain pool models, factory defaults, marker limits, and media.
+        </p>
+        {message ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {message}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            {error}
+          </div>
+        ) : null}
+      </div>
 
-      <form onSubmit={save} className="flex flex-wrap gap-3 mb-8 bg-white p-4 rounded-lg shadow">
-        <input className="border border-gray-300 rounded p-2 flex-1" placeholder="Name"
-          value={form.name}
-          onChange={e=>setForm(f=>({...f, name:e.target.value}))}
-          required
-        />
-        <input className="border border-gray-300 rounded p-2 w-28" placeholder="Length (ft)" type="number"
-          value={form.lengthFt ?? ''}
-          onChange={e=>setForm(f=>({...f, lengthFt: e.target.value ? Number(e.target.value) : null}))}
-        />
-        <input className="border border-gray-300 rounded p-2 w-28" placeholder="Width (ft)" type="number"
-          value={form.widthFt ?? ''}
-          onChange={e=>setForm(f=>({...f, widthFt: e.target.value ? Number(e.target.value) : null}))}
-        />
-        <input className="border border-gray-300 rounded p-2 w-28" placeholder="Depth (ft)" type="number"
-          value={form.depthFt ?? ''}
-          onChange={e=>setForm(f=>({...f, depthFt: e.target.value ? Number(e.target.value) : null}))}
-        />
-        <select
-          className="border border-gray-300 rounded p-2"
-          value={form.defaultFactoryLocationId}
-          onChange={e => setForm(f => ({ ...f, defaultFactoryLocationId: e.target.value }))}
-        >
-          <option value="">Default factory (optional)</option>
-          {factories.map((f:any) => (
-            <option key={f.id} value={f.id}>{f.name}</option>
-          ))}
-        </select>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
-          Add Model
-        </button>
+      <form
+        onSubmit={onCreate}
+        className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_20px_56px_rgba(15,23,42,0.08)] p-5 space-y-4"
+      >
+        <div className="text-lg font-extrabold text-slate-900">Add New Model</div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <input
+            value={form.name}
+            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            placeholder="Model name"
+            required
+          />
+          <input
+            value={form.lengthFt}
+            onChange={(e) => setForm((prev) => ({ ...prev, lengthFt: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step="0.1"
+            placeholder="Length (ft)"
+          />
+          <input
+            value={form.widthFt}
+            onChange={(e) => setForm((prev) => ({ ...prev, widthFt: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step="0.1"
+            placeholder="Width (ft)"
+          />
+          <input
+            value={form.depthFt}
+            onChange={(e) => setForm((prev) => ({ ...prev, depthFt: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step="0.1"
+            placeholder="Depth (ft)"
+          />
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <select
+            value={form.defaultFactoryLocationId}
+            onChange={(e) => setForm((prev) => ({ ...prev, defaultFactoryLocationId: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="">Default factory (optional)</option>
+            {factories.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          <input
+            value={form.maxSkimmers}
+            onChange={(e) => setForm((prev) => ({ ...prev, maxSkimmers: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="Max skimmers"
+          />
+          <input
+            value={form.maxReturns}
+            onChange={(e) => setForm((prev) => ({ ...prev, maxReturns: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="Max returns"
+          />
+          <input
+            value={form.maxMainDrains}
+            onChange={(e) => setForm((prev) => ({ ...prev, maxMainDrains: e.target.value }))}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="Max main drains"
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={creating}
+            className="inline-flex items-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+          >
+            {creating ? 'Creating…' : 'Create model'}
+          </button>
+        </div>
       </form>
 
-      {loading ? (
-        <div className="text-center py-6 text-gray-500">Loading pool models...</div>
-      ) : (
-        <div className="overflow-x-auto bg-white shadow rounded-lg">
-          <table className="min-w-full border border-gray-200">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="p-3 border text-left">Name</th>
-                <th className="p-3 border text-center">Length (ft)</th>
-                <th className="p-3 border text-center">Width (ft)</th>
-                <th className="p-3 border text-center">Depth (ft)</th>
-                <th className="p-3 border text-center">Default Factory</th>
-                <th className="p-3 border text-center">Image</th>
-                <th className="p-3 border text-center">Blueprint</th>
-                <th className="p-3 border text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-4 text-gray-500">
-                    No pool models found.
-                  </td>
-                </tr>
-              ) : (
-                items.map((m:any, idx:number)=>(
-                  <tr key={m.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="border p-3 font-medium">{m.name}</td>
-                    <td className="border p-3 text-center">{m.lengthFt ?? '-'}</td>
-                    <td className="border p-3 text-center">{m.widthFt ?? '-'}</td>
-                    <td className="border p-3 text-center">{m.depthFt ?? '-'}</td>
-                    <td className="border p-3 text-center">
-                      <select
-                        className="border border-gray-300 rounded p-1.5 text-sm"
-                        value={m.defaultFactoryLocationId || ''}
-                        onChange={(e) => updateDefaultFactory(m.id, e.target.value)}
-                      >
-                        <option value="">No default</option>
-                        {factories.map((f:any) => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="border p-3 text-center">
-                      {m.imageUrl ? (
-                        <img alt={m.name} src={m.imageUrl} className="h-14 w-20 object-cover rounded mx-auto border" />
-                      ) : (
-                        <div className="text-xs text-gray-500">No image</div>
-                      )}
-                      <label className="mt-2 inline-flex items-center justify-center px-2 py-1 text-xs rounded bg-slate-800 text-white cursor-pointer">
-                        {uploading[`${m.id}:image`] ? 'Uploading…' : 'Upload image'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) uploadMedia(m.id, 'image', file)
-                            e.currentTarget.value = ''
-                          }}
-                        />
-                      </label>
-                    </td>
-                    <td className="border p-3 text-center">
-                      {m.blueprintUrl ? (
-                        <a
-                          href={m.blueprintUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-700 underline text-sm"
-                        >
-                          View blueprint
-                        </a>
-                      ) : (
-                        <div className="text-xs text-gray-500">No blueprint</div>
-                      )}
-                      <label className="mt-2 inline-flex items-center justify-center px-2 py-1 text-xs rounded bg-slate-800 text-white cursor-pointer">
-                        {uploading[`${m.id}:blueprint`] ? 'Uploading…' : 'Upload blueprint'}
-                        <input
-                          type="file"
-                          accept="application/pdf,image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) uploadMedia(m.id, 'blueprint', file)
-                            e.currentTarget.value = ''
-                          }}
-                        />
-                      </label>
-                    </td>
-                    <td className="border p-3 text-center">
-                      <button
-                        onClick={()=>remove(m.id)}
-                        className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded shadow"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <section className="rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_20px_56px_rgba(15,23,42,0.08)] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-lg font-extrabold text-slate-900">Manage Existing Models</div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 w-full md:w-80 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            placeholder="Search by model or factory"
+          />
         </div>
-      )}
+
+        {loading ? (
+          <div className="py-10 text-center text-slate-500">Loading pool models…</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-10 text-center text-slate-500">No pool models found.</div>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-3">Model</th>
+                  <th className="py-2 pr-3">Dimensions (ft)</th>
+                  <th className="py-2 pr-3">Default Factory</th>
+                  <th className="py-2 pr-3">Marker Limits</th>
+                  <th className="py-2 pr-3">Media</th>
+                  <th className="py-2 pr-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((m) => {
+                  const draft = drafts[m.id] ?? toDraft(m)
+                  return (
+                    <tr key={m.id} className="border-b align-top">
+                      <td className="py-3 pr-3 min-w-[220px]">
+                        <input
+                          value={draft.name}
+                          onChange={(e) => setDraftField(m.id, 'name', e.target.value)}
+                          className="h-10 w-full rounded-lg border border-slate-200 px-2.5"
+                        />
+                        <div className="mt-1 text-xs text-slate-500">ID: {m.id}</div>
+                      </td>
+
+                      <td className="py-3 pr-3 min-w-[230px]">
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            value={draft.lengthFt}
+                            onChange={(e) => setDraftField(m.id, 'lengthFt', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="L"
+                          />
+                          <input
+                            value={draft.widthFt}
+                            onChange={(e) => setDraftField(m.id, 'widthFt', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="W"
+                          />
+                          <input
+                            value={draft.depthFt}
+                            onChange={(e) => setDraftField(m.id, 'depthFt', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="D"
+                          />
+                        </div>
+                      </td>
+
+                      <td className="py-3 pr-3 min-w-[230px]">
+                        <select
+                          value={draft.defaultFactoryLocationId}
+                          onChange={(e) => setDraftField(m.id, 'defaultFactoryLocationId', e.target.value)}
+                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5"
+                        >
+                          <option value="">No default factory</option>
+                          {factories.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td className="py-3 pr-3 min-w-[260px]">
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            value={draft.maxSkimmers}
+                            onChange={(e) => setDraftField(m.id, 'maxSkimmers', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Skim"
+                          />
+                          <input
+                            value={draft.maxReturns}
+                            onChange={(e) => setDraftField(m.id, 'maxReturns', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Return"
+                          />
+                          <input
+                            value={draft.maxMainDrains}
+                            onChange={(e) => setDraftField(m.id, 'maxMainDrains', e.target.value)}
+                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Drain"
+                          />
+                        </div>
+                      </td>
+
+                      <td className="py-3 pr-3 min-w-[280px]">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="mb-1 text-xs font-semibold text-slate-600">Image</div>
+                            <div className="h-20 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                              {m.imageUrl ? (
+                                <img
+                                  src={m.imageUrl}
+                                  alt={m.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-xs text-slate-400">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+                            <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                              {uploading[`${m.id}:image`] ? 'Uploading…' : 'Upload'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.currentTarget.files?.[0]
+                                  if (file) void uploadMedia(m.id, 'image', file)
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <div className="mb-1 text-xs font-semibold text-slate-600">Dig Sheet</div>
+                            <div className="h-20 w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-xs">
+                              {m.blueprintUrl ? (
+                                <a
+                                  href={m.blueprintUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sky-700 underline"
+                                >
+                                  View file
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">No dig sheet</span>
+                              )}
+                            </div>
+                            <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                              {uploading[`${m.id}:blueprint`] ? 'Uploading…' : 'Upload'}
+                              <input
+                                type="file"
+                                accept="application/pdf,image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.currentTarget.files?.[0]
+                                  if (file) void uploadMedia(m.id, 'blueprint', file)
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 pr-0 text-right min-w-[170px]">
+                        <div className="flex flex-col items-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void onSaveRow(m.id)}
+                            disabled={savingId === m.id}
+                            className="inline-flex h-9 items-center rounded-lg bg-slate-900 px-3 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            {savingId === m.id ? 'Saving…' : 'Save changes'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDelete(m.id)}
+                            className="inline-flex h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-bold text-rose-700 hover:bg-rose-100"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

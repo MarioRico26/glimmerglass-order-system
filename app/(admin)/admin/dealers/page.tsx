@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, FileSignature, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, FileSignature, KeyRound, RefreshCw, Search, XCircle } from 'lucide-react'
 
 type Row = {
     id: string
@@ -12,6 +12,7 @@ type Row = {
     city: string | null
     state: string | null
     createdAt: string
+    hasLogin: boolean
     approved: boolean
     agreementSignedAt: string | null
     agreementUrl: string | null
@@ -28,6 +29,18 @@ type Overview = {
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
+const STATES = [
+    'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming',
+]
+
+function makeTemporaryPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*'
+    let out = ''
+    for (let i = 0; i < 12; i += 1) {
+        out += chars[Math.floor(Math.random() * chars.length)]
+    }
+    return out
+}
 
 export default function AdminDealersPage() {
     const [data, setData] = useState<Overview | null>(null)
@@ -36,6 +49,35 @@ export default function AdminDealersPage() {
     const [q, setQ] = useState('')
     const [statusFilter, setStatusFilter] = useState<'ALL' | Row['onboardingStatus']>('ALL')
     const [busyId, setBusyId] = useState<string | null>(null)
+    const [creating, setCreating] = useState(false)
+    const [createError, setCreateError] = useState<string | null>(null)
+    const [createOk, setCreateOk] = useState<string | null>(null)
+    const [createForm, setCreateForm] = useState({
+        name: '',
+        email: '',
+        password: '',
+        phone: '',
+        address: '',
+        city: '',
+        state: '',
+        createLogin: true,
+        approved: true,
+    })
+    const [resetTarget, setResetTarget] = useState<Row | null>(null)
+    const [resetBusy, setResetBusy] = useState(false)
+    const [resetError, setResetError] = useState<string | null>(null)
+    const [resetOk, setResetOk] = useState<string | null>(null)
+    const [resetForm, setResetForm] = useState({
+        newPassword: '',
+        confirmPassword: '',
+    })
+    const [enableLoginTarget, setEnableLoginTarget] = useState<Row | null>(null)
+    const [enableLoginBusy, setEnableLoginBusy] = useState(false)
+    const [enableLoginError, setEnableLoginError] = useState<string | null>(null)
+    const [enableLoginForm, setEnableLoginForm] = useState({
+        password: makeTemporaryPassword(),
+        approved: true,
+    })
 
     const load = async () => {
         try {
@@ -91,6 +133,136 @@ export default function AdminDealersPage() {
         }
     }
 
+    const createDealer = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setCreateError(null)
+        setCreateOk(null)
+        try {
+            setCreating(true)
+            const res = await fetch('/api/admin/dealers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(createForm),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok) {
+                throw new Error(json?.message || 'Failed to create dealer')
+            }
+
+            setCreateOk('Dealer created successfully.')
+            setCreateForm({
+                name: '',
+                email: '',
+                password: '',
+                phone: '',
+                address: '',
+                city: '',
+                state: '',
+                createLogin: true,
+                approved: true,
+            })
+            await load()
+        } catch (e: any) {
+            setCreateError(e?.message || 'Failed to create dealer')
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    const openResetModal = (row: Row) => {
+        if (!row.hasLogin) return
+        const temp = makeTemporaryPassword()
+        setResetTarget(row)
+        setResetForm({ newPassword: temp, confirmPassword: temp })
+        setResetError(null)
+        setResetOk(null)
+    }
+
+    const closeResetModal = () => {
+        setResetTarget(null)
+        setResetForm({ newPassword: '', confirmPassword: '' })
+        setResetError(null)
+        setResetOk(null)
+    }
+
+    const submitResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!resetTarget) return
+        setResetError(null)
+        setResetOk(null)
+
+        if (!resetForm.newPassword || resetForm.newPassword.length < 8) {
+            setResetError('Password must be at least 8 characters.')
+            return
+        }
+        if (resetForm.newPassword !== resetForm.confirmPassword) {
+            setResetError('Passwords do not match.')
+            return
+        }
+
+        try {
+            setResetBusy(true)
+            const res = await fetch(`/api/admin/dealers/${resetTarget.id}/password`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newPassword: resetForm.newPassword }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok) {
+                throw new Error(json?.message || 'Failed to reset password')
+            }
+            setResetOk('Password reset successfully.')
+        } catch (e: any) {
+            setResetError(e?.message || 'Failed to reset password')
+        } finally {
+            setResetBusy(false)
+        }
+    }
+
+    const openEnableLoginModal = (row: Row) => {
+        setEnableLoginTarget(row)
+        setEnableLoginForm({
+            password: makeTemporaryPassword(),
+            approved: true,
+        })
+        setEnableLoginBusy(false)
+        setEnableLoginError(null)
+    }
+
+    const closeEnableLoginModal = () => {
+        if (enableLoginBusy) return
+        setEnableLoginTarget(null)
+        setEnableLoginError(null)
+    }
+
+    const submitEnableLogin = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!enableLoginTarget) return
+        setEnableLoginError(null)
+        if (!enableLoginForm.password || enableLoginForm.password.length < 6) {
+            setEnableLoginError('Password must be at least 6 characters.')
+            return
+        }
+        try {
+            setEnableLoginBusy(true)
+            const res = await fetch(`/api/admin/dealers/${enableLoginTarget.id}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(enableLoginForm),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok) {
+                throw new Error(json?.message || 'Failed to enable login')
+            }
+            await load()
+            setEnableLoginTarget(null)
+        } catch (err: any) {
+            setEnableLoginError(err?.message || 'Failed to enable login')
+        } finally {
+            setEnableLoginBusy(false)
+        }
+    }
+
     const Stat = ({ label, value }: { label: string; value: number }) => (
         <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
             <div className="text-slate-600 text-sm">{label}</div>
@@ -131,6 +303,112 @@ export default function AdminDealersPage() {
                 <Stat label="Waiting signature" value={data.totals.waitingSignature} />
                 <Stat label="Active" value={data.totals.active} />
             </div>
+
+            {/* Create dealer */}
+            <section className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
+                <div className="mb-3">
+                    <h2 className="text-lg font-extrabold text-slate-900">Create Dealer</h2>
+                    <p className="text-sm text-slate-600">Create dealer account and login from admin portal.</p>
+                </div>
+                <form onSubmit={createDealer} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <input
+                        value={createForm.name}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, name: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        placeholder="Dealer name"
+                        required
+                    />
+                    <input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, email: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        placeholder="Email"
+                        required
+                    />
+                    <input
+                        type={createForm.createLogin ? 'password' : 'text'}
+                        value={createForm.password}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, password: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        placeholder={createForm.createLogin ? 'Temporary password (min 6)' : 'No login will be created'}
+                        required={createForm.createLogin}
+                        disabled={!createForm.createLogin}
+                    />
+                    <input
+                        value={createForm.phone}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, phone: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        placeholder="Phone"
+                        required
+                    />
+                    <input
+                        value={createForm.address}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, address: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm md:col-span-2 lg:col-span-2"
+                        placeholder="Address"
+                        required
+                    />
+                    <input
+                        value={createForm.city}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, city: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        placeholder="City"
+                        required
+                    />
+                    <select
+                        value={createForm.state}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, state: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        required
+                    >
+                        <option value="">State</option>
+                        {STATES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                        ))}
+                    </select>
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={createForm.createLogin}
+                            onChange={(e)=>setCreateForm(f=>({
+                                ...f,
+                                createLogin: e.target.checked,
+                                password: e.target.checked ? (f.password || makeTemporaryPassword()) : '',
+                            }))}
+                        />
+                        Create login now
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={createForm.approved}
+                            onChange={(e)=>setCreateForm(f=>({ ...f, approved: e.target.checked }))}
+                            disabled={!createForm.createLogin}
+                        />
+                        Approved for login
+                    </label>
+                    <div className="flex items-center justify-end lg:col-span-4">
+                        <button
+                            type="submit"
+                            disabled={creating}
+                            className="h-10 rounded-lg bg-black px-4 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                            {creating ? 'Creating…' : 'Create Dealer'}
+                        </button>
+                    </div>
+                    {createError ? (
+                        <div className="lg:col-span-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                            {createError}
+                        </div>
+                    ) : null}
+                    {createOk ? (
+                        <div className="lg:col-span-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                            {createOk}
+                        </div>
+                    ) : null}
+                </form>
+            </section>
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
@@ -185,7 +463,14 @@ export default function AdminDealersPage() {
                     {filtered.map(r => (
                         <tr key={r.id} className="border-t border-slate-100">
                             <td className="p-3">
-                                <div className="font-semibold text-slate-900">{r.name || '—'}</div>
+                                <div className="flex items-center gap-2">
+                                    <div className="font-semibold text-slate-900">{r.name || '—'}</div>
+                                    {!r.hasLogin ? (
+                                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                            No login
+                                        </span>
+                                    ) : null}
+                                </div>
                                 <div className="text-slate-600">{r.email || '—'}</div>
                             </td>
                             <td className="p-3 text-slate-700">
@@ -211,22 +496,35 @@ export default function AdminDealersPage() {
                             <td className="p-3">
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={()=>toggleApproval(r as any)}
+                                        onClick={() => (r.hasLogin ? toggleApproval(r as any) : openEnableLoginModal(r))}
                                         disabled={busyId === r.id}
                                         className={[
                                             'h-9 rounded-lg px-3 text-xs font-semibold border',
-                                            r.approved
+                                            !r.hasLogin
+                                                ? 'border-amber-200 bg-white hover:bg-amber-50 text-amber-700'
+                                                : r.approved
                                                 ? 'border-rose-200 bg-white hover:bg-rose-50 text-rose-700'
                                                 : 'border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700'
                                         ].join(' ')}
-                                        title={r.approved ? 'Disable dealer' : 'Approve dealer'}
+                                        title={!r.hasLogin ? 'Create login for dealer' : r.approved ? 'Disable dealer' : 'Approve dealer'}
                                     >
                                         {busyId === r.id
                                             ? 'Saving…'
+                                            : !r.hasLogin
+                                                ? 'Enable login'
                                             : r.approved
                                                 ? (<span className="inline-flex items-center gap-1"><XCircle size={14}/> Disable</span>)
                                                 : (<span className="inline-flex items-center gap-1"><CheckCircle2 size={14}/> Approve</span>)
                                         }
+                                    </button>
+                                    <button
+                                        onClick={() => openResetModal(r)}
+                                        disabled={!r.hasLogin}
+                                        className="h-9 rounded-lg px-3 text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1 disabled:opacity-40 disabled:hover:bg-white"
+                                        title="Reset dealer password"
+                                    >
+                                        <KeyRound size={14} />
+                                        Reset password
                                     </button>
                                     {/* Acceso rápido a notificaciones del dealer (opcional): */}
                                     {/* <Link href={`/admin/dealers/${r.id}/notes`} className="text-xs underline">Notes</Link> */}
@@ -237,6 +535,160 @@ export default function AdminDealersPage() {
                     </tbody>
                 </table>
             </div>
+
+            {resetTarget ? (
+                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-4">
+                    <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-extrabold text-slate-900">Reset Dealer Password</h3>
+                                <p className="text-sm text-slate-600 mt-1">
+                                    {resetTarget.name || 'Dealer'} ({resetTarget.email || 'No email'})
+                                </p>
+                            </div>
+                            <button
+                                onClick={closeResetModal}
+                                className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                aria-label="Close reset password dialog"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <form onSubmit={submitResetPassword} className="mt-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                <input
+                                    type="text"
+                                    value={resetForm.newPassword}
+                                    onChange={(e)=>setResetForm(f=>({ ...f, newPassword: e.target.value }))}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                    placeholder="New password (min 8)"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const temp = makeTemporaryPassword()
+                                        setResetForm({ newPassword: temp, confirmPassword: temp })
+                                        setResetError(null)
+                                        setResetOk(null)
+                                    }}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1 justify-center"
+                                >
+                                    <RefreshCw size={14} />
+                                    Generate
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                value={resetForm.confirmPassword}
+                                onChange={(e)=>setResetForm(f=>({ ...f, confirmPassword: e.target.value }))}
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                placeholder="Confirm new password"
+                                required
+                            />
+                            {resetError ? (
+                                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                    {resetError}
+                                </div>
+                            ) : null}
+                            {resetOk ? (
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                                    {resetOk}
+                                </div>
+                            ) : null}
+                            <div className="pt-1 flex items-center justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={closeResetModal}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={resetBusy}
+                                    className="h-10 rounded-lg bg-black px-4 text-sm font-semibold text-white disabled:opacity-60"
+                                >
+                                    {resetBusy ? 'Saving…' : 'Save New Password'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
+
+            {enableLoginTarget ? (
+                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-4">
+                    <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-extrabold text-slate-900">Enable Dealer Login</h3>
+                                <p className="text-sm text-slate-600 mt-1">
+                                    {enableLoginTarget.name || 'Dealer'} ({enableLoginTarget.email || 'No email'})
+                                </p>
+                            </div>
+                            <button
+                                onClick={closeEnableLoginModal}
+                                className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                aria-label="Close enable login dialog"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <form onSubmit={submitEnableLogin} className="mt-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                <input
+                                    type="text"
+                                    value={enableLoginForm.password}
+                                    onChange={(e)=>setEnableLoginForm(f=>({ ...f, password: e.target.value }))}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                    placeholder="Temporary password (min 6)"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setEnableLoginForm(f => ({ ...f, password: makeTemporaryPassword() }))}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1 justify-center"
+                                >
+                                    <RefreshCw size={14} />
+                                    Generate
+                                </button>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                    type="checkbox"
+                                    checked={enableLoginForm.approved}
+                                    onChange={(e)=>setEnableLoginForm(f=>({ ...f, approved: e.target.checked }))}
+                                />
+                                Approved for login
+                            </label>
+                            {enableLoginError ? (
+                                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                    {enableLoginError}
+                                </div>
+                            ) : null}
+                            <div className="pt-1 flex items-center justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={closeEnableLoginModal}
+                                    className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={enableLoginBusy}
+                                    className="h-10 rounded-lg bg-black px-4 text-sm font-semibold text-white disabled:opacity-60"
+                                >
+                                    {enableLoginBusy ? 'Saving…' : 'Enable Login'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
 
             {/* Stripe */}
             <div

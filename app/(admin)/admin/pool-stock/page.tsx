@@ -20,6 +20,8 @@ type PoolStockItem = {
   status: 'READY' | 'RESERVED' | 'IN_PRODUCTION' | 'DAMAGED'
   quantity: number
   eta: string | null
+  productionDate: string | null
+  serialNumber: string | null
   notes: string | null
   imageUrl: string | null
   updatedAt: string
@@ -95,7 +97,8 @@ export default function AdminPoolStockPage() {
     colorId: '',
     status: 'READY' as PoolStockItem['status'],
     quantity: 0,
-    eta: '',
+    productionDate: '',
+    serialNumber: '',
     notes: '',
   })
 
@@ -103,7 +106,8 @@ export default function AdminPoolStockPage() {
   const [editForm, setEditForm] = useState({
     status: 'READY' as PoolStockItem['status'],
     quantity: 0,
-    eta: '',
+    productionDate: '',
+    serialNumber: '',
     notes: '',
   })
 
@@ -187,7 +191,8 @@ export default function AdminPoolStockPage() {
         it.poolModel?.name?.toLowerCase().includes(q) ||
         it.factory?.name?.toLowerCase().includes(q) ||
         (it.color?.name || '').toLowerCase().includes(q) ||
-        it.status.toLowerCase().includes(q)
+        it.status.toLowerCase().includes(q) ||
+        (it.serialNumber || '').toLowerCase().includes(q)
       )
     })
   }, [items, search])
@@ -197,13 +202,23 @@ export default function AdminPoolStockPage() {
     setCreating(true)
     setError('')
     try {
+      if (createForm.status === 'READY' && Number(createForm.quantity || 0) > 0) {
+        if (!createForm.serialNumber.trim()) {
+          throw new Error('Serial number is required for READY stock rows')
+        }
+        if (!createForm.productionDate) {
+          throw new Error('Production date is required for READY stock rows')
+        }
+      }
+
       const payload = {
         factoryId: createForm.factoryId,
         poolModelId: createForm.poolModelId,
         colorId: createForm.colorId || null,
         status: createForm.status,
         quantity: Number(createForm.quantity || 0),
-        eta: createForm.eta || null,
+        productionDate: createForm.productionDate || null,
+        serialNumber: createForm.serialNumber || null,
         notes: createForm.notes || null,
       }
 
@@ -221,7 +236,8 @@ export default function AdminPoolStockPage() {
         poolModelId: '',
         colorId: '',
         quantity: 0,
-        eta: '',
+        productionDate: '',
+        serialNumber: '',
         notes: '',
       }))
 
@@ -238,7 +254,8 @@ export default function AdminPoolStockPage() {
     setEditForm({
       status: item.status,
       quantity: item.quantity,
-      eta: toDateInputValue(item.eta),
+      productionDate: toDateInputValue(item.productionDate ?? item.eta),
+      serialNumber: item.serialNumber || '',
       notes: item.notes || '',
     })
   }
@@ -250,10 +267,20 @@ export default function AdminPoolStockPage() {
   const saveEdit = async (id: string) => {
     setError('')
     try {
+      if (editForm.status === 'READY' && Number(editForm.quantity || 0) > 0) {
+        if (!editForm.serialNumber.trim()) {
+          throw new Error('Serial number is required for READY stock rows')
+        }
+        if (!editForm.productionDate) {
+          throw new Error('Production date is required for READY stock rows')
+        }
+      }
+
       const payload = {
         status: editForm.status,
         quantity: Number(editForm.quantity),
-        eta: editForm.eta || null,
+        productionDate: editForm.productionDate || null,
+        serialNumber: editForm.serialNumber || null,
         notes: editForm.notes || null,
       }
 
@@ -375,7 +402,7 @@ export default function AdminPoolStockPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Pool Stock</h1>
-        <p className="text-slate-600">Finished pools by factory. Adjust quantity, status and ETA.</p>
+        <p className="text-slate-600">Finished pools by factory. Adjust quantity, status, serial number and production date.</p>
       </div>
 
       {error ? (
@@ -442,23 +469,30 @@ export default function AdminPoolStockPage() {
           />
 
           <input
-            type="date"
-            value={createForm.eta}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, eta: e.target.value }))}
+            value={createForm.serialNumber}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, serialNumber: e.target.value }))}
             className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-3"
+            placeholder="Serial number"
+          />
+
+          <input
+            type="date"
+            value={createForm.productionDate}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, productionDate: e.target.value }))}
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
           />
 
           <input
             value={createForm.notes}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, notes: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm md:col-span-2 xl:col-span-9"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm md:col-span-2 xl:col-span-6"
             placeholder="Notes"
           />
 
           <button
             type="submit"
             disabled={creating}
-            className="h-10 w-full rounded-lg bg-black text-white px-4 text-sm font-semibold disabled:opacity-60 md:col-span-2 xl:col-span-3"
+            className="h-10 w-full rounded-lg bg-black text-white px-4 text-sm font-semibold disabled:opacity-60 md:col-span-2 xl:col-span-2"
           >
             {creating ? 'Adding…' : 'Add'}
           </button>
@@ -493,7 +527,7 @@ export default function AdminPoolStockPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-            placeholder="Search model / factory / color / status"
+            placeholder="Search model / factory / color / status / serial"
           />
 
           <label className="inline-flex items-center gap-2 text-sm text-slate-600">
@@ -520,9 +554,10 @@ export default function AdminPoolStockPage() {
                   <th className="py-2 pr-3">Factory</th>
                   <th className="py-2 pr-3">Model</th>
                   <th className="py-2 pr-3">Color</th>
+                  <th className="py-2 pr-3">Serial #</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3 text-right">Qty</th>
-                  <th className="py-2 pr-3">ETA</th>
+                  <th className="py-2 pr-3">Production Date</th>
                   <th className="py-2 pr-3">Notes</th>
                   <th className="py-2 pr-3">Updated</th>
                   <th className="py-2 pr-3"></th>
@@ -587,6 +622,18 @@ export default function AdminPoolStockPage() {
                         <td className="py-3 pr-3">{it.color?.name || '—'}</td>
                         <td className="py-3 pr-3">
                           {editing ? (
+                            <input
+                              value={editForm.serialNumber}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, serialNumber: e.target.value }))}
+                              className="h-9 w-36 rounded-lg border border-slate-200 bg-white px-2"
+                              placeholder="Serial number"
+                            />
+                          ) : (
+                            <span className="text-slate-700">{it.serialNumber || '—'}</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-3">
+                          {editing ? (
                             <select
                               value={editForm.status}
                               onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as PoolStockItem['status'] }))}
@@ -619,12 +666,12 @@ export default function AdminPoolStockPage() {
                           {editing ? (
                             <input
                               type="date"
-                              value={editForm.eta}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, eta: e.target.value }))}
+                              value={editForm.productionDate}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, productionDate: e.target.value }))}
                               className="h-9 rounded-lg border border-slate-200 bg-white px-2"
                             />
                           ) : (
-                            toDateInputValue(it.eta) || '—'
+                            toDateInputValue(it.productionDate ?? it.eta) || '—'
                           )}
                         </td>
                         <td className="py-3 pr-3">

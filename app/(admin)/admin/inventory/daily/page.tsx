@@ -315,6 +315,7 @@ export default function DailyInventoryPage() {
                           <div className="col-span-1 flex justify-center">
                             <input
                               type="number"
+                              step="0.01"
                               value={it.onHand ?? 0}
                               onChange={e => setCell(it.itemId, 'onHand', Number(e.target.value))}
                               className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-black/10"
@@ -324,6 +325,7 @@ export default function DailyInventoryPage() {
                           <div className="col-span-1 flex justify-center">
                             <input
                               type="number"
+                              step="0.01"
                               value={it.qtyToOrder ?? 0}
                               onChange={e =>
                                 setCell(it.itemId, 'qtyToOrder', Number(e.target.value))

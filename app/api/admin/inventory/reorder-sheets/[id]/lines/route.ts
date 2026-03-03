@@ -86,7 +86,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     })
 
     return NextResponse.json(
-      { sheet, items },
+      {
+        sheet,
+        items: items.map((line) => ({
+          ...line,
+          onHand: Number(line.onHand),
+          qtyToOrder: Number(line.qtyToOrder),
+          item: line.item ? { ...line.item, minStock: Number(line.item.minStock) } : line.item,
+        })),
+      },
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (e) {
@@ -158,7 +166,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       },
     })
 
-    return NextResponse.json(saved, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json(
+      {
+        ...saved,
+        onHand: Number(saved.onHand),
+        qtyToOrder: Number(saved.qtyToOrder),
+        item: saved.item ? { ...saved.item, minStock: Number(saved.item.minStock) } : saved.item,
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (e: any) {
     console.error('PATCH /api/admin/inventory/reorder-sheets/[id]/lines error:', e)
     return json('Internal server error', 500)

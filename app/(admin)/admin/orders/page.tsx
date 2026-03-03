@@ -38,6 +38,7 @@ interface Order {
   dealer: Maybe<{ name: string }>
   factoryLocation: Maybe<{ name: string }>
   createdAt?: string
+  requestedShipDate?: string | null
 }
 
 type ApiResp = {
@@ -61,9 +62,9 @@ type MissingPayload = {
 const aqua = '#00B2CA'
 const deep = '#007A99'
 
-// ✅ APPROVED fuera del UI
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
+  'APPROVED',
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
@@ -96,6 +97,13 @@ function StatusBadge({ status }: { status: string }) {
         <span className={`${base} bg-amber-50 text-amber-900 border-amber-200`}>
           <span className={`${dot} bg-amber-500`} />
           Pending
+        </span>
+      )
+    case 'APPROVED':
+      return (
+        <span className={`${base} bg-sky-50 text-sky-900 border-sky-200`}>
+          <span className={`${dot} bg-sky-500`} />
+          Approved
         </span>
       )
     case 'IN_PRODUCTION':
@@ -151,7 +159,7 @@ function SkeletonGroup() {
 
 /**
  * Botón “siguiente paso” según flow:
- * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+ * PENDING_PAYMENT_APPROVAL -> APPROVED -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
  */
 function NextStep({
   order,
@@ -177,6 +185,14 @@ function NextStep({
 
   const primary =
     s === 'PENDING_PAYMENT_APPROVAL'
+      ? {
+          label: 'Approve Payment',
+          icon: <CircleCheckBig size={16} />,
+          next: 'APPROVED' as FlowStatus,
+          className:
+            'bg-sky-600 hover:bg-sky-700 text-white shadow-[0_10px_30px_rgba(14,165,233,0.25)]',
+        }
+      : s === 'APPROVED'
       ? {
           label: 'Start',
           icon: <Clock size={16} />,
@@ -330,6 +346,9 @@ function AdminOrdersInner() {
           openMissing(orderId, newStatus, payload as MissingPayload)
           return
         }
+        if (payload?.code === 'INVALID_TRANSITION' && payload?.expectedNext) {
+          throw new Error(`Invalid transition. Next status must be ${labelStatus(payload.expectedNext)}.`)
+        }
         throw new Error(payload?.message || 'Failed to update status')
       }
 
@@ -416,7 +435,7 @@ function AdminOrdersInner() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
-  const toggleSort = (col: 'createdAt' | 'status') => {
+  const toggleSort = (col: 'createdAt' | 'requestedShipDate' | 'status') => {
     const nextDir = sort === col ? (dir === 'asc' ? 'desc' : 'asc') : 'desc'
     setParams({ sort: col, dir: nextDir, page: 1 })
   }
@@ -452,6 +471,13 @@ function AdminOrdersInner() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/admin/orders/new"
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold"
+            >
+              Create Order
+            </Link>
+
             <a
               href={exportUrl()}
               className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
@@ -552,12 +578,30 @@ function AdminOrdersInner() {
             </div>
 
             <button
+              onClick={() => toggleSort('createdAt')}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+              title="Sort by order date"
+            >
+              <ArrowUpDown size={16} />
+              Order Date
+            </button>
+
+            <button
+              onClick={() => toggleSort('requestedShipDate')}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+              title="Sort by requested ship date"
+            >
+              <ArrowUpDown size={16} />
+              Requested Ship Date
+            </button>
+
+            <button
               onClick={() => toggleSort('status')}
               className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
               title="Sort by status"
             >
               <ArrowUpDown size={16} />
-              Sort
+              Status
             </button>
           </div>
         </div>
@@ -662,8 +706,14 @@ function AdminOrdersInner() {
                                   {order.dealer?.name || 'Unknown Dealer'}
                                 </div>
                                 <div className="mt-1 text-sm text-slate-600">
-                                  <span className="font-semibold">Created:</span>{' '}
+                                  <span className="font-semibold">Order Date:</span>{' '}
                                   {order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-600">
+                                  <span className="font-semibold">Requested Ship Date:</span>{' '}
+                                  {order.requestedShipDate
+                                    ? new Date(order.requestedShipDate).toLocaleDateString()
+                                    : '—'}
                                 </div>
                               </div>
 

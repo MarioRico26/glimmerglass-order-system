@@ -4,6 +4,7 @@ import type { OrderDocType } from '@prisma/client'
 // ✅ Statuses del flow (APPROVED eliminado)
 export type FlowStatus =
   | 'PENDING_PAYMENT_APPROVAL'
+  | 'APPROVED'
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
@@ -12,6 +13,7 @@ export type FlowStatus =
 // Orden del “camino” normal (CANCELED no forma parte del forward flow)
 export const FLOW_ORDER: Exclude<FlowStatus, 'CANCELED'>[] = [
   'PENDING_PAYMENT_APPROVAL',
+  'APPROVED',
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
@@ -19,9 +21,16 @@ export const FLOW_ORDER: Exclude<FlowStatus, 'CANCELED'>[] = [
 
 // Si tu Prisma enum OrderDocType es el source of truth, usamos ese tipo directo
 export type OrderDocTypeKey = OrderDocType
+export const REQUIREMENT_FIELD_KEYS = [
+  'serialNumber',
+  'requestedShipDate',
+  'productionPriority',
+] as const
+export type RequirementFieldKey = (typeof REQUIREMENT_FIELD_KEYS)[number]
 
 export const STATUS_LABELS: Record<FlowStatus, string> = {
   PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
+  APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
@@ -31,8 +40,8 @@ export const STATUS_LABELS: Record<FlowStatus, string> = {
 // Labels bonitos para docs
 export const DOC_TYPE_LABELS: Partial<Record<OrderDocTypeKey, string>> = {
   PROOF_OF_PAYMENT: 'Proof of Payment',
-  QUOTE: 'Quote',
-  INVOICE: 'Invoice',
+  QUOTE: 'Order Form',
+  INVOICE: 'Invoice with deposit applied',
 
   BUILD_SHEET: 'Build Sheet',
   POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',
@@ -44,6 +53,19 @@ export const DOC_TYPE_LABELS: Partial<Record<OrderDocTypeKey, string>> = {
   PAID_INVOICE: 'Paid Invoice',
 }
 
+export const WORKFLOW_DOC_OPTIONS: OrderDocTypeKey[] = [
+  'PROOF_OF_PAYMENT',
+  'QUOTE',
+  'INVOICE',
+  'BUILD_SHEET',
+  'POST_PRODUCTION_MEDIA',
+  'SHIPPING_CHECKLIST',
+  'PRE_SHIPPING_MEDIA',
+  'BILL_OF_LADING',
+  'PROOF_OF_FINAL_PAYMENT',
+  'PAID_INVOICE',
+]
+
 export function labelDocType(docType?: string | null) {
   if (!docType) return null
   const key = docType as OrderDocTypeKey
@@ -53,8 +75,11 @@ export function labelDocType(docType?: string | null) {
 /**
  * REGLAS de Mike (sin APPROVED):
  *
- * Pending -> In Production requiere:
+ * Pending -> Approved requiere:
  *  - Proof of Payment, Quote, Invoice
+ *
+ * Approved -> In Production:
+ *  - No extra docs (payment already approved)
  *
  * In Production -> Pre-Shipping requiere:
  *  - Build sheet
@@ -69,7 +94,7 @@ export function labelDocType(docType?: string | null) {
  *  - Paid invoice
  */
 export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
-  IN_PRODUCTION: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
+  APPROVED: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
   PRE_SHIPPING: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'],
   COMPLETED: [
     'SHIPPING_CHECKLIST',
@@ -80,7 +105,7 @@ export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
   ],
 }
 
-export const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, Array<'serialNumber'>>> = {
+export const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, RequirementFieldKey[]>> = {
   PRE_SHIPPING: ['serialNumber'], // Mike: serial antes de Pre-Shipping
   COMPLETED: ['serialNumber'],
 }

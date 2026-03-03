@@ -12,9 +12,11 @@ function json(data: any, status = 200) {
 }
 
 function normalizeQty(type: InventoryTxnType, qty: number) {
-  // guardamos qty siempre POSITIVO, y el tipo define el signo lógico
+  // guardamos qty siempre positivo (decimal permitido), y el tipo define el signo lógico
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void type
   if (!Number.isFinite(qty) || qty <= 0) return null
-  return Math.floor(qty)
+  return qty
 }
 
 export async function GET(req: NextRequest) {
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return json({ txns })
+  return json({ txns: txns.map((t) => ({ ...t, qty: Number(t.qty) })) })
 }
 
 export async function POST(req: NextRequest) {
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
   if (!itemId || !locationId) return json({ message: 'itemId and locationId are required' }, 400)
 
   const qty = normalizeQty(type as InventoryTxnType, qtyRaw)
-  if (!qty) return json({ message: 'qty must be a positive integer' }, 400)
+  if (!qty) return json({ message: 'qty must be a positive number' }, 400)
 
   const result = await prisma.$transaction(async (tx) => {
     // asegura stock row
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
       if (!Number.isFinite(d) || d === 0) throw new Error('For ADJUST provide delta (non-zero number)')
     }
 
-    const newOnHand = stock.onHand + delta
+    const newOnHand = Number(stock.onHand) + delta
     if (newOnHand < 0) {
       throw new Error('Insufficient stock (would go below zero)')
     }
@@ -120,7 +122,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return { txn, onHand: newOnHand }
+    return { txn: { ...txn, qty: Number(txn.qty) }, onHand: newOnHand }
   })
 
   return json(result, 201)

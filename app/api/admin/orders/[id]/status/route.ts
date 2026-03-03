@@ -7,13 +7,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { Role, OrderDocType, type OrderStatus } from '@prisma/client'
+import { getStatusRequirements } from '@/lib/orderRequirements'
 
 import {
   FLOW_ORDER,
-  REQUIRED_FOR,
-  REQUIRED_FIELDS_FOR,
   type FlowStatus,
   type OrderDocTypeKey,
+  type RequirementFieldKey,
 } from '@/lib/orderFlow'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
@@ -55,6 +55,14 @@ function isForwardMove(from: FlowStatus, to: FlowStatus) {
   const b = flowIndex(to)
   if (a === -1 || b === -1) return false
   return b > a
+}
+
+function isOneStepForward(from: FlowStatus, to: FlowStatus) {
+  if (to === 'CANCELED') return false
+  const a = flowIndex(from)
+  const b = flowIndex(to)
+  if (a === -1 || b === -1) return false
+  return b === a + 1
 }
 
 function normalizeBlueprintMarkers(raw: unknown): BlueprintMarker[] {
@@ -137,17 +145,31 @@ async function getOrderSummary(orderId: string) {
   }
 }
 
-type MissingOk = { ok: true; missingDocs: OrderDocTypeKey[]; missingFields: string[] }
+type MissingCheckInput = { serialNumber?: string | null }
+type MissingOk = {
+  ok: true
+  requiredDocs: OrderDocTypeKey[]
+  requiredFields: RequirementFieldKey[]
+  missingDocs: OrderDocTypeKey[]
+  missingFields: string[]
+}
 type MissingNotFound = { ok: false; notFound: true }
 type MissingResult = MissingOk | MissingNotFound
 
-async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): Promise<MissingResult> {
-  const needDocs = (REQUIRED_FOR[targetStatus] ?? []) as OrderDocTypeKey[]
-  const needFields = REQUIRED_FIELDS_FOR[targetStatus] ?? []
+async function getMissingForTarget(
+  orderId: string,
+  targetStatus: FlowStatus,
+  input?: MissingCheckInput
+): Promise<MissingResult> {
+  const reqConfig = await getStatusRequirements(targetStatus)
+  const needDocs = reqConfig.requiredDocs
+  const needFields = reqConfig.requiredFields
 
   if (needDocs.length === 0 && needFields.length === 0) {
     return {
       ok: true,
+      requiredDocs: needDocs,
+      requiredFields: needFields,
       missingDocs: [],
       missingFields: [],
     }
@@ -156,7 +178,13 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
   const [order, media] = await Promise.all([
     prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, serialNumber: true, paymentProofUrl: true },
+      select: {
+        id: true,
+        serialNumber: true,
+        requestedShipDate: true,
+        productionPriority: true,
+        paymentProofUrl: true,
+      },
     }),
     needDocs.length
       ? prisma.orderMedia.findMany({
@@ -180,12 +208,26 @@ async function getMissingForTarget(orderId: string, targetStatus: FlowStatus): P
 
   const missingDocs = needDocs.filter((d) => !present.has(d as unknown as OrderDocType))
 
+  const hasSerialOverride = input?.serialNumber !== undefined
+  const serialForValidation = hasSerialOverride
+    ? (input?.serialNumber ?? '')
+    : (order.serialNumber ?? '')
   const missingFields: string[] = []
   for (const f of needFields) {
-    if (f === 'serialNumber' && !order.serialNumber) missingFields.push('serialNumber')
+    if (f === 'serialNumber' && !serialForValidation) missingFields.push('serialNumber')
+    if (f === 'requestedShipDate' && !order.requestedShipDate) missingFields.push('requestedShipDate')
+    if (f === 'productionPriority' && typeof order.productionPriority !== 'number') {
+      missingFields.push('productionPriority')
+    }
   }
 
-  return { ok: true, missingDocs, missingFields }
+  return {
+    ok: true,
+    requiredDocs: needDocs,
+    requiredFields: needFields,
+    missingDocs,
+    missingFields,
+  }
 }
 
 /**
@@ -209,11 +251,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       }
 
       const targetStatus = targetStatusRaw as FlowStatus
-      const requiredDocs = (REQUIRED_FOR[targetStatus] ?? []) as OrderDocTypeKey[]
-      const requiredFields = REQUIRED_FIELDS_FOR[targetStatus] ?? []
       const missing = await getMissingForTarget(orderId, targetStatus)
       if (!missing.ok) return json('Order not found', 404)
 
+      const requiredDocs = missing.requiredDocs
+      const requiredFields = missing.requiredFields
       const missingDocs = missing.missingDocs
       const missingFields = missing.missingFields
       const satisfiedDocs = requiredDocs.filter((d) => !missingDocs.includes(d))
@@ -245,7 +287,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
 /**
  * PATCH: cambiar status con gate de docs/campos
- * Body: { status: FlowStatus, comment?: string }
+ * Body: { status: FlowStatus, comment?: string, serialNumber?: string | null }
  */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
@@ -259,8 +301,19 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const nextStatus = (body?.status as FlowStatus | undefined) ?? undefined
     const comment = (body?.comment as string | undefined) ?? ''
+    const serialRaw = (body as { serialNumber?: unknown } | null)?.serialNumber
+    const serialNumber =
+      serialRaw === undefined
+        ? undefined
+        : serialRaw === null
+        ? null
+        : String(serialRaw).trim()
 
     if (!nextStatus) return json('Missing status', 400)
+    if (!isFlowStatus(nextStatus)) return json('Invalid status', 400)
+    if (typeof serialNumber === 'string' && serialNumber.length > 100) {
+      return json('Serial number too long (max 100 chars)', 400)
+    }
 
     const current = await prisma.order.findUnique({
       where: { id: orderId },
@@ -270,14 +323,29 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const currentStatus = current.status as FlowStatus
 
+    if (isForwardMove(currentStatus, nextStatus) && !isOneStepForward(currentStatus, nextStatus)) {
+      const currentIdx = flowIndex(currentStatus)
+      const expectedNext = currentIdx >= 0 ? FLOW_ORDER[currentIdx + 1] ?? null : null
+      return json('Invalid status transition. Move one step at a time.', 400, {
+        code: 'INVALID_TRANSITION',
+        from: currentStatus,
+        to: nextStatus,
+        expectedNext,
+      })
+    }
+
     // Gate solo al mover forward
     if (isForwardMove(currentStatus, nextStatus)) {
-      const missing = await getMissingForTarget(orderId, nextStatus)
+      const missing = await getMissingForTarget(
+        orderId,
+        nextStatus,
+        serialNumber === undefined ? undefined : { serialNumber }
+      )
       if (!missing.ok) return json('Order not found', 404)
 
       if (missing.missingDocs.length || missing.missingFields.length) {
-        const requiredDocs = (REQUIRED_FOR[nextStatus] ?? []) as OrderDocTypeKey[]
-        const requiredFields = REQUIRED_FIELDS_FOR[nextStatus] ?? []
+        const requiredDocs = missing.requiredDocs
+        const requiredFields = missing.requiredFields
         return json('Missing required documents/fields to move forward', 400, {
           code: 'MISSING_REQUIREMENTS',
           targetStatus: nextStatus,
@@ -304,7 +372,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
-        data: { status: nextStatus as OrderStatus },
+        data: {
+          status: nextStatus as OrderStatus,
+          ...(serialNumber !== undefined ? { serialNumber: serialNumber || null } : {}),
+        },
       })
 
       await tx.orderHistory.create({

@@ -13,8 +13,8 @@ type Props = {
 
 const DOC_LABELS: Record<string, string> = {
   PROOF_OF_PAYMENT: 'Proof of Payment',
-  QUOTE: 'Quote',
-  INVOICE: 'Invoice',
+  QUOTE: 'Order Form',
+  INVOICE: 'Invoice with deposit applied',
 
   BUILD_SHEET: 'Build Sheet',
   POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',

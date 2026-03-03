@@ -54,6 +54,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const notesRaw = body?.notes
     const notes = typeof notesRaw === 'string' && notesRaw.trim() !== '' ? notesRaw.trim() : null
     const etaRaw = body?.eta
+    const productionDateRaw = body?.productionDate
+    const serialNumberRaw = body?.serialNumber
+    const serialNumber =
+      typeof serialNumberRaw === 'string' && serialNumberRaw.trim() !== ''
+        ? serialNumberRaw.trim()
+        : null
     const colorIdRaw = body?.colorId
     const colorId = body?.colorId === null
       ? null
@@ -74,12 +80,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const eta = etaRaw === null ? null : etaRaw ? parseDateInput(etaRaw) : undefined
+    const productionDate =
+      productionDateRaw === null
+        ? null
+        : productionDateRaw
+          ? parseDateInput(productionDateRaw)
+          : undefined
 
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.poolStock.findUnique({ where: { id: params.id } })
       if (!current) {
         throw Object.assign(new Error('Not found'), { status: 404 })
       }
+      const currentAny = current as any
 
       const data: any = {}
       let delta = 0
@@ -92,6 +105,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (status) data.status = status
 
       if (etaRaw !== undefined) data.eta = eta
+
+      if (productionDateRaw !== undefined) data.productionDate = productionDate
+
+      if (serialNumberRaw !== undefined) data.serialNumber = serialNumber
 
       if (notesRaw !== undefined) data.notes = notes
 
@@ -120,6 +137,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
       if (Object.keys(data).length === 0) {
         throw Object.assign(new Error('No valid fields to update'), { status: 400 })
+      }
+
+      const nextStatus = (data.status ?? current.status) as Status
+      const nextQuantity = typeof data.quantity === 'number' ? data.quantity : current.quantity
+      const nextSerial =
+        data.serialNumber !== undefined ? (data.serialNumber as string | null) : currentAny.serialNumber
+      const nextProductionDate =
+        data.productionDate !== undefined
+          ? (data.productionDate as Date | null)
+          : currentAny.productionDate
+
+      if (nextStatus === 'READY' && nextQuantity > 0) {
+        if (!nextSerial) {
+          throw Object.assign(new Error('serialNumber is required for READY stock rows'), {
+            status: 400,
+          })
+        }
+        if (!nextProductionDate) {
+          throw Object.assign(new Error('productionDate is required for READY stock rows'), {
+            status: 400,
+          })
+        }
       }
 
       const updated = await tx.poolStock.update({

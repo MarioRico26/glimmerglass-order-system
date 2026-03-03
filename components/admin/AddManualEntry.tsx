@@ -31,9 +31,15 @@ type UploadMediaErrorPayload = {
   message?: string
 }
 
-// ✅ APPROVED fuera (ya no lo vamos a usar)
+type RequirementsResponse = {
+  message?: string
+  serialNumber?: string | null
+  requirements?: Partial<RequirementsState>
+}
+
 const STATUSES = [
   { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending Payment Approval' },
+  { value: 'APPROVED', label: 'Approved' },
   { value: 'IN_PRODUCTION', label: 'In Production' },
   { value: 'PRE_SHIPPING', label: 'Pre-Shipping' },
   { value: 'COMPLETED', label: 'Completed' },
@@ -42,8 +48,8 @@ const STATUSES = [
 
 const DOC_LABELS: Record<string, string> = {
   PROOF_OF_PAYMENT: 'Proof of Payment',
-  QUOTE: 'Quote',
-  INVOICE: 'Invoice',
+  QUOTE: 'Order Form',
+  INVOICE: 'Invoice with deposit applied',
 
   BUILD_SHEET: 'Build Sheet',
   POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',
@@ -78,35 +84,38 @@ function asStringArray(value: unknown): string[] {
 }
 
 export default function AddManualEntryModal({ orderId, open, onClose, onSuccess }: Props) {
-  const [status, setStatus] = useState<string>('IN_PRODUCTION')
+  const [status, setStatus] = useState<string>('APPROVED')
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null)
   const [uploadInfo, setUploadInfo] = useState<string | null>(null)
   const [requirementsLoading, setRequirementsLoading] = useState(false)
   const [dragOverDoc, setDragOverDoc] = useState<string | null>(null)
+  const [serialNumber, setSerialNumber] = useState('')
+  const [serialDirty, setSerialDirty] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [requirements, setRequirements] = useState<RequirementsState | null>(null)
 
+  const missingDocs = useMemo(() => requirements?.missingDocs ?? [], [requirements])
+  const missingFields = useMemo(() => requirements?.missingFields ?? [], [requirements])
+  const requiredDocs = useMemo(() => requirements?.requiredDocs ?? [], [requirements])
+  const requiredFields = useMemo(() => requirements?.requiredFields ?? [], [requirements])
+  const serialRequired = requiredFields.includes('serialNumber')
+  const serialMissing = missingFields.includes('serialNumber')
   const hint = useMemo(() => {
-    // Mike rules reminder (sin APPROVED)
-    if (status === 'IN_PRODUCTION') {
-      return 'To move to In Production: Proof of Payment, Quote, and Invoice.'
+    if (requirementsLoading) return null
+    if (requiredDocs.length === 0 && requiredFields.length === 0) {
+      return 'No additional requirements for this transition.'
     }
-    if (status === 'PRE_SHIPPING') {
-      return 'To move to Pre-Shipping: Build Sheet, Post-production media, and Serial Number.'
-    }
-    if (status === 'COMPLETED') {
-      return 'To move to Completed: Shipping checklist, Pre-shipping media, Bill of Lading, Proof of Final Payment, Paid invoice, and Serial Number.'
-    }
-    return null
-  }, [status])
-
-  const missingDocs = requirements?.missingDocs ?? []
-  const missingFields = requirements?.missingFields ?? []
-  const requiredDocs = requirements?.requiredDocs ?? []
-  const requiredFields = requirements?.requiredFields ?? []
+    const docsText = requiredDocs.length
+      ? requiredDocs.map((d) => niceDoc(d)).join(', ')
+      : 'none'
+    const fieldsText = requiredFields.length
+      ? requiredFields.map((f) => niceField(f)).join(', ')
+      : 'none'
+    return `Required docs: ${docsText}. Required fields: ${fieldsText}.`
+  }, [requirementsLoading, requiredDocs, requiredFields])
 
   const loadRequirements = async (targetStatus: string) => {
     setRequirementsLoading(true)
@@ -115,8 +124,11 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
         `/api/admin/orders/${orderId}/status?targetStatus=${encodeURIComponent(targetStatus)}`,
         { cache: 'no-store' }
       )
-      const data = await safeJson<{ requirements?: Partial<RequirementsState>; message?: string }>(res)
+      const data = await safeJson<RequirementsResponse>(res)
       if (!res.ok) throw new Error(data?.message || `Failed to load requirements (${res.status})`)
+      if (!serialDirty) {
+        setSerialNumber(typeof data?.serialNumber === 'string' ? data.serialNumber : '')
+      }
 
       const payload = data?.requirements
       const requiredDocsNext = asStringArray(payload?.requiredDocs)
@@ -161,6 +173,8 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
     if (!open) return
     setError(null)
     setUploadInfo(null)
+    setSerialNumber('')
+    setSerialDirty(false)
     void loadRequirements(status)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, status, orderId])
@@ -182,21 +196,8 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
       const data = await safeJson<UploadMediaErrorPayload>(res)
       if (!res.ok) throw new Error(data?.message || `Upload failed (${res.status})`)
 
-      setRequirements((prev) => {
-        if (!prev) return prev
-        const nextMissingDocs = prev.missingDocs.filter((d) => d !== docType)
-        const nextSatisfiedDocs = prev.satisfiedDocs.includes(docType)
-          ? prev.satisfiedDocs
-          : [...prev.satisfiedDocs, docType]
-        if (nextMissingDocs.length === 0 && prev.missingFields.length === 0) {
-          setError(null)
-        }
-        return {
-          ...prev,
-          missingDocs: nextMissingDocs,
-          satisfiedDocs: nextSatisfiedDocs,
-        }
-      })
+      await loadRequirements(status)
+      setError(null)
       setUploadInfo(`${niceDoc(docType)} uploaded. Click Save to continue.`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -219,6 +220,9 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
         body: JSON.stringify({
           status,
           comment: comment?.trim() || '',
+          ...(serialRequired || serialNumber.trim().length
+            ? { serialNumber: serialNumber.trim() || null }
+            : {}),
         }),
       })
 
@@ -248,6 +252,7 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
       }
 
       setComment('')
+      setSerialDirty(false)
       onSuccess()
       onClose()
     } catch (err: unknown) {
@@ -291,7 +296,7 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
             </select>
 
             {hint ? <div className="text-xs text-slate-500 mt-1">{hint}</div> : null}
-            {status === 'IN_PRODUCTION' ? (
+            {status === 'APPROVED' ? (
               <div className="text-xs text-emerald-700 mt-1">
                 Dealer payment proof uploaded at order creation counts automatically.
               </div>
@@ -308,6 +313,34 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
               className="w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
           </div>
+
+          {(serialRequired || serialNumber.trim().length > 0) && (
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-slate-700">
+                Serial Number {serialRequired ? '(required)' : '(optional)'}
+              </label>
+              <input
+                type="text"
+                value={serialNumber}
+                onChange={(e) => {
+                  setSerialNumber(e.target.value)
+                  setSerialDirty(true)
+                }}
+                placeholder="e.g. GP-2026-000123"
+                className={[
+                  'h-11 w-full rounded-xl border bg-white px-3 focus:outline-none focus:ring-2',
+                  serialMissing
+                    ? 'border-amber-300 focus:ring-amber-200'
+                    : 'border-slate-300 focus:ring-sky-300',
+                ].join(' ')}
+              />
+              {serialMissing ? (
+                <div className="text-xs text-amber-700">
+                  Serial Number is required for this status transition.
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {(requirementsLoading || requiredDocs.length > 0 || requiredFields.length > 0) && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">

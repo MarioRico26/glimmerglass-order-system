@@ -61,6 +61,7 @@ export async function GET() {
             city: d.city,
             state: d.state,
             createdAt: d.createdAt,
+            hasLogin: Boolean(owner),
             approved,
             agreementSignedAt: d.agreementSignedAt,
             agreementUrl: d.agreementUrl,

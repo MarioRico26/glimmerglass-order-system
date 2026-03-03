@@ -22,6 +22,9 @@ type PoolModel = {
   depthFt: number | null
   imageUrl?: string | null
   blueprintUrl?: string | null
+  maxSkimmers?: number | null
+  maxReturns?: number | null
+  maxMainDrains?: number | null
   defaultFactoryLocationId?: string | null
   defaultFactoryLocation?: { id: string; name: string } | null
 }
@@ -32,8 +35,19 @@ type Color = {
   swatchUrl?: string | null
 }
 
+type Factory = {
+  id: string
+  name: string
+  city?: string | null
+  state?: string | null
+}
+
 type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
 type ReadyStockSummary = { poolModel: { id: string } | null; quantity: number }
+type PenetrationMode =
+  | 'PENETRATIONS_WITH_INSTALL'
+  | 'PENETRATIONS_WITHOUT_INSTALL'
+  | 'NO_PENETRATIONS'
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
@@ -58,12 +72,16 @@ export default function NewOrderPage() {
   const [hardwareAutocover, setHardwareAutocover] = useState<boolean | null>(null)
 
   // data
+  const [factories, setFactories] = useState<Factory[]>([])
+  const [selectedFactoryId, setSelectedFactoryId] = useState('')
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
   const [modelSearch, setModelSearch] = useState('')
   const [onlyReadyModels, setOnlyReadyModels] = useState(false)
-  const [markerType, setMarkerType] = useState<BlueprintMarker['type']>('skimmer')
+  const [markerType, setMarkerType] = useState<'skimmer' | 'return' | 'drain'>('skimmer')
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
+  const [markerError, setMarkerError] = useState('')
+  const [penetrationMode, setPenetrationMode] = useState<PenetrationMode>('PENETRATIONS_WITHOUT_INSTALL')
   const blueprintRef = useRef<HTMLDivElement | null>(null)
   const [readyStockRows, setReadyStockRows] = useState<ReadyStockSummary[]>([])
   const [inStock, setInStock] = useState<
@@ -72,6 +90,7 @@ export default function NewOrderPage() {
       factory: { id?: string; name: string }
       quantity: number
       eta: string | null
+      productionDate: string | null
       status: 'READY'
     }[]
   >([])
@@ -107,10 +126,13 @@ export default function NewOrderPage() {
 
   const visibleModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
-    const searched = !q ? models : models.filter((m) => m.name.toLowerCase().includes(q))
+    const byFactory = !selectedFactoryId
+      ? models
+      : models.filter((m) => m.defaultFactoryLocationId === selectedFactoryId)
+    const searched = !q ? byFactory : byFactory.filter((m) => m.name.toLowerCase().includes(q))
     if (!onlyReadyModels) return searched
     return searched.filter((m) => (readyQtyByModel.get(m.id) || 0) > 0)
-  }, [models, modelSearch, onlyReadyModels, readyQtyByModel])
+  }, [models, modelSearch, onlyReadyModels, readyQtyByModel, selectedFactoryId])
 
   const blueprintIsPdf = useMemo(() => {
     const url = activeModel?.blueprintUrl || ''
@@ -156,24 +178,28 @@ export default function NewOrderPage() {
           })
         }
 
-        const [mRes, cRes, sRes] = await Promise.all([
+        const [mRes, cRes, sRes, fRes] = await Promise.all([
           fetch('/api/catalog/pool-models'),
           fetch('/api/catalog/colors'),
           fetch('/api/dealer/in-stock', { cache: 'no-store' }),
+          fetch('/api/catalog/factories'),
         ])
 
-        const [mJson, cJson, sJson] = await Promise.all([
+        const [mJson, cJson, sJson, fJson] = await Promise.all([
           mRes.json(),
           cRes.json(),
           sRes.json().catch(() => null),
+          fRes.json().catch(() => null),
         ])
 
         if (!mRes.ok) throw new Error(mJson?.message || 'Error loading pool models')
         if (!cRes.ok) throw new Error(cJson?.message || 'Error loading colors')
+        if (!fRes.ok) throw new Error(fJson?.message || 'Error loading factories')
 
         setModels(mJson.items || [])
         setColors(cJson.items || [])
         setReadyStockRows(Array.isArray(sJson?.items) ? sJson.items : [])
+        setFactories(Array.isArray(fJson?.items) ? fJson.items : [])
       } catch (e: unknown) {
         setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Error fetching data' })
       } finally {
@@ -219,6 +245,7 @@ export default function NewOrderPage() {
           poolModelId,
           colorId,
         })
+        if (selectedFactoryId) params.set('factoryId', selectedFactoryId)
         const res = await fetch(`/api/dealer/in-stock?${params.toString()}`, {
           cache: 'no-store',
         })
@@ -233,12 +260,14 @@ export default function NewOrderPage() {
                   factory: { id?: string; name: string }
                   quantity: number
                   eta: string | null
+                  productionDate: string | null
                   status: 'READY'
                 }) => ({
                   id: row.id,
                   factory: row.factory,
                   quantity: row.quantity,
                   eta: row.eta ?? null,
+                  productionDate: row.productionDate ?? null,
                   status: row.status,
                 }))
               : []
@@ -254,15 +283,34 @@ export default function NewOrderPage() {
     return () => {
       abort = true
     }
-  }, [poolModelId, colorId])
+  }, [poolModelId, colorId, selectedFactoryId])
 
   useEffect(() => {
     setMarkers([])
+    setMarkerError('')
   }, [poolModelId])
+
+  useEffect(() => {
+    if (penetrationMode === 'NO_PENETRATIONS') {
+      setMarkers([])
+      setMarkerError('')
+    }
+  }, [penetrationMode])
 
   useEffect(() => {
     setSelectedStockId('')
   }, [poolModelId, colorId])
+
+  useEffect(() => {
+    if (!selectedFactoryId || !poolModelId) return
+    const selectedModel = models.find((m) => m.id === poolModelId)
+    if (!selectedModel) return
+    if (selectedModel.defaultFactoryLocationId !== selectedFactoryId) {
+      setPoolModelId('')
+      setSelectedStockId('')
+      setMarkers([])
+    }
+  }, [selectedFactoryId, poolModelId, models])
 
   useEffect(() => {
     if (!selectedStockId) return
@@ -279,6 +327,7 @@ export default function NewOrderPage() {
   }, [inStock, prefillStockId])
 
   const handleBlueprintClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (penetrationMode === 'NO_PENETRATIONS') return
     if (!blueprintRef.current) return
     const rect = blueprintRef.current.getBoundingClientRect()
     if (!rect.width || !rect.height) return
@@ -287,6 +336,19 @@ export default function NewOrderPage() {
     const clampedX = Math.min(100, Math.max(0, x))
     const clampedY = Math.min(100, Math.max(0, y))
 
+    const limit = markerType === 'skimmer'
+      ? activeModel?.maxSkimmers ?? null
+      : markerType === 'return'
+        ? activeModel?.maxReturns ?? null
+        : activeModel?.maxMainDrains ?? null
+
+    const currentCount = markers.filter((m) => m.type === markerType).length
+    if (typeof limit === 'number' && limit >= 0 && currentCount >= limit) {
+      setMarkerError(`Maximum ${markerType} markers reached for this model (${limit}).`)
+      return
+    }
+
+    setMarkerError('')
     setMarkers((prev) => [
       ...prev,
       {
@@ -312,11 +374,11 @@ export default function NewOrderPage() {
     return null
   }
 
-  function labelEta(value: string | null) {
-    if (!value) return 'No ETA'
+  function labelProductionDate(value: string | null) {
+    if (!value) return 'No production date'
     const d = new Date(value)
-    if (Number.isNaN(d.getTime())) return 'No ETA'
-    return `ETA: ${d.toLocaleDateString()}`
+    if (Number.isNaN(d.getTime())) return 'No production date'
+    return `Production Date: ${d.toLocaleDateString()}`
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -380,6 +442,7 @@ export default function NewOrderPage() {
       formData.append('notes', notes)
       formData.append('paymentProof', paymentProof)
       formData.append('shippingMethod', shippingMethod)
+      formData.append('penetrationMode', penetrationMode)
 
       // nuevo campo (como string ISO de date sin hora)
       formData.append('requestedShipDate', requestedShipDate)
@@ -422,8 +485,10 @@ export default function NewOrderPage() {
       setHardwareReturns(false)
       setHardwareMainDrains(false)
       setHardwareAutocover(null)
+      setPenetrationMode('PENETRATIONS_WITHOUT_INSTALL')
       setMarkers([])
       setMarkerType('skimmer')
+      setMarkerError('')
       setSelectedStockId('')
     } catch (e: unknown) {
       setMsg({
@@ -496,6 +561,29 @@ export default function NewOrderPage() {
         ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Production Facility */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Production Facility
+            </label>
+            <select
+              value={selectedFactoryId}
+              onChange={(e) => setSelectedFactoryId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+            >
+              <option value="">All facilities</option>
+              {factories.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                  {f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Pool models below are filtered by the selected production facility.
+            </p>
+          </div>
+
           {/* Pool Model */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -528,7 +616,7 @@ export default function NewOrderPage() {
                     href="/dealer/in-stock"
                     className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
                   >
-                    View In-Stock List
+                    View Available Stock
                   </a>
                 </div>
               </div>
@@ -574,7 +662,7 @@ export default function NewOrderPage() {
                             <div className="font-bold text-slate-900">{m.name}</div>
                             {readyQty > 0 ? (
                               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                In stock: {readyQty}
+                                Available now: {readyQty}
                               </span>
                             ) : selected ? (
                               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
@@ -602,10 +690,10 @@ export default function NewOrderPage() {
                                 rel="noopener noreferrer"
                                 className="text-sky-700 underline"
                               >
-                                View blueprint
+                                View dig sheet
                               </a>
                             ) : (
-                              <span className="text-slate-400">No blueprint</span>
+                              <span className="text-slate-400">No dig sheet</span>
                             )}
                           </div>
                         </div>
@@ -673,12 +761,21 @@ export default function NewOrderPage() {
 
             {/* In-stock hint */}
             {poolModelId && colorId ? (
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+              <div
+                className={[
+                  'mt-4 rounded-xl px-4 py-3',
+                  inStock.length > 0
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border border-amber-200 bg-amber-50 text-amber-800',
+                ].join(' ')}
+              >
                 <div className="text-sm font-semibold flex items-center gap-2">
-                  ✅ IN STOCK — READY TO SHIP
+                  {inStock.length > 0
+                    ? 'AVAILABLE NOW — READY TO SHIP'
+                    : 'NOT AVAILABLE NOW — BUILD REQUIRED'}
                 </div>
                 {stockLoading ? (
-                  <div className="text-sm text-emerald-700 mt-1">Checking availability…</div>
+                  <div className="text-sm mt-1">Checking availability…</div>
                 ) : inStock.length > 0 ? (
                   <div className="mt-2 space-y-2">
                     <label className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-sm text-emerald-900">
@@ -706,14 +803,14 @@ export default function NewOrderPage() {
                           className="mt-1"
                         />
                         <span>
-                          ✅ Available now at {row.factory?.name || 'Factory'} ({row.quantity} units) • {labelEta(row.eta)}
+                          ✅ Available now at {row.factory?.name || 'Factory'} ({row.quantity} units) • {labelProductionDate(row.productionDate ?? row.eta)}
                         </span>
                       </label>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-emerald-700 mt-1">
-                    No ready stock available right now.
+                  <div className="text-sm mt-1">
+                    This model/color combination must be built to order.
                   </div>
                 )}
                 {selectedStockId ? (
@@ -725,18 +822,73 @@ export default function NewOrderPage() {
             ) : null}
           </div>
 
-          {/* Blueprint markup */}
+          {/* Penetration Mode */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Blueprint Markup (optional)
+              Penetration Option
+            </label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="penetrationMode"
+                  checked={penetrationMode === 'PENETRATIONS_WITH_INSTALL'}
+                  onChange={() => setPenetrationMode('PENETRATIONS_WITH_INSTALL')}
+                  className="mt-1"
+                />
+                <span>Glimmerglass installs hardware ($125 per skimmer, $75 per return)</span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="penetrationMode"
+                  checked={penetrationMode === 'PENETRATIONS_WITHOUT_INSTALL'}
+                  onChange={() => setPenetrationMode('PENETRATIONS_WITHOUT_INSTALL')}
+                  className="mt-1"
+                />
+                <span>Glimmerglass cuts penetrations, white goods ship loose</span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="penetrationMode"
+                  checked={penetrationMode === 'NO_PENETRATIONS'}
+                  onChange={() => setPenetrationMode('NO_PENETRATIONS')}
+                  className="mt-1"
+                />
+                <span>No penetrations</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Dig Sheet markup */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Dig Sheet Markup (optional)
             </label>
 
-            {!activeModel?.blueprintUrl ? (
+            {penetrationMode === 'NO_PENETRATIONS' ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                No blueprint uploaded for this model yet.
+                Dig sheet markup is skipped because this order is set to <span className="font-semibold">No penetrations</span>.
+              </div>
+            ) : !activeModel?.blueprintUrl ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                No dig sheet uploaded for this model yet.
               </div>
             ) : (
               <div className="space-y-3">
+                <div className="text-xs text-slate-500">
+                  Standard fitting configuration shown, please indicate changes if required.
+                </div>
+                <div className="text-xs text-slate-500">
+                  Model limits:
+                  {' '}
+                  Skimmers <span className="font-semibold">{activeModel?.maxSkimmers ?? 'no limit'}</span>
+                  {' • '}
+                  Returns <span className="font-semibold">{activeModel?.maxReturns ?? 'no limit'}</span>
+                  {' • '}
+                  Main Drains <span className="font-semibold">{activeModel?.maxMainDrains ?? 'no limit'}</span>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-slate-500">Marker type:</span>
                   <button
@@ -838,8 +990,14 @@ export default function NewOrderPage() {
                 </div>
 
                 <div className="text-xs text-slate-500">
-                  Click on the blueprint to place markers. You can remove markers below before submitting.
+                  Click on the dig sheet to place markers. You can remove markers below before submitting.
                 </div>
+
+                {markerError ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {markerError}
+                  </div>
+                ) : null}
 
                 {markers.length > 0 && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -885,7 +1043,7 @@ export default function NewOrderPage() {
                 >
                   <option value="">Select shipping method</option>
                   <option value="PICK_UP">Pick Up at Factory</option>
-                  <option value="QUOTE">Request Shipping Quote</option>
+                  <option value="QUOTE">Glimmerglass Freight (quote to be provided)</option>
                 </select>
                 <Settings2
                   className="pointer-events-none absolute right-3 top-2.5 text-slate-400"
@@ -1055,9 +1213,7 @@ export default function NewOrderPage() {
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Only certified checks or bank transfers are accepted. Your payment
-              will be reviewed by our accounting department before production
-              begins.
+              Example: Scan of certified check or receipt of wire transfer. Your payment will be reviewed by our accounting department before production begins.
             </p>
           </div>
 

@@ -3,13 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
 
-const SAFE_SORT = new Set(['createdAt', 'status'])
+const SAFE_SORT = new Set(['createdAt', 'requestedShipDate', 'status'])
 const SAFE_DIR = new Set(['asc', 'desc'])
 
 type OrderStatus =
     | 'PENDING_PAYMENT_APPROVAL'
     | 'APPROVED'
     | 'IN_PRODUCTION'
+    | 'PRE_SHIPPING'
     | 'COMPLETED'
     | 'CANCELED'
 
@@ -22,7 +23,9 @@ export async function GET(req: NextRequest) {
         const status = searchParams.get('status') || ''
         const dealer = searchParams.get('dealer') || ''
         const factory = searchParams.get('factory') || ''
-        const sort = SAFE_SORT.has(searchParams.get('sort') || '') ? (searchParams.get('sort') as 'createdAt' | 'status') : 'createdAt'
+        const sort = SAFE_SORT.has(searchParams.get('sort') || '')
+            ? (searchParams.get('sort') as 'createdAt' | 'requestedShipDate' | 'status')
+            : 'createdAt'
         const dir = SAFE_DIR.has(searchParams.get('dir') || '') ? (searchParams.get('dir') as 'asc' | 'desc') : 'desc'
 
         const where: any = {}
@@ -48,6 +51,7 @@ export async function GET(req: NextRequest) {
                 status: true,
                 deliveryAddress: true,
                 createdAt: true,
+                requestedShipDate: true,
                 dealer: { select: { name: true, email: true } },
                 poolModel: { select: { name: true } },
                 color: { select: { name: true } },
@@ -60,6 +64,7 @@ export async function GET(req: NextRequest) {
             status: OrderStatus
             deliveryAddress: string | null
             createdAt: Date
+            requestedShipDate: Date | null
             updatedAt: Date
             dealerName: string | null
             dealerEmail: string | null
@@ -73,6 +78,7 @@ export async function GET(req: NextRequest) {
             status: o.status as OrderStatus,
             deliveryAddress: o.deliveryAddress ?? null,
             createdAt: o.createdAt,
+            requestedShipDate: o.requestedShipDate ?? null,
             updatedAt: o.createdAt, // fallback
             dealerName: o.dealer?.name ?? null,
             dealerEmail: o.dealer?.email ?? null,
@@ -82,7 +88,7 @@ export async function GET(req: NextRequest) {
         }))
 
         const header = [
-            'Order ID','Status','Delivery Address','Created At','Updated At',
+            'Order ID','Status','Delivery Address','Order Date','Requested Ship Date','Updated At',
             'Dealer Name','Dealer Email','Pool Model','Color','Factory',
         ].join(',')
 
@@ -92,6 +98,7 @@ export async function GET(req: NextRequest) {
                 r.status,
                 r.deliveryAddress ?? '',
                 r.createdAt.toISOString(),
+                r.requestedShipDate ? r.requestedShipDate.toISOString() : '',
                 r.updatedAt.toISOString(),
                 r.dealerName ?? '',
                 r.dealerEmail ?? '',

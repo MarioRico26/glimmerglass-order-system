@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         status: true,
         quantity: true,
         eta: true,
+        productionDate: true,
         factory: { select: { id: true, name: true, city: true, state: true } },
         poolModel: { select: { id: true, name: true, lengthFt: true, widthFt: true, depthFt: true } },
         color: { select: { id: true, name: true, swatchUrl: true } },

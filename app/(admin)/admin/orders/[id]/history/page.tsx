@@ -64,6 +64,7 @@ interface FactoryLocation {
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
+  APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
@@ -72,7 +73,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const SHIPPING_LABELS: Record<string, string> = {
   PICK_UP: 'Pick Up',
-  QUOTE: 'Shipping Quote',
+  QUOTE: 'Glimmerglass Freight (quote to be provided)',
 }
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
@@ -213,6 +214,37 @@ export default function OrderHistoryPage() {
     } catch (error) {
       console.error('Save error:', error)
       setMessage('❌ Network error. Please check your connection.')
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMessage(''), 3000)
+    }
+  }
+
+  const handleApprovePayment = async () => {
+    try {
+      setSaving(true)
+      setMessage('🔄 Approving payment proof...')
+
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'APPROVED',
+          comment: 'Payment proof approved by admin',
+        }),
+      })
+
+      const payload = await safeJson<{ message?: string; code?: string }>(res)
+      if (!res.ok) {
+        throw new Error(payload?.message || 'Could not approve payment proof')
+      }
+
+      await loadAll()
+      setMessage('✅ Payment proof approved.')
+    } catch (error) {
+      console.error('Approve payment error:', error)
+      const msg = error instanceof Error ? error.message : 'Could not approve payment proof'
+      setMessage(`❌ ${msg}`)
     } finally {
       setSaving(false)
       setTimeout(() => setMessage(''), 3000)
@@ -435,7 +467,7 @@ export default function OrderHistoryPage() {
 
             <div className="px-6 pb-6">
               <BlueprintMarkersCard
-                title="Blueprint Markers"
+                title="Dig Sheet Markers"
                 subtitle="Marker positions captured by dealer during order creation."
                 blueprintUrl={summary.poolModel?.blueprintUrl ?? null}
                 markers={summary.blueprintMarkers ?? []}
@@ -444,6 +476,16 @@ export default function OrderHistoryPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 mb-8">
+            {summary.status === 'PENDING_PAYMENT_APPROVAL' && (
+              <button
+                onClick={handleApprovePayment}
+                disabled={saving}
+                className="bg-sky-600 hover:bg-sky-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
+              >
+                Approve Payment Proof
+              </button>
+            )}
+
             <button
               onClick={() => setManualOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
@@ -574,7 +616,7 @@ export default function OrderHistoryPage() {
                 >
                   <option value="">Not set</option>
                   <option value="PICK_UP">Pick Up</option>
-                  <option value="QUOTE">Shipping Quote</option>
+                  <option value="QUOTE">Glimmerglass Freight (quote to be provided)</option>
                 </select>
               </div>
 

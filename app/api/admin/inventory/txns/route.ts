@@ -11,9 +11,9 @@ function json(message: string, status = 400, extra?: any) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
-function asInt(v: any) {
+function asNumber(v: any) {
   const n = Number(v)
-  return Number.isFinite(n) ? Math.trunc(n) : NaN
+  return Number.isFinite(n) ? n : NaN
 }
 
 // GET: list txns (with filters)
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const locationId = searchParams.get('locationId')
   const orderId = searchParams.get('orderId')
   const type = searchParams.get('type') // IN/OUT/ADJUST
-  const take = Math.min(200, Math.max(1, asInt(searchParams.get('take') || 50)))
+  const take = Math.min(200, Math.max(1, Math.trunc(asNumber(searchParams.get('take') || 50))))
 
   const where: any = {}
   if (itemId) where.itemId = itemId
@@ -46,7 +46,15 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return NextResponse.json({ txns }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(
+    {
+      txns: txns.map((t) => ({
+        ...t,
+        qty: Number(t.qty),
+      })),
+    },
+    { headers: { 'Cache-Control': 'no-store' } }
+  )
 }
 
 /**
@@ -66,7 +74,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
 
   const type = body?.type as InventoryTxnType | undefined
-  const qty = asInt(body?.qty)
+  const qty = asNumber(body?.qty)
   const itemId = String(body?.itemId || '')
   const locationId = String(body?.locationId || '')
   const notes = body?.notes ? String(body.notes) : null
@@ -105,7 +113,7 @@ export async function POST(req: NextRequest) {
         select: { id: true, onHand: true },
       })
 
-      const nextOnHand = stock.onHand + delta
+      const nextOnHand = Number(stock.onHand) + delta
       if (nextOnHand < 0) {
         throw Object.assign(new Error('Insufficient stock'), {
           status: 400,
@@ -142,7 +150,13 @@ export async function POST(req: NextRequest) {
       return { txn, stock: updatedStock }
     })
 
-    return NextResponse.json(result, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json(
+      {
+        txn: { ...result.txn, qty: Number(result.txn.qty) },
+        stock: { ...result.stock, onHand: Number(result.stock.onHand) },
+      },
+      { status: 201, headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (e: any) {
     const status = e?.status || 500
     if (e?.code === 'INSUFFICIENT_STOCK') {
@@ -151,4 +165,4 @@ export async function POST(req: NextRequest) {
     console.error('POST /inventory/txns error:', e)
     return json(e?.message || 'Internal Server Error', status)
   }
-}2
+}

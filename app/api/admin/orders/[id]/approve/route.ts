@@ -6,8 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
 import { OrderDocType } from '@prisma/client'
-
-const REQUIRED: OrderDocType[] = ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE']
+import { getStatusRequirements } from '@/lib/orderRequirements'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -15,17 +14,31 @@ function json(message: string, status = 400, extra?: Record<string, unknown>) {
 
 export async function PATCH(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const session = await requireRole(['ADMIN', 'SUPERADMIN'])
     const id = params.id
+    const email = (session?.user as { email?: string } | undefined)?.email
+    if (!email) return json('Unauthorized', 401)
 
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, status: true, paymentProofUrl: true },
+      select: {
+        id: true,
+        status: true,
+        paymentProofUrl: true,
+        serialNumber: true,
+        requestedShipDate: true,
+        productionPriority: true,
+      },
     })
     if (!order) return json('Order not found', 404)
+    if (order.status !== 'PENDING_PAYMENT_APPROVAL') {
+      return json('Only pending orders can be approved', 400)
+    }
+
+    const requirements = await getStatusRequirements('APPROVED')
 
     const media = await prisma.orderMedia.findMany({
-      where: { orderId: id, docType: { in: REQUIRED } },
+      where: { orderId: id, docType: { in: requirements.requiredDocs } },
       select: { docType: true },
     })
 
@@ -33,19 +46,48 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     if (order.paymentProofUrl) {
       present.add('PROOF_OF_PAYMENT')
     }
-    const missingDocs = REQUIRED.filter((d) => !present.has(d))
 
-    if (missingDocs.length) {
-      return json('Missing required documents to approve', 400, {
+    const missingDocs = requirements.requiredDocs.filter((d) =>
+      !present.has(d as unknown as OrderDocType)
+    )
+
+    const missingFields: string[] = []
+    for (const f of requirements.requiredFields) {
+      if (f === 'serialNumber' && !order.serialNumber) missingFields.push('serialNumber')
+      if (f === 'requestedShipDate' && !order.requestedShipDate) missingFields.push('requestedShipDate')
+      if (f === 'productionPriority' && typeof order.productionPriority !== 'number') {
+        missingFields.push('productionPriority')
+      }
+    }
+
+    if (missingDocs.length || missingFields.length) {
+      return json('Missing required documents/fields to approve', 400, {
         code: 'MISSING_REQUIREMENTS',
         targetStatus: 'APPROVED',
-        missing: { docs: missingDocs, fields: [] },
+        missing: { docs: missingDocs, fields: missingFields },
       })
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { status: 'APPROVED' },
+    const actor = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    })
+    if (!actor) return json('User not found', 404)
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.order.update({
+        where: { id },
+        data: { status: 'APPROVED' },
+      })
+      await tx.orderHistory.create({
+        data: {
+          orderId: id,
+          status: 'APPROVED',
+          comment: 'Payment proof approved by admin',
+          userId: actor.id,
+        },
+      })
+      return next
     })
 
     return NextResponse.json(updated, { status: 200, headers: { 'Cache-Control': 'no-store' } })

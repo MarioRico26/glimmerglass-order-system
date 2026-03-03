@@ -20,8 +20,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const { itemId, locationId, newOnHand } = body || {}
+  const onHandValue = Number(newOnHand)
 
-  if (!itemId || !locationId || !Number.isInteger(newOnHand)) {
+  if (!itemId || !locationId || !Number.isFinite(onHandValue) || onHandValue < 0) {
     return json({ message: 'itemId, locationId, newOnHand required' }, 400)
   }
 
@@ -33,17 +34,17 @@ export async function POST(req: NextRequest) {
       create: {
         itemId,
         locationId,
-        onHand: newOnHand,
+        onHand: onHandValue,
       },
       update: {
-        onHand: newOnHand,
+        onHand: onHandValue,
       },
     })
 
     await tx.inventoryTxn.create({
       data: {
         type: InventoryTxnType.ADJUST,
-        qty: Math.abs(newOnHand),
+        qty: Math.abs(onHandValue),
         itemId,
         locationId,
         notes: 'Daily inventory adjustment',
@@ -54,5 +55,5 @@ export async function POST(req: NextRequest) {
     return stock
   })
 
-  return json({ ok: true, stock: result })
+  return json({ ok: true, stock: { ...result, onHand: Number(result.onHand) } })
 }

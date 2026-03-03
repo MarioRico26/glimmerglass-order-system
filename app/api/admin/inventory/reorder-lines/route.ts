@@ -19,8 +19,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const { locationId, date, itemId, qtyToOrder } = body || {}
+  const qty = Number(qtyToOrder)
 
-  if (!locationId || !date || !itemId || !Number.isInteger(qtyToOrder)) {
+  if (!locationId || !date || !itemId || !Number.isFinite(qty) || qty < 0) {
     return json({ message: 'invalid payload' }, 400)
   }
 
@@ -46,14 +47,21 @@ export async function POST(req: NextRequest) {
       },
     },
     update: {
-      qtyToOrder,
+      qtyToOrder: qty,
     },
     create: {
       sheetId: sheet.id,
       itemId,
-      qtyToOrder,
+      qtyToOrder: qty,
     },
   })
 
-  return json({ ok: true, line })
+  return json({
+    ok: true,
+    line: {
+      ...line,
+      onHand: Number(line.onHand),
+      qtyToOrder: Number(line.qtyToOrder),
+    },
+  })
 }

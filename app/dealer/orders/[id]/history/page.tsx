@@ -53,6 +53,10 @@ const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
     icon: BadgeDollarSign,
     badge: 'bg-amber-50 text-amber-800 border-amber-200',
   },
+  APPROVED: {
+    icon: CircleCheckBig,
+    badge: 'bg-sky-50 text-sky-800 border-sky-200',
+  },
   IN_PRODUCTION: {
     icon: CircleCheckBig,
     badge: 'bg-indigo-50 text-indigo-800 border-indigo-200',
@@ -146,7 +150,7 @@ export default function DealerOrderHistoryPage() {
 
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">
         <BlueprintMarkersCard
-          title="Blueprint Markers"
+          title="Dig Sheet Markers"
           subtitle="Skimmer, return and drain points saved on your order."
           blueprintUrl={summary?.poolModel?.blueprintUrl ?? null}
           markers={summary?.blueprintMarkers ?? []}

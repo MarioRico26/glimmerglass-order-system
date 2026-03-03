@@ -20,6 +20,7 @@ type Maybe<T> = T | null | undefined
 
 type OrderStatus =
   | 'PENDING_PAYMENT_APPROVAL'
+  | 'APPROVED'
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
@@ -30,7 +31,10 @@ interface Order {
   deliveryAddress: string
   status: OrderStatus
   paymentProofUrl?: string | null
-  poolModel: Maybe<{ name: string }>
+  poolModel: Maybe<{
+    name: string
+    defaultFactoryLocation?: { id: string; name: string } | null
+  }>
   color: Maybe<{ name: string }>
   dealer: Maybe<{ name: string }>
   factoryLocation: Maybe<{ name: string }>
@@ -72,6 +76,8 @@ function statusPill(status: OrderStatus) {
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
       return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
+    case 'APPROVED':
+      return <span className={`${base} bg-sky-50 text-sky-800 border-sky-200`}>Approved</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>In Prod</span>
     case 'PRE_SHIPPING':
@@ -93,12 +99,20 @@ function sortKey(o: Order) {
   return [p, ship, -created, o.id]
 }
 
-function compareKeys(a: any[], b: any[]) {
+function compareKeys(a: Array<number | string>, b: Array<number | string>) {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if (a[i] < b[i]) return -1
     if (a[i] > b[i]) return 1
   }
   return 0
+}
+
+function resolveFactoryName(order: Order) {
+  return (
+    order.factoryLocation?.name ||
+    order.poolModel?.defaultFactoryLocation?.name ||
+    'Unassigned Factory'
+  )
 }
 
 export default function ProductionBoardByFactory() {
@@ -108,8 +122,6 @@ export default function ProductionBoardByFactory() {
   const [error, setError] = useState<string | null>(null)
 
   const [auto, setAuto] = useState(false)
-  const [showCompleted, setShowCompleted] = useState(false)
-  const [showCanceled, setShowCanceled] = useState(false)
   const [compact, setCompact] = useState(false)
 
   const [fs, setFs] = useState(false)
@@ -128,10 +140,15 @@ export default function ProductionBoardByFactory() {
       setLoading(true)
       setError(null)
 
-      // Traemos suficiente para board (ya soportás 200)
-      const res = await fetch(`/api/admin/orders?page=1&pageSize=200&sort=createdAt&dir=desc`, {
-        cache: 'no-store',
+      // Production Schedule: approved + in-production queue
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '200',
+        status: 'ALL',
+        sort: 'productionPriority',
+        dir: 'asc',
       })
+      const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) {
         const msg = (await safeJson<{ message?: string }>(res))?.message || 'Failed to load orders'
         throw new Error(msg)
@@ -139,10 +156,10 @@ export default function ProductionBoardByFactory() {
 
       const data = await safeJson<ApiOrders>(res)
       const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data!.items : []
-      setOrders(list)
-    } catch (e: any) {
+      setOrders(list.filter((o) => o.status === 'IN_PRODUCTION' || o.status === 'APPROVED'))
+    } catch (e: unknown) {
       setOrders([])
-      setError(e?.message || 'Failed to load orders')
+      setError(e instanceof Error ? e.message : 'Failed to load orders')
     } finally {
       setLoading(false)
     }
@@ -174,17 +191,19 @@ export default function ProductionBoardByFactory() {
     } catch {}
   }
 
-  const visibleOrders = useMemo(() => {
-    return orders.filter((o) => {
-      if (!showCompleted && o.status === 'COMPLETED') return false
-      if (!showCanceled && o.status === 'CANCELED') return false
-      return true
-    })
-  }, [orders, showCompleted, showCanceled])
+  const visibleOrders = useMemo(() => orders, [orders])
+
+  const stats = useMemo(() => {
+    const total = visibleOrders.length
+    const approved = visibleOrders.filter((o) => o.status === 'APPROVED').length
+    const inProduction = visibleOrders.filter((o) => o.status === 'IN_PRODUCTION').length
+    const noPriority = visibleOrders.filter((o) => typeof o.productionPriority !== 'number').length
+    return { total, approved, inProduction, noPriority, prioritized: total - noPriority }
+  }, [visibleOrders])
 
   const factories = useMemo(() => {
     const s = new Set<string>()
-    visibleOrders.forEach((o) => s.add(o.factoryLocation?.name || 'Unknown Factory'))
+    visibleOrders.forEach((o) => s.add(resolveFactoryName(o)))
     return Array.from(s).sort()
   }, [visibleOrders])
 
@@ -193,7 +212,7 @@ export default function ProductionBoardByFactory() {
     factories.forEach((f) => (map[f] = []))
 
     visibleOrders.forEach((o) => {
-      const f = o.factoryLocation?.name || 'Unknown Factory'
+      const f = resolveFactoryName(o)
       ;(map[f] ||= []).push(o)
     })
 
@@ -250,10 +269,45 @@ export default function ProductionBoardByFactory() {
         setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updated } : o)))
         setActive((prev) => (prev?.id === id ? { ...prev, ...updated } : prev))
       }
-    } catch (e: any) {
-      alert(e?.message || 'Could not save schedule')
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Could not save schedule')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function persistBatchPriorities(updates: Array<{ id: string; productionPriority: number | null }>) {
+    const res = await fetch(`/api/admin/orders/schedule/batch`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    })
+    if (!res.ok) {
+      const payload = await safeJson<{ message?: string }>(res)
+      throw new Error(payload?.message || 'Failed to save production order')
+    }
+  }
+
+  const normalizeFactoryPriorities = async (factoryName: string) => {
+    const list = [...(byFactory[factoryName] || [])]
+    if (list.length === 0) return
+
+    const updates = list.map((o, i) => ({ id: o.id, productionPriority: i + 1 }))
+
+    setOrders((prev) => {
+      const map = new Map(prev.map((o) => [o.id, o] as const))
+      for (const u of updates) {
+        const current = map.get(u.id)
+        if (current) map.set(u.id, { ...current, productionPriority: u.productionPriority })
+      }
+      return Array.from(map.values())
+    })
+
+    try {
+      await persistBatchPriorities(updates)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Could not normalize priorities')
+      await load()
     }
   }
 
@@ -289,14 +343,9 @@ export default function ProductionBoardByFactory() {
     })
 
     try {
-      const res = await fetch(`/api/admin/orders/schedule/batch`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
-      })
-      if (!res.ok) throw new Error((await safeJson<{ message?: string }>(res))?.message || 'Failed to save order')
-    } catch (e: any) {
-      alert(e?.message || 'Could not save new order')
+      await persistBatchPriorities(updates)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Could not save new order')
       await load()
     }
   }
@@ -318,10 +367,13 @@ export default function ProductionBoardByFactory() {
               PRODUCTION BOARD
             </div>
             <h1 className="mt-3 text-3xl sm:text-4xl font-black text-slate-900">
-              Order of fabrication by factory
+              Production Schedule
             </h1>
             <p className="mt-2 text-slate-600">
-              Drag cards to set <strong>Priority</strong>. Sorts by <strong>Priority → Ship date → Created</strong>.
+              Approved and in-production orders by factory. Drag cards to set <strong>Priority</strong>.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Sort order: <strong>Priority → Requested ship date → Created</strong>.
             </p>
             {error && <p className="mt-2 text-sm text-rose-700">⚠️ {error}</p>}
           </div>
@@ -359,26 +411,6 @@ export default function ProductionBoardByFactory() {
               Compact
             </label>
 
-            <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                className="accent-sky-600"
-                checked={showCompleted}
-                onChange={(e) => setShowCompleted(e.target.checked)}
-              />
-              Completed
-            </label>
-
-            <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                className="accent-sky-600"
-                checked={showCanceled}
-                onChange={(e) => setShowCanceled(e.target.checked)}
-              />
-              Canceled
-            </label>
-
             <button
               onClick={toggleFS}
               className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
@@ -393,6 +425,24 @@ export default function ProductionBoardByFactory() {
               style={{ backgroundImage: `linear-gradient(90deg, ${aqua}, ${deep})` }}
             />
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+            Total Queue: {stats.total}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-semibold text-sky-700">
+            Approved: {stats.approved}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700">
+            In Production: {stats.inProduction}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+            Prioritized: {stats.prioritized}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+            Missing Priority: {stats.noPriority}
+          </span>
         </div>
       </div>
 
@@ -411,9 +461,19 @@ export default function ProductionBoardByFactory() {
                     <div className="text-lg font-extrabold text-slate-900 truncate">{factoryName}</div>
                     <div className="text-xs text-slate-600">Priority → Ship → Created</div>
                   </div>
-                  <span className="text-xs font-black px-2 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
-                    {list.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => normalizeFactoryPriorities(factoryName)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      title="Re-number this factory priorities from top to bottom"
+                    >
+                      Normalize
+                    </button>
+                    <span className="text-xs font-black px-2 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
+                      {list.length}
+                    </span>
+                  </div>
                 </div>
               </header>
 
@@ -562,7 +622,7 @@ export default function ProductionBoardByFactory() {
               <Field label="Delivery address" wrap>
                 {active.deliveryAddress || '—'}
               </Field>
-              <Field label="Factory">{active.factoryLocation?.name || '—'}</Field>
+              <Field label="Factory">{resolveFactoryName(active)}</Field>
               <Field label="Payment proof">
                 {active.paymentProofUrl ? (
                   <a

@@ -19,11 +19,12 @@ export default function WireInstructions({ compact = false }: { compact?: boolea
       </div>
 
       <div className={compact ? 'mt-4 grid gap-2 text-sm' : 'mt-4 grid gap-3 text-sm'}>
-        <Row label="Business Name" value="Kline Brothers East Landscaping East" />
+        <Row label="Business Name" value="Fort Plain Fiberglass Pools LLC" />
+        <Row label="Business Address" value="248 W 15TH Street, Ship Bottom, NJ 08008" />
         <Row label="Bank" value="M & T Bank" />
-        <Row label="Bank Address" value="Forked River, NJ" />
+        <Row label="Bank Address" value="416 Main St Suite A, Forked River, NJ" />
         <Row label="Routing" value="022000046" />
-        <Row label="Account" value="9869438326" />
+        <Row label="Account" value="9884427767" />
         <Row label="Reference Format" value="Dealer name + Order ID" />
       </div>
 
