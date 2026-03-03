@@ -16,7 +16,7 @@ type PoolModel = {
   maxMainDrains?: number | null
   defaultFactoryLocationId?: string | null
 }
-type Color = { id: string; name: string }
+type Color = { id: string; name: string; swatchUrl?: string | null }
 type Factory = { id: string; name: string; city?: string | null; state?: string | null }
 type PenetrationMode =
   | 'PENETRATIONS_WITH_INSTALL'
@@ -99,6 +99,10 @@ export default function AdminNewOrderPage() {
   const activeModel = useMemo(
     () => models.find((m) => m.id === form.poolModelId) ?? null,
     [models, form.poolModelId]
+  )
+  const selectedColor = useMemo(
+    () => colors.find((c) => c.id === form.colorId) ?? null,
+    [colors, form.colorId]
   )
 
   const ready = useMemo(() => {
@@ -467,6 +471,23 @@ export default function AdminNewOrderPage() {
                       </option>
                     ))}
                   </select>
+                  {selectedColor ? (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                      {selectedColor.swatchUrl ? (
+                        <img
+                          src={selectedColor.swatchUrl}
+                          alt={`${selectedColor.name} swatch`}
+                          className="h-8 w-12 rounded object-cover border border-slate-200 bg-white"
+                        />
+                      ) : (
+                        <span className="h-8 w-12 rounded bg-slate-200 border border-slate-200" />
+                      )}
+                      <div className="text-xs">
+                        <div className="font-semibold text-slate-900">Selected color</div>
+                        <div className="text-slate-600">{selectedColor.name}</div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

@@ -113,6 +113,10 @@ export default function NewOrderPage() {
     () => models.find((m) => m.id === poolModelId) ?? null,
     [models, poolModelId]
   )
+  const selectedColor = useMemo(
+    () => colors.find((c) => c.id === colorId) ?? null,
+    [colors, colorId]
+  )
 
   const readyQtyByModel = useMemo(() => {
     const map = new Map<string, number>()
@@ -729,6 +733,24 @@ export default function NewOrderPage() {
                 size={18}
               />
             </div>
+
+            {selectedColor ? (
+              <div className="mt-3 inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                {selectedColor.swatchUrl ? (
+                  <img
+                    src={selectedColor.swatchUrl}
+                    alt={`${selectedColor.name} swatch`}
+                    className="h-12 w-16 rounded object-cover border border-slate-200 bg-white"
+                  />
+                ) : (
+                  <span className="h-12 w-16 rounded bg-slate-200 border border-slate-200" />
+                )}
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected color</div>
+                  <div className="text-sm font-semibold text-slate-900">{selectedColor.name}</div>
+                </div>
+              </div>
+            ) : null}
 
             {/* Swatches */}
             <div className="mt-3 flex flex-wrap gap-3">
