@@ -676,45 +676,50 @@ export default function NewOrderPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="p-4">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="min-h-[2.5rem] pr-2 font-bold leading-tight text-slate-900">
-                                    {m.name}
-                                  </div>
-                                  {readyQty > 0 ? (
-                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      Available now: {readyQty}
-                                    </span>
-                                  ) : selected ? (
-                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                                      Selected
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                      Build to order
-                                    </span>
-                                  )}
+                              <div className="flex h-full flex-col p-4">
+                                <div className="min-h-[3.25rem]">
+                                  <div className="font-bold leading-tight text-slate-900">{m.name}</div>
                                 </div>
-                                <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
-                                  <span>L: {m.lengthFt ?? '-'} ft</span>
-                                  <span>W: {m.widthFt ?? '-'} ft</span>
-                                  <span>D: {m.depthFt ?? '-'} ft</span>
+
+                                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1">L: {m.lengthFt ?? '-'} ft</span>
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1">W: {m.widthFt ?? '-'} ft</span>
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1">D: {m.depthFt ?? '-'} ft</span>
                                 </div>
-                                <div className="mt-2 text-xs text-slate-500">
+
+                                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                                   Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
                                 </div>
-                                <div className="mt-2 text-xs">
+
+                                <div className="mt-3 text-xs">
                                   {m.blueprintUrl ? (
                                     <a
                                       href={m.blueprintUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-sky-700 underline"
+                                      className="font-semibold text-sky-700 underline underline-offset-2"
                                     >
                                       View dig sheet
                                     </a>
                                   ) : (
                                     <span className="text-slate-400">No dig sheet</span>
+                                  )}
+                                </div>
+
+                                <div className="mt-4">
+                                  {readyQty > 0 ? (
+                                    <div className="flex h-11 w-full items-center justify-between rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white px-3 text-sm font-semibold text-emerald-800">
+                                      <span>Available now</span>
+                                      <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white">{readyQty} ready</span>
+                                    </div>
+                                  ) : selected ? (
+                                    <div className="flex h-11 w-full items-center justify-center rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-3 text-sm font-semibold text-sky-800">
+                                      Selected for this order
+                                    </div>
+                                  ) : (
+                                    <div className="flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-gradient-to-r from-slate-100 to-white px-3 text-sm font-semibold text-slate-700">
+                                      Build to order
+                                    </div>
                                   )}
                                 </div>
                               </div>
