@@ -88,7 +88,6 @@ export default function AdminNewOrderPage() {
     notes: '',
     shippingMethod: '' as '' | 'PICK_UP' | 'QUOTE',
     requestedShipDate: '',
-    paymentProofUrl: '',
     penetrationMode: '' as '' | PenetrationMode,
     hardwareSkimmer: false,
     hardwareReturns: false,
@@ -229,7 +228,6 @@ export default function AdminNewOrderPage() {
         factoryLocationId: form.factoryLocationId,
         deliveryAddress: form.deliveryAddress.trim(),
         notes: form.notes.trim() || null,
-        paymentProofUrl: form.paymentProofUrl.trim() || null,
         penetrationMode: form.penetrationMode,
         blueprintMarkers:
           form.penetrationMode === 'NO_PENETRATIONS'
@@ -261,7 +259,6 @@ export default function AdminNewOrderPage() {
         factoryLocationId: '',
         deliveryAddress: '',
         notes: '',
-        paymentProofUrl: '',
         shippingMethod: '',
         requestedShipDate: '',
         penetrationMode: '',
@@ -766,29 +763,16 @@ export default function AdminNewOrderPage() {
                 />
               </div>
 
-              <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                    Proof of Deposit URL (optional)
-                  </label>
-                  <input
-                    value={form.paymentProofUrl}
-                    onChange={(e) => setForm((prev) => ({ ...prev, paymentProofUrl: e.target.value }))}
-                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    placeholder="https://..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                    Notes (optional)
-                  </label>
-                  <input
-                    value={form.notes}
-                    onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    placeholder="Internal notes"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                  Notes (optional)
+                </label>
+                <input
+                  value={form.notes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  placeholder="Internal notes"
+                />
               </div>
             </section>
 
