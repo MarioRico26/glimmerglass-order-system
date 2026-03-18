@@ -10,7 +10,6 @@ import {
   CalendarDays,
   Settings2,
 } from 'lucide-react'
-import WireInstructions from '@/components/WireInstructions'
 import ShippingNotice from '@/components/ShippingNotice'
 
 type PoolModel = {
@@ -1194,9 +1193,6 @@ export default function NewOrderPage() {
               placeholder="Any special instructions, site constraints, or comments for Glimmerglass…"
             />
           </div>
-
-          {/* Wire instructions */}
-          <WireInstructions compact />
 
           {/* Submit */}
           <div className="pt-2">
