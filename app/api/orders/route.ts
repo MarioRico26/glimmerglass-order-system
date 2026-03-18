@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
  * - requestedShipDate ('YYYY-MM-DD', opcional, pero si viene debe ser >= 4 semanas adelante)
  * - hardwareSkimmer / hardwareAutocover / hardwareReturns / hardwareMainDrains (on/true/false)
  * - poolStockId (string, optional): reserva 1 unidad READY del stock terminado
- * - paymentProof (File, required)
+ * - paymentProof (File, optional)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -132,10 +132,6 @@ export async function POST(req: NextRequest) {
     // Validaciones básicas
     if (!poolModelId || !colorId || !deliveryAddress) {
       return jsonError('Missing required fields (poolModelId, colorId, deliveryAddress)', 400)
-    }
-
-    if (!(paymentProof instanceof File) || paymentProof.size === 0) {
-      return jsonError('Payment proof file is required', 400)
     }
 
     // Validar shippingMethod si viene
@@ -251,7 +247,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Subir comprobante de pago a Vercel Blob
+    // Subir comprobante de deposito a Vercel Blob si viene
     let paymentProofUrl: string | null = null
     if (paymentProof instanceof File && paymentProof.size > 0) {
       const ext = paymentProof.name.split('.').pop() || 'dat'

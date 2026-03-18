@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Palette,
   Truck,
-  Paperclip,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -59,7 +58,6 @@ export default function NewOrderPage() {
   const [colorId, setColorId] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [notes, setNotes] = useState('')
-  const [paymentProof, setPaymentProof] = useState<File | null>(null)
 
   // nuevos campos
   const [shippingMethod, setShippingMethod] = useState<'PICK_UP' | 'QUOTE' | ''>('')
@@ -405,14 +403,6 @@ export default function NewOrderPage() {
       return
     }
 
-    if (!paymentProof) {
-      setMsg({
-        type: 'err',
-        text: 'Please attach the proof of deposit.',
-      })
-      return
-    }
-
     if (!shippingMethod) {
       setMsg({
         type: 'err',
@@ -444,7 +434,6 @@ export default function NewOrderPage() {
       formData.append('colorId', colorId)
       formData.append('deliveryAddress', deliveryAddress)
       formData.append('notes', notes)
-      formData.append('paymentProof', paymentProof)
       formData.append('shippingMethod', shippingMethod)
       formData.append('penetrationMode', penetrationMode)
 
@@ -482,7 +471,6 @@ export default function NewOrderPage() {
       setColorId('')
       setDeliveryAddress('')
       setNotes('')
-      setPaymentProof(null)
       setShippingMethod('')
       setRequestedShipDate('')
       setHardwareSkimmer(false)
@@ -1205,38 +1193,6 @@ export default function NewOrderPage() {
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
               placeholder="Any special instructions, site constraints, or comments for Glimmerglass…"
             />
-          </div>
-
-          {/* Deposit proof */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Proof of Deposit (image or PDF)
-            </label>
-            <div className="flex items-center gap-3">
-              <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50">
-                <Paperclip size={16} className="text-slate-500" />
-                <span className="text-sm font-medium text-slate-800">
-                  {paymentProof ? paymentProof.name : 'Choose file'}
-                </span>
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  onChange={(e) =>
-                    setPaymentProof(e.target.files?.[0] || null)
-                  }
-                  className="hidden"
-                  required
-                />
-              </label>
-              {paymentProof && (
-                <span className="text-xs text-slate-500">
-                  {(paymentProof.size / 1024 / 1024).toFixed(2)} MB
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Example: Scan of certified check or receipt of wire transfer. Your payment will be reviewed by our accounting department before production begins.
-            </p>
           </div>
 
           {/* Wire instructions */}
