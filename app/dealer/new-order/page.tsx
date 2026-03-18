@@ -678,17 +678,19 @@ export default function NewOrderPage() {
                               </div>
                               <div className="p-4">
                                 <div className="flex items-center justify-between gap-2">
-                                  <div className="font-bold text-slate-900">{m.name}</div>
+                                  <div className="min-h-[2.5rem] pr-2 font-bold leading-tight text-slate-900">
+                                    {m.name}
+                                  </div>
                                   {readyQty > 0 ? (
-                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       Available now: {readyQty}
                                     </span>
                                   ) : selected ? (
-                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
                                       Selected
                                     </span>
                                   ) : (
-                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                    <span className="inline-flex min-w-[122px] justify-center text-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                       Build to order
                                     </span>
                                   )}
