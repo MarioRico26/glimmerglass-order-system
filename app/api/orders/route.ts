@@ -334,6 +334,17 @@ export async function POST(req: NextRequest) {
         },
       })
 
+      await tx.orderHistory.create({
+        data: {
+          orderId: created.id,
+          status: created.status,
+          comment: notes
+            ? `Order created by dealer. Initial notes: ${notes}`
+            : 'Order created by dealer',
+          userId: dbUser.id,
+        },
+      })
+
       if (poolStockId) {
         await tx.poolStockTxn.create({
           data: {

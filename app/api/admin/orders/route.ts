@@ -218,9 +218,19 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     const role = (session?.user as any)?.role
+    const userEmail = (session?.user as any)?.email
 
     if (!session?.user?.email || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { id: true },
+    })
+
+    if (!dbUser) {
+      return NextResponse.json({ message: 'User not found' }, { status: 404 })
     }
 
     const body = await req.json()
@@ -293,35 +303,49 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const newOrder = await prisma.order.create({
-      data: {
-        deliveryAddress: body.deliveryAddress,
-        status: 'PENDING_PAYMENT_APPROVAL',
-        dealerId: body.dealerId,
-        poolModelId: body.poolModelId,
-        colorId: body.colorId,
-        factoryLocationId: body.factoryLocationId,
-        notes: body.notes || null,
-        paymentProofUrl: body.paymentProofUrl || null,
-        blueprintMarkers,
-        shippingMethod: body.shippingMethod || null,
-        penetrationMode,
-        hardwareSkimmer: body.hardwareSkimmer || false,
-        hardwareAutocover: body.hardwareAutocover || false,
-        hardwareReturns: body.hardwareReturns || false,
-        hardwareMainDrains: body.hardwareMainDrains || false,
+    const newOrder = await prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          deliveryAddress: body.deliveryAddress,
+          status: 'PENDING_PAYMENT_APPROVAL',
+          dealerId: body.dealerId,
+          poolModelId: body.poolModelId,
+          colorId: body.colorId,
+          factoryLocationId: body.factoryLocationId,
+          notes: body.notes || null,
+          paymentProofUrl: body.paymentProofUrl || null,
+          blueprintMarkers,
+          shippingMethod: body.shippingMethod || null,
+          penetrationMode,
+          hardwareSkimmer: body.hardwareSkimmer || false,
+          hardwareAutocover: body.hardwareAutocover || false,
+          hardwareReturns: body.hardwareReturns || false,
+          hardwareMainDrains: body.hardwareMainDrains || false,
 
-        // (opcional, si querés permitirlo al crear)
-        requestedShipDate: body.requestedShipDate ? new Date(body.requestedShipDate) : null,
-        productionPriority:
-          typeof body.productionPriority === 'number' ? body.productionPriority : null,
-      },
-      include: {
-        poolModel: { select: { name: true } },
-        color: { select: { name: true } },
-        dealer: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
-      },
+          requestedShipDate: body.requestedShipDate ? new Date(body.requestedShipDate) : null,
+          productionPriority:
+            typeof body.productionPriority === 'number' ? body.productionPriority : null,
+        },
+        include: {
+          poolModel: { select: { name: true } },
+          color: { select: { name: true } },
+          dealer: { select: { name: true } },
+          factoryLocation: { select: { name: true } },
+        },
+      })
+
+      await tx.orderHistory.create({
+        data: {
+          orderId: created.id,
+          status: created.status,
+          comment: body.notes
+            ? `Order created by admin. Initial notes: ${body.notes}`
+            : 'Order created by admin',
+          userId: dbUser.id,
+        },
+      })
+
+      return created
     })
 
     return NextResponse.json({ message: 'Order created successfully', order: newOrder }, { status: 201 })
