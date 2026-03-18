@@ -94,6 +94,7 @@ async function getOrderSummary(orderId: string) {
     select: {
       id: true,
       deliveryAddress: true,
+      notes: true,
       status: true,
       paymentProofUrl: true,
       blueprintMarkers: true,
@@ -122,6 +123,7 @@ async function getOrderSummary(orderId: string) {
   return {
     id: order.id,
     deliveryAddress: order.deliveryAddress,
+    notes: order.notes ?? null,
     status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
     paymentProofUrl: order.paymentProofUrl ?? null,
     blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),

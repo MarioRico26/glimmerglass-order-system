@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { PencilLine } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
@@ -29,6 +30,7 @@ interface OrderMedia {
 interface OrderSummary {
   id: string
   deliveryAddress: string
+  notes?: string | null
   status: string
   paymentProofUrl?: string | null
   blueprintMarkers?: BlueprintMarker[]
@@ -101,6 +103,8 @@ export default function OrderHistoryPage() {
   const [editRequestedDate, setEditRequestedDate] = useState<string>('') // yyyy-mm-dd
   const [editSerialNumber, setEditSerialNumber] = useState<string>('')
   const [editPriority, setEditPriority] = useState<string>('')
+  const [editDeliveryAddress, setEditDeliveryAddress] = useState<string>('')
+  const [editNotes, setEditNotes] = useState<string>('')
 
   const [editing, setEditing] = useState(false)
 
@@ -133,6 +137,8 @@ export default function OrderHistoryPage() {
 
         setSelectedFactoryId(orderData.factory?.id || '')
         setSelectedShippingMethod(orderData.shippingMethod || '')
+        setEditDeliveryAddress(orderData.deliveryAddress || '')
+        setEditNotes(orderData.notes || '')
 
         if (orderData.requestedShipDate) {
           const d = new Date(orderData.requestedShipDate)
@@ -172,6 +178,8 @@ export default function OrderHistoryPage() {
       const body = {
         factoryLocationId: selectedFactoryId || null,
         shippingMethod: selectedShippingMethod || null,
+        deliveryAddress: editDeliveryAddress,
+        notes: editNotes || null,
         requestedShipDate: editRequestedDate || null,
         serialNumber: editSerialNumber || null,
         productionPriority: editPriority ? Number(editPriority) : null,
@@ -189,6 +197,8 @@ export default function OrderHistoryPage() {
         setSummary(updated)
         setSelectedFactoryId(updated.factory?.id || '')
         setSelectedShippingMethod(updated.shippingMethod || '')
+        setEditDeliveryAddress(updated.deliveryAddress || '')
+        setEditNotes(updated.notes || '')
 
         setEditSerialNumber(updated.serialNumber || '')
         setEditPriority(typeof updated.productionPriority === 'number' ? String(updated.productionPriority) : '')
@@ -407,19 +417,29 @@ export default function OrderHistoryPage() {
 
                 <button
                   onClick={() => setEditing(true)}
-                  className="mt-2 text-xs font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                  className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100"
                 >
-                  ✏️ Edit factory, shipping &amp; production
+                  <PencilLine size={16} />
+                  Edit Order
                 </button>
               </div>
             </div>
 
-            <div className="px-6 pb-6 grid gap-4 md:grid-cols-2">
+            <div className="px-6 pb-6 grid gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Delivery Address
                 </div>
                 <div className="text-slate-800">{summary.deliveryAddress}</div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Order Notes
+                </div>
+                <div className="text-slate-800 whitespace-pre-wrap">
+                  {summary.notes || <span className="italic text-slate-500">No notes</span>}
+                </div>
               </div>
 
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
@@ -573,87 +593,136 @@ export default function OrderHistoryPage() {
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-lg">
-            <h2 className="text-xl font-bold mb-4 text-slate-900">
-              Edit logistics &amp; production
-            </h2>
+          <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-black mb-1 text-slate-900">Edit Order Inputs</h2>
+            <p className="text-sm text-slate-600 mb-5">
+              Update core order inputs after entry. Changes are saved and logged to order history.
+            </p>
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-semibold mb-1 text-slate-700">
-                  Factory Location
-                </label>
-                <select
-                  value={selectedFactoryId}
-                  onChange={(e) => setSelectedFactoryId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  disabled={saving}
-                >
-                  <option value="">Not assigned</option>
-                  {factoryList.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                      {f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-6 mb-6">
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
+                  Order Details
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Delivery Address
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={editDeliveryAddress}
+                      onChange={(e) => setEditDeliveryAddress(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1 text-slate-700">
-                  Shipping Method
-                </label>
-                <select
-                  value={selectedShippingMethod}
-                  onChange={(e) => setSelectedShippingMethod(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  disabled={saving}
-                >
-                  <option value="">Not set</option>
-                  <option value="PICK_UP">Pick Up</option>
-                  <option value="QUOTE">Glimmerglass Freight (quote to be provided)</option>
-                </select>
-              </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Notes
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                      placeholder="Optional notes for operations, shipping or production..."
+                    />
+                  </div>
+                </div>
+              </section>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1 text-slate-700">
-                  Requested Ship Date
-                </label>
-                <input
-                  type="date"
-                  value={editRequestedDate}
-                  onChange={(e) => setEditRequestedDate(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  disabled={saving}
-                />
-              </div>
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
+                  Logistics
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Factory Location
+                    </label>
+                    <select
+                      value={selectedFactoryId}
+                      onChange={(e) => setSelectedFactoryId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    >
+                      <option value="">Not assigned</option>
+                      {factoryList.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                          {f.city ? ` — ${f.city}${f.state ? `, ${f.state}` : ''}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1 text-slate-700">
-                  Serial Number
-                </label>
-                <input
-                  type="text"
-                  value={editSerialNumber}
-                  onChange={(e) => setEditSerialNumber(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  disabled={saving}
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Shipping Method
+                    </label>
+                    <select
+                      value={selectedShippingMethod}
+                      onChange={(e) => setSelectedShippingMethod(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    >
+                      <option value="">Not set</option>
+                      <option value="PICK_UP">Pick Up</option>
+                      <option value="QUOTE">Glimmerglass Freight (quote to be provided)</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1 text-slate-700">
-                  Production Priority
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  value={editPriority}
-                  onChange={(e) => setEditPriority(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  disabled={saving}
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Requested Ship Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editRequestedDate}
+                      onChange={(e) => setEditRequestedDate(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
+                  Production
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Serial Number
+                    </label>
+                    <input
+                      type="text"
+                      value={editSerialNumber}
+                      onChange={(e) => setEditSerialNumber(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Production Priority
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={editPriority}
+                      onChange={(e) => setEditPriority(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              </section>
             </div>
 
             <div className="flex justify-end gap-2">

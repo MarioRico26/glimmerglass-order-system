@@ -29,6 +29,7 @@ function toSummaryDTO(o: any) {
         }
       : null,
     shippingMethod: o.shippingMethod ?? null,
+    notes: o.notes ?? null,
     hardwareSkimmer: o.hardwareSkimmer,
     hardwareReturns: o.hardwareReturns,
     hardwareAutocover: o.hardwareAutocover,
@@ -44,7 +45,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const session = await requireRole(['ADMIN', 'SUPERADMIN'])
     const { id } = params
 
     const body = await req.json().catch(() => ({} as any))
@@ -52,12 +53,16 @@ export async function PATCH(
     const {
       factoryLocationId,
       shippingMethod,
+      deliveryAddress,
+      notes,
       requestedShipDate,
       serialNumber,
       productionPriority,
     } = body as {
       factoryLocationId?: string | null
       shippingMethod?: string | null
+      deliveryAddress?: string | null
+      notes?: string | null
       requestedShipDate?: string | null
       serialNumber?: string | null
       productionPriority?: number | null
@@ -74,6 +79,18 @@ export async function PATCH(
 
     if (typeof shippingMethod === 'string' || shippingMethod === null) {
       data.shippingMethod = shippingMethod
+    }
+
+    if (typeof deliveryAddress === 'string') {
+      const trimmedDeliveryAddress = deliveryAddress.trim()
+      if (!trimmedDeliveryAddress) {
+        return NextResponse.json({ message: 'Delivery address is required' }, { status: 400 })
+      }
+      data.deliveryAddress = trimmedDeliveryAddress
+    }
+
+    if (typeof notes === 'string' || notes === null) {
+      data.notes = typeof notes === 'string' ? notes.trim() || null : null
     }
 
     if (requestedShipDate) {
@@ -95,24 +112,51 @@ export async function PATCH(
       data.productionPriority = null
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data,
-      include: {
-        dealer: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-            address: true,
-            city: true,
-            state: true,
+    const userEmail =
+      session?.user && typeof session.user === 'object' && 'email' in session.user
+        ? (session.user as { email?: string | null }).email
+        : null
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.update({
+        where: { id },
+        data,
+        include: {
+          dealer: {
+            select: {
+              name: true,
+              email: true,
+              phone: true,
+              address: true,
+              city: true,
+              state: true,
+            },
           },
+          poolModel: { select: { name: true } },
+          color: { select: { name: true } },
+          factoryLocation: { select: { id: true, name: true } },
         },
-        poolModel: { select: { name: true } },
-        color: { select: { name: true } },
-        factoryLocation: { select: { id: true, name: true } },
-      },
+      })
+
+      if (userEmail) {
+        const user = await tx.user.findUnique({
+          where: { email: userEmail },
+          select: { id: true },
+        })
+
+        if (user) {
+          await tx.orderHistory.create({
+            data: {
+              orderId: id,
+              status: order.status,
+              comment: 'Order inputs updated by admin',
+              userId: user.id,
+            },
+          })
+        }
+      }
+
+      return order
     })
 
     return NextResponse.json(toSummaryDTO(updated))
