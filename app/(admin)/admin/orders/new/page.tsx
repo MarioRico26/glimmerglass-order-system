@@ -108,8 +108,11 @@ export default function AdminNewOrderPage() {
     [colors, form.colorId]
   )
   const visibleModels = useMemo(() => {
-    if (!form.factoryLocationId) return models
-    return models.filter((m) => m.defaultFactoryLocationId === form.factoryLocationId)
+    if (!form.factoryLocationId) return []
+    return models.filter((m) => {
+      const modelFactoryId = m.defaultFactoryLocationId || m.defaultFactoryLocation?.id || ''
+      return modelFactoryId === form.factoryLocationId
+    })
   }, [models, form.factoryLocationId])
 
   const ready = useMemo(() => {
@@ -434,7 +437,11 @@ export default function AdminNewOrderPage() {
                   <select
                     value={form.factoryLocationId}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, factoryLocationId: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        factoryLocationId: e.target.value,
+                        poolModelId: '',
+                      }))
                     }
                     className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     required
@@ -468,7 +475,9 @@ export default function AdminNewOrderPage() {
                             : 'Select model'}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {visibleModels.length} models available for the selected factory
+                          {form.factoryLocationId
+                            ? `${visibleModels.length} models available for the selected factory`
+                            : 'Select a factory first to see matching models'}
                         </div>
                       </div>
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600">
@@ -481,10 +490,11 @@ export default function AdminNewOrderPage() {
                         <select
                           value={form.poolModelId}
                           onChange={(e) => setForm((prev) => ({ ...prev, poolModelId: e.target.value }))}
-                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                           required
+                          disabled={!form.factoryLocationId}
                         >
-                          <option value="">Select model</option>
+                          <option value="">{form.factoryLocationId ? 'Select model' : 'Select factory first'}</option>
                           {visibleModels.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name}
@@ -492,7 +502,9 @@ export default function AdminNewOrderPage() {
                           ))}
                         </select>
                         <p className="mt-2 text-xs text-slate-500">
-                          Models are filtered by the factory selected above.
+                          {form.factoryLocationId
+                            ? 'Only models assigned to the selected factory are shown.'
+                            : 'Choose the production facility before selecting a pool model.'}
                         </p>
                       </div>
                     ) : null}
