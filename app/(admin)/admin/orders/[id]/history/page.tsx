@@ -7,6 +7,7 @@ import Link from 'next/link'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
+import { labelOrderStatus } from '@/lib/orderFlow'
 
 interface OrderHistory {
   id: string
@@ -60,15 +61,6 @@ interface FactoryLocation {
   name: string
   city?: string | null
   state?: string | null
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
-  APPROVED: 'Approved',
-  IN_PRODUCTION: 'In Production',
-  PRE_SHIPPING: 'Pre-Shipping',
-  COMPLETED: 'Completed',
-  CANCELED: 'Canceled',
 }
 
 const SHIPPING_LABELS: Record<string, string> = {
@@ -229,8 +221,8 @@ export default function OrderHistoryPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          status: 'APPROVED',
-          comment: 'Payment proof approved by admin',
+          status: 'IN_PRODUCTION',
+          comment: 'Payment proof approved by admin; order moved to In Production',
         }),
       })
 
@@ -240,7 +232,7 @@ export default function OrderHistoryPage() {
       }
 
       await loadAll()
-      setMessage('✅ Payment proof approved.')
+      setMessage('✅ Payment approved and order moved to In Production.')
     } catch (error) {
       console.error('Approve payment error:', error)
       const msg = error instanceof Error ? error.message : 'Could not approve payment proof'
@@ -340,7 +332,7 @@ export default function OrderHistoryPage() {
                 <p className="mt-1">
                   <span className="font-semibold">Status:</span>{' '}
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800">
-                    {STATUS_LABEL[summary.status] || summary.status.replaceAll('_', ' ')}
+                    {labelOrderStatus(summary.status)}
                   </span>
                 </p>
               </div>
@@ -530,7 +522,7 @@ export default function OrderHistoryPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
-                      {STATUS_LABEL[h.status] || h.status.replaceAll('_', ' ')}
+                      {labelOrderStatus(h.status, { preserveLegacyApproved: true })}
                     </p>
                     {h.comment && <p className="text-sm text-slate-700 mt-1">{h.comment}</p>}
                     {h.user && <p className="text-xs text-slate-400 mt-1">By: {h.user.email}</p>}

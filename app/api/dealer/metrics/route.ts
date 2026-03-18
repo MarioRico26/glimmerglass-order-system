@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import type { Session } from 'next-auth'
+import { normalizeOrderStatus } from '@/lib/orderFlow'
 
 export async function GET() {
   const session = (await getServerSession(authOptions)) as Session | null
@@ -47,13 +48,14 @@ export async function GET() {
   const totals: Record<string, number> = {
     total: orders.length,
     PENDING_PAYMENT_APPROVAL: 0,
-    APPROVED: 0,
     IN_PRODUCTION: 0,
+    PRE_SHIPPING: 0,
     COMPLETED: 0,
     CANCELED: 0,
   }
   orders.forEach(o => {
-    totals[o.status] = (totals[o.status] || 0) + 1
+    const status = normalizeOrderStatus(o.status)?.toString() ?? o.status
+    totals[status] = (totals[status] || 0) + 1
   })
 
   // 5) Serie mensual últimos 6 meses
@@ -103,7 +105,7 @@ export async function GET() {
       id: r.id,
       model: r.poolModel?.name ?? '-',
       color: r.color?.name ?? '-',
-      status: r.status,
+      status: normalizeOrderStatus(r.status)?.toString() ?? r.status,
       createdAt: r.createdAt,
     })),
   })

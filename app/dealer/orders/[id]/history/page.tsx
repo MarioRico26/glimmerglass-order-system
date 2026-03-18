@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
-import { STATUS_LABELS, labelDocType, type FlowStatus } from '@/lib/orderFlow'
+import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 
 type OrderHistory = {
   id: string
@@ -47,7 +47,6 @@ function toApiUrl(u: string) {
   return u.startsWith('/uploads/') ? '/api/uploads/' + u.replace('/uploads/', '') : u
 }
 
-// ✅ APPROVED eliminado
 const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
   PENDING_PAYMENT_APPROVAL: {
     icon: BadgeDollarSign,
@@ -75,10 +74,8 @@ const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
   },
 }
 
-// ✅ evita el error TS: h.status es string, STATUS_LABELS espera FlowStatus
 function labelStatus(status: string) {
-  const key = status as FlowStatus
-  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
+  return labelOrderStatus(status, { preserveLegacyApproved: true })
 }
 
 export default function DealerOrderHistoryPage() {

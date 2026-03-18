@@ -42,7 +42,7 @@ type PoolStockSummary = {
 }
 
 const emptyMetrics: Metrics = {
-  totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, APPROVED: 0, IN_PRODUCTION: 0, COMPLETED: 0 },
+    totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, CANCELED: 0 },
   monthly: [],
   recent: [],
   byFactory: [],
@@ -124,13 +124,13 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid sm:grid-cols-5 gap-4 mb-6">
-        <Stat label="Total Orders" value={t.total || 0} Icon={PackageSearch} />
-        <Stat label="Pending" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
-        <Stat label="Approved" value={t.APPROVED || 0} Icon={CheckCircle2} />
-        <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
-        <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
-      </div>
+            <div className="grid sm:grid-cols-5 gap-4 mb-6">
+                <Stat label="Total Orders" value={t.total || 0} Icon={PackageSearch} />
+                <Stat label="Pending" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
+                <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
+                <Stat label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={CheckCircle2} />
+                <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
+            </div>
 
       {/* Pool stock snapshot (always visible near top) */}
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4 mb-6">
@@ -222,9 +222,9 @@ export default function AdminDashboard() {
                 <th className="text-left py-2 pr-4">Factory</th>
                 <th className="text-right py-2 px-3">Total</th>
                 <th className="text-right py-2 px-3">Pending</th>
-                <th className="text-right py-2 px-3">Approved</th>
-                <th className="text-right py-2 px-3">In Prod.</th>
-                <th className="text-right py-2 px-3">Completed</th>
+                            <th className="text-right py-2 px-3">In Prod.</th>
+                            <th className="text-right py-2 px-3">Pre-Ship</th>
+                            <th className="text-right py-2 px-3">Completed</th>
               </tr>
             </thead>
             <tbody>
@@ -233,14 +233,14 @@ export default function AdminDashboard() {
                   <td className="py-2 pr-4 font-medium text-slate-900">{f.factoryName}</td>
                   <td className="py-2 px-3 text-right">{f.totals.total}</td>
                   <td className="py-2 px-3 text-right">{f.totals.PENDING_PAYMENT_APPROVAL}</td>
-                  <td className="py-2 px-3 text-right">{f.totals.APPROVED}</td>
-                  <td className="py-2 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
-                  <td className="py-2 px-3 text-right">{f.totals.COMPLETED}</td>
-                </tr>
-              ))}
-              {metrics.byFactory.length === 0 && (
-                <tr><td colSpan={6} className="py-3 text-slate-500">No data.</td></tr>
-              )}
+                                <td className="py-2 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
+                                <td className="py-2 px-3 text-right">{f.totals.PRE_SHIPPING}</td>
+                                <td className="py-2 px-3 text-right">{f.totals.COMPLETED}</td>
+                            </tr>
+                        ))}
+                        {metrics.byFactory.length === 0 && (
+                            <tr><td colSpan={6} className="py-3 text-slate-500">No data.</td></tr>
+                        )}
             </tbody>
           </table>
         </div>

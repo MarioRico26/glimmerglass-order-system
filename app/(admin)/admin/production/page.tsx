@@ -20,7 +20,6 @@ type Maybe<T> = T | null | undefined
 
 type OrderStatus =
   | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED'
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
@@ -76,8 +75,6 @@ function statusPill(status: OrderStatus) {
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
       return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
-    case 'APPROVED':
-      return <span className={`${base} bg-sky-50 text-sky-800 border-sky-200`}>Approved</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>In Prod</span>
     case 'PRE_SHIPPING':
@@ -140,7 +137,7 @@ export default function ProductionBoardByFactory() {
       setLoading(true)
       setError(null)
 
-      // Production Schedule: approved + in-production queue
+      // Production Schedule: in-production queue
       const params = new URLSearchParams({
         page: '1',
         pageSize: '200',
@@ -156,7 +153,7 @@ export default function ProductionBoardByFactory() {
 
       const data = await safeJson<ApiOrders>(res)
       const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data!.items : []
-      setOrders(list.filter((o) => o.status === 'IN_PRODUCTION' || o.status === 'APPROVED'))
+      setOrders(list.filter((o) => o.status === 'IN_PRODUCTION'))
     } catch (e: unknown) {
       setOrders([])
       setError(e instanceof Error ? e.message : 'Failed to load orders')
@@ -195,10 +192,9 @@ export default function ProductionBoardByFactory() {
 
   const stats = useMemo(() => {
     const total = visibleOrders.length
-    const approved = visibleOrders.filter((o) => o.status === 'APPROVED').length
     const inProduction = visibleOrders.filter((o) => o.status === 'IN_PRODUCTION').length
     const noPriority = visibleOrders.filter((o) => typeof o.productionPriority !== 'number').length
-    return { total, approved, inProduction, noPriority, prioritized: total - noPriority }
+    return { total, inProduction, noPriority, prioritized: total - noPriority }
   }, [visibleOrders])
 
   const factories = useMemo(() => {
@@ -370,7 +366,7 @@ export default function ProductionBoardByFactory() {
               Production Schedule
             </h1>
             <p className="mt-2 text-slate-600">
-              Approved and in-production orders by factory. Drag cards to set <strong>Priority</strong>.
+              In-production orders by factory. Drag cards to set <strong>Priority</strong>.
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Sort order: <strong>Priority → Requested ship date → Created</strong>.
@@ -430,9 +426,6 @@ export default function ProductionBoardByFactory() {
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
             Total Queue: {stats.total}
-          </span>
-          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-semibold text-sky-700">
-            Approved: {stats.approved}
           </span>
           <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700">
             In Production: {stats.inProduction}

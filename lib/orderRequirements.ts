@@ -22,7 +22,6 @@ export type StatusRequirementConfig = {
 type DbClient = Pick<typeof prisma, 'orderStatusRequirementTemplate'>
 
 export const TEMPLATE_STATUSES: FlowStatus[] = [
-  'APPROVED',
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',

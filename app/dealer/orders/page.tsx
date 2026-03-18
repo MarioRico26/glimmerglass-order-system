@@ -13,7 +13,7 @@ import {
   FileText,
 } from 'lucide-react'
 
-import { STATUS_LABELS, type FlowStatus } from '@/lib/orderFlow'
+import { labelOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 
 type Order = {
   id: string
@@ -34,8 +34,7 @@ const aqua = '#00B2CA'
 const deep = '#007A99'
 
 function labelStatus(status: string) {
-  const key = status as FlowStatus
-  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
+  return labelOrderStatus(status)
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -43,7 +42,6 @@ function StatusBadge({ status }: { status: string }) {
 
   const map: Partial<Record<FlowStatus, string>> = {
     PENDING_PAYMENT_APPROVAL: 'bg-amber-50 text-amber-800 border-amber-200',
-    APPROVED: 'bg-sky-50 text-sky-800 border-sky-200',
     IN_PRODUCTION: 'bg-indigo-50 text-indigo-800 border-indigo-200',
     PRE_SHIPPING: 'bg-violet-50 text-violet-800 border-violet-200',
     COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',

@@ -32,10 +32,10 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     })
     if (!order) return json('Order not found', 404)
     if (order.status !== 'PENDING_PAYMENT_APPROVAL') {
-      return json('Only pending orders can be approved', 400)
+      return json('Only pending orders can be moved into production', 400)
     }
 
-    const requirements = await getStatusRequirements('APPROVED')
+    const requirements = await getStatusRequirements('IN_PRODUCTION')
 
     const media = await prisma.orderMedia.findMany({
       where: { orderId: id, docType: { in: requirements.requiredDocs } },
@@ -61,9 +61,9 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     }
 
     if (missingDocs.length || missingFields.length) {
-      return json('Missing required documents/fields to approve', 400, {
+      return json('Missing required documents/fields to enter production', 400, {
         code: 'MISSING_REQUIREMENTS',
-        targetStatus: 'APPROVED',
+        targetStatus: 'IN_PRODUCTION',
         missing: { docs: missingDocs, fields: missingFields },
       })
     }
@@ -77,13 +77,13 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
     const updated = await prisma.$transaction(async (tx) => {
       const next = await tx.order.update({
         where: { id },
-        data: { status: 'APPROVED' },
+        data: { status: 'IN_PRODUCTION' },
       })
       await tx.orderHistory.create({
         data: {
           orderId: id,
-          status: 'APPROVED',
-          comment: 'Payment proof approved by admin',
+          status: 'IN_PRODUCTION',
+          comment: 'Payment proof approved by admin; order moved to In Production',
           userId: actor.id,
         },
       })

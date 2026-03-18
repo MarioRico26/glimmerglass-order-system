@@ -1,19 +1,17 @@
-// glimmerglass-order-system/lib/orderFlow.ts
 import type { OrderDocType } from '@prisma/client'
 
-// ✅ Statuses del flow (APPROVED eliminado)
 export type FlowStatus =
   | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED'
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
   | 'CANCELED'
 
-// Orden del “camino” normal (CANCELED no forma parte del forward flow)
+export type LegacyFlowStatus = FlowStatus | 'APPROVED'
+
+// Canonical operational path. APPROVED is treated as legacy data only.
 export const FLOW_ORDER: Exclude<FlowStatus, 'CANCELED'>[] = [
   'PENDING_PAYMENT_APPROVAL',
-  'APPROVED',
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
@@ -30,11 +28,15 @@ export type RequirementFieldKey = (typeof REQUIREMENT_FIELD_KEYS)[number]
 
 export const STATUS_LABELS: Record<FlowStatus, string> = {
   PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
-  APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
+}
+
+export const LEGACY_STATUS_LABELS: Record<LegacyFlowStatus, string> = {
+  ...STATUS_LABELS,
+  APPROVED: 'Payment Approved',
 }
 
 // Labels bonitos para docs
@@ -72,14 +74,41 @@ export function labelDocType(docType?: string | null) {
   return DOC_TYPE_LABELS[key] || docType.replaceAll('_', ' ')
 }
 
+export function isFlowStatus(value: string): value is FlowStatus {
+  return value in STATUS_LABELS
+}
+
+export function isLegacyFlowStatus(value: string): value is LegacyFlowStatus {
+  return value in LEGACY_STATUS_LABELS
+}
+
+export function normalizeOrderStatus(status?: string | null): FlowStatus | null {
+  if (!status) return null
+  if (status === 'APPROVED') return 'IN_PRODUCTION'
+  return isFlowStatus(status) ? status : null
+}
+
+export function labelOrderStatus(
+  status?: string | null,
+  options?: { preserveLegacyApproved?: boolean }
+) {
+  if (!status) return ''
+  if (options?.preserveLegacyApproved && status === 'APPROVED') {
+    return LEGACY_STATUS_LABELS.APPROVED
+  }
+  const normalized = normalizeOrderStatus(status)
+  if (normalized) return STATUS_LABELS[normalized]
+  if (isLegacyFlowStatus(status)) return LEGACY_STATUS_LABELS[status]
+  return status.replaceAll('_', ' ')
+}
+
 /**
- * REGLAS de Mike (sin APPROVED):
+ * REGLAS de Mike:
  *
- * Pending -> Approved requiere:
- *  - Proof of Payment, Quote, Invoice
- *
- * Approved -> In Production:
- *  - No extra docs (payment already approved)
+ * Pending Payment Approval -> In Production requiere:
+ *  - Proof of Payment
+ *  - Order Form
+ *  - Invoice with deposit applied
  *
  * In Production -> Pre-Shipping requiere:
  *  - Build sheet
@@ -94,7 +123,7 @@ export function labelDocType(docType?: string | null) {
  *  - Paid invoice
  */
 export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
-  APPROVED: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
+  IN_PRODUCTION: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],
   PRE_SHIPPING: ['BUILD_SHEET', 'POST_PRODUCTION_MEDIA'],
   COMPLETED: [
     'SHIPPING_CHECKLIST',
@@ -106,6 +135,6 @@ export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
 }
 
 export const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, RequirementFieldKey[]>> = {
-  PRE_SHIPPING: ['serialNumber'], // Mike: serial antes de Pre-Shipping
+  PRE_SHIPPING: ['serialNumber'],
   COMPLETED: ['serialNumber'],
 }

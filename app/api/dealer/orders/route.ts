@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import { normalizeOrderStatus } from '@/lib/orderFlow'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -25,7 +26,12 @@ export async function GET(_req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ orders })
+    return NextResponse.json({
+      orders: orders.map((order) => ({
+        ...order,
+        status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
+      })),
+    })
   } catch (error) {
     console.error('❌ Error fetching dealer orders:', error)
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 })

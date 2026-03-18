@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest) {
     if (invalidStatusIds.length > 0) {
       return NextResponse.json(
         {
-          message: 'Only APPROVED or IN_PRODUCTION orders can be re-prioritized in Production Schedule',
+          message: 'Only in-production orders can be re-prioritized in Production Schedule',
           invalidStatusIds,
         },
         { status: 400 }

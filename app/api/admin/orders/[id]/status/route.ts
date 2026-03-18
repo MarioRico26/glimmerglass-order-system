@@ -11,6 +11,7 @@ import { getStatusRequirements } from '@/lib/orderRequirements'
 
 import {
   FLOW_ORDER,
+  normalizeOrderStatus,
   type FlowStatus,
   type OrderDocTypeKey,
   type RequirementFieldKey,
@@ -120,7 +121,7 @@ async function getOrderSummary(orderId: string) {
   return {
     id: order.id,
     deliveryAddress: order.deliveryAddress,
-    status: order.status,
+    status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
     paymentProofUrl: order.paymentProofUrl ?? null,
     blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),
 
@@ -321,7 +322,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     })
     if (!current) return json('Order not found', 404)
 
-    const currentStatus = current.status as FlowStatus
+    const currentStatus = normalizeOrderStatus(current.status)
+    if (!currentStatus) return json('Invalid current status', 400, { from: current.status })
 
     if (isForwardMove(currentStatus, nextStatus) && !isOneStepForward(currentStatus, nextStatus)) {
       const currentIdx = flowIndex(currentStatus)

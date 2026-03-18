@@ -9,7 +9,6 @@ type Dealer = { id: string; name: string; email: string }
 const STATUSES = [
     { value: '', label: 'All statuses' },
     { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending payment approval' },
-    { value: 'APPROVED', label: 'Approved' },
     { value: 'IN_PRODUCTION', label: 'In production' },
     { value: 'PRE_SHIPPING', label: 'Pre-shipping' },
     { value: 'COMPLETED', label: 'Completed' },

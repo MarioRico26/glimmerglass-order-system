@@ -3,20 +3,21 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { normalizeOrderStatus } from '@/lib/orderFlow'
 
 type Status =
   | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED'
   | 'IN_PRODUCTION'
+  | 'PRE_SHIPPING'
   | 'COMPLETED'
   | 'CANCELED'
 
 const STATUSES: Status[] = [
   'PENDING_PAYMENT_APPROVAL',
-  'APPROVED',
   'IN_PRODUCTION',
+  'PRE_SHIPPING',
   'COMPLETED',
-  // 'CANCELED' // <- si no la quieres en los cards, déjala fuera
+  'CANCELED',
 ]
 
 export async function GET() {
@@ -34,7 +35,7 @@ export async function GET() {
     for (const s of STATUSES) totals[s] = 0
 
     for (const row of groupByStatus) {
-      const st = row.status as Status
+      const st = normalizeOrderStatus(row.status)?.toString() as Status | undefined
       const c = row._count._all
       totals.total += c
       if (st in totals) totals[st] += c
@@ -76,7 +77,7 @@ export async function GET() {
       color: o.color?.name ?? '—',
       // 👇 normalizamos al campo "factory" que consume el frontend
       factory: o.factoryLocation?.name ?? 'Unknown Factory',
-      status: o.status,
+      status: normalizeOrderStatus(o.status)?.toString() ?? o.status,
       createdAt: o.createdAt.toISOString(),
     }))
 
@@ -109,7 +110,7 @@ export async function GET() {
       if (!fId) continue
       const entry = byFactoryMap.get(fId)
       if (!entry) continue
-      const st = row.status as Status
+      const st = normalizeOrderStatus(row.status)?.toString() as Status | undefined
       const c = row._count._all
       entry.totals.total += c
       if (st in entry.totals) entry.totals[st] += c

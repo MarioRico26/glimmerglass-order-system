@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { PenetrationMode } from '@prisma/client'
+import { normalizeOrderStatus } from '@/lib/orderFlow'
 
 type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
 
@@ -76,7 +77,10 @@ export async function GET(req: NextRequest) {
     const where: any = {}
 
     if (statusFilter !== 'ALL') {
-      where.status = statusFilter
+      where.status =
+        statusFilter === 'IN_PRODUCTION'
+          ? { in: ['IN_PRODUCTION', 'APPROVED'] }
+          : statusFilter
     }
 
     if (dealerFilter !== 'ALL') {
@@ -186,7 +190,12 @@ export async function GET(req: NextRequest) {
 
     const total = await prisma.order.count({ where })
 
-    return NextResponse.json({ items: orders, page, pageSize, total })
+    const items = orders.map((order) => ({
+      ...order,
+      status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
+    }))
+
+    return NextResponse.json({ items, page, pageSize, total })
   } catch (err: any) {
     console.error('GET /api/admin/orders error:', err)
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 })

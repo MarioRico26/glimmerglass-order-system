@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "backup:neon": "bash scripts/backup-neon-db.sh",
     "dev": "next dev",
     "build": "next build",
+    "workflow:remove-approved": "node scripts/remove-approved-workflow.cjs --execute",
+    "workflow:remove-approved:dry": "node scripts/remove-approved-workflow.cjs --dry-run",
     "start": "next start",
     "lint": "next lint"
   },

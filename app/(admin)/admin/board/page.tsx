@@ -10,7 +10,6 @@ import Link from 'next/link'
 type Maybe<T> = T | null | undefined
 type OrderStatus =
   | 'PENDING_PAYMENT_APPROVAL'
-  | 'APPROVED'
   | 'IN_PRODUCTION'
   | 'COMPLETED'
   | 'CANCELED'
@@ -34,15 +33,13 @@ const deep = '#007A99'
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING_PAYMENT_APPROVAL: 'Pending',
-  APPROVED: 'Approved',
   IN_PRODUCTION: 'In Production',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
 }
 
 const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  PENDING_PAYMENT_APPROVAL: ['APPROVED', 'CANCELED'],
-  APPROVED: ['IN_PRODUCTION', 'CANCELED'],
+  PENDING_PAYMENT_APPROVAL: ['IN_PRODUCTION', 'CANCELED'],
   IN_PRODUCTION: ['COMPLETED', 'CANCELED'],
   COMPLETED: [],
   CANCELED: [],
@@ -50,7 +47,6 @@ const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
 
 const STATUS_COLORS = {
   PENDING_PAYMENT_APPROVAL: { bg: 'bg-amber-50',   text: 'text-amber-800',   head: 'bg-amber-100/70',   rail: 'bg-amber-200'   },
-  APPROVED:                 { bg: 'bg-sky-50',     text: 'text-sky-800',     head: 'bg-sky-100/70',     rail: 'bg-sky-200'     },
   IN_PRODUCTION:            { bg: 'bg-indigo-50',  text: 'text-indigo-800',  head: 'bg-indigo-100/70',  rail: 'bg-indigo-200'  },
   COMPLETED:                { bg: 'bg-emerald-50', text: 'text-emerald-800', head: 'bg-emerald-100/70', rail: 'bg-emerald-200' },
   CANCELED:                 { bg: 'bg-rose-50',    text: 'text-rose-800',    head: 'bg-rose-100/70',    rail: 'bg-rose-200'    },
@@ -125,7 +121,6 @@ export default function AdminStatusBoard() {
   const grouped = useMemo(() => {
     const map: Record<OrderStatus, Order[]> = {
       PENDING_PAYMENT_APPROVAL: [],
-      APPROVED: [],
       IN_PRODUCTION: [],
       COMPLETED: [],
       CANCELED: [],
@@ -466,8 +461,6 @@ function StatusBadge({ status }: { status: OrderStatus | string }) {
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
       return <span className={`${base} bg-yellow-100 text-yellow-800`}>Pending</span>
-    case 'APPROVED':
-      return <span className={`${base} bg-blue-100 text-blue-800`}>Approved</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
     case 'COMPLETED':

@@ -2,13 +2,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
+import { normalizeOrderStatus } from '@/lib/orderFlow'
 
 const SAFE_SORT = new Set(['createdAt', 'requestedShipDate', 'status'])
 const SAFE_DIR = new Set(['asc', 'desc'])
 
 type OrderStatus =
     | 'PENDING_PAYMENT_APPROVAL'
-    | 'APPROVED'
     | 'IN_PRODUCTION'
     | 'PRE_SHIPPING'
     | 'COMPLETED'
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         const dir = SAFE_DIR.has(searchParams.get('dir') || '') ? (searchParams.get('dir') as 'asc' | 'desc') : 'desc'
 
         const where: any = {}
-        if (status) where.status = status
+        if (status) where.status = status === 'IN_PRODUCTION' ? { in: ['IN_PRODUCTION', 'APPROVED'] } : status
         if (dealer) where.dealer = { name: { equals: dealer } }
         if (factory) where.factoryLocation = { name: { equals: factory } }
         if (q) {
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
         const rows: Row[] = raw.map(o => ({
             id: o.id,
-            status: o.status as OrderStatus,
+            status: (normalizeOrderStatus(o.status)?.toString() ?? o.status) as OrderStatus,
             deliveryAddress: o.deliveryAddress ?? null,
             createdAt: o.createdAt,
             requestedShipDate: o.requestedShipDate ?? null,

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
-import { STATUS_LABELS, type FlowStatus } from '@/lib/orderFlow'
+import { STATUS_LABELS, labelOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 
 type Maybe<T> = T | null | undefined
 
@@ -64,7 +64,6 @@ const deep = '#007A99'
 
 const ALL_STATUS = [
   'PENDING_PAYMENT_APPROVAL',
-  'APPROVED',
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
@@ -83,8 +82,7 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
 }
 
 function labelStatus(status: string) {
-  const key = status as FlowStatus
-  return STATUS_LABELS[key] ?? status.replaceAll('_', ' ')
+  return labelOrderStatus(status)
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -97,13 +95,6 @@ function StatusBadge({ status }: { status: string }) {
         <span className={`${base} bg-amber-50 text-amber-900 border-amber-200`}>
           <span className={`${dot} bg-amber-500`} />
           Pending
-        </span>
-      )
-    case 'APPROVED':
-      return (
-        <span className={`${base} bg-sky-50 text-sky-900 border-sky-200`}>
-          <span className={`${dot} bg-sky-500`} />
-          Approved
         </span>
       )
     case 'IN_PRODUCTION':
@@ -159,7 +150,7 @@ function SkeletonGroup() {
 
 /**
  * Botón “siguiente paso” según flow:
- * PENDING_PAYMENT_APPROVAL -> APPROVED -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+ * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
  */
 function NextStep({
   order,
@@ -188,17 +179,9 @@ function NextStep({
       ? {
           label: 'Approve Payment',
           icon: <CircleCheckBig size={16} />,
-          next: 'APPROVED' as FlowStatus,
-          className:
-            'bg-sky-600 hover:bg-sky-700 text-white shadow-[0_10px_30px_rgba(14,165,233,0.25)]',
-        }
-      : s === 'APPROVED'
-      ? {
-          label: 'Start',
-          icon: <Clock size={16} />,
           next: 'IN_PRODUCTION' as FlowStatus,
           className:
-            'bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_10px_30px_rgba(79,70,229,0.25)]',
+            'bg-sky-600 hover:bg-sky-700 text-white shadow-[0_10px_30px_rgba(14,165,233,0.25)]',
         }
       : s === 'IN_PRODUCTION'
       ? {
