@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 type Dealer = { id: string; name: string; email?: string | null }
 type PoolModel = {
@@ -10,11 +11,13 @@ type PoolModel = {
   lengthFt?: number | null
   widthFt?: number | null
   depthFt?: number | null
+  imageUrl?: string | null
   blueprintUrl?: string | null
   maxSkimmers?: number | null
   maxReturns?: number | null
   maxMainDrains?: number | null
   defaultFactoryLocationId?: string | null
+  defaultFactoryLocation?: { id: string; name: string } | null
 }
 type Color = { id: string; name: string; swatchUrl?: string | null }
 type Factory = { id: string; name: string; city?: string | null; state?: string | null }
@@ -62,6 +65,7 @@ export default function AdminNewOrderPage() {
   const [dealerModalOpen, setDealerModalOpen] = useState(false)
   const [dealerModalBusy, setDealerModalBusy] = useState(false)
   const [dealerModalError, setDealerModalError] = useState('')
+  const [modelSectionOpen, setModelSectionOpen] = useState(true)
   const [dealerForm, setDealerForm] = useState({
     name: '',
     email: '',
@@ -103,6 +107,10 @@ export default function AdminNewOrderPage() {
     () => colors.find((c) => c.id === form.colorId) ?? null,
     [colors, form.colorId]
   )
+  const visibleModels = useMemo(() => {
+    if (!form.factoryLocationId) return models
+    return models.filter((m) => m.defaultFactoryLocationId === form.factoryLocationId)
+  }, [models, form.factoryLocationId])
 
   const ready = useMemo(() => {
     return !!(
@@ -165,6 +173,17 @@ export default function AdminNewOrderPage() {
     setMarkers([])
     setMarkerError('')
   }, [form.poolModelId])
+
+  useEffect(() => {
+    if (!form.factoryLocationId || !form.poolModelId) return
+    const selectedModel = models.find((m) => m.id === form.poolModelId)
+    if (!selectedModel) return
+    if (selectedModel.defaultFactoryLocationId !== form.factoryLocationId) {
+      setForm((prev) => ({ ...prev, poolModelId: '' }))
+      setMarkers([])
+      setMarkerError('')
+    }
+  }, [form.factoryLocationId, form.poolModelId, models])
 
   useEffect(() => {
     if (form.penetrationMode === 'NO_PENETRATIONS') {
@@ -436,19 +455,48 @@ export default function AdminNewOrderPage() {
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
                     Pool Model
                   </label>
-                  <select
-                    value={form.poolModelId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, poolModelId: e.target.value }))}
-                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    required
-                  >
-                    <option value="">Select model</option>
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setModelSectionOpen((prev) => !prev)}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {form.poolModelId
+                            ? visibleModels.find((m) => m.id === form.poolModelId)?.name || 'Selected model'
+                            : 'Select model'}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {visibleModels.length} models available for the selected factory
+                        </div>
+                      </div>
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600">
+                        {modelSectionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </span>
+                    </button>
+
+                    {modelSectionOpen ? (
+                      <div className="border-t border-slate-200 bg-white px-3 py-3">
+                        <select
+                          value={form.poolModelId}
+                          onChange={(e) => setForm((prev) => ({ ...prev, poolModelId: e.target.value }))}
+                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                          required
+                        >
+                          <option value="">Select model</option>
+                          {visibleModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Models are filtered by the factory selected above.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div>

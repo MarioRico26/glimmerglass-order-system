@@ -5,6 +5,8 @@ import {
   Palette,
   Truck,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   AlertCircle,
   Loader2,
   CalendarDays,
@@ -75,6 +77,7 @@ export default function NewOrderPage() {
   const [colors, setColors] = useState<Color[]>([])
   const [modelSearch, setModelSearch] = useState('')
   const [onlyReadyModels, setOnlyReadyModels] = useState(false)
+  const [modelPickerOpen, setModelPickerOpen] = useState(true)
   const [markerType, setMarkerType] = useState<'skimmer' | 'return' | 'drain'>('skimmer')
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
   const [markerError, setMarkerError] = useState('')
@@ -113,6 +116,10 @@ export default function NewOrderPage() {
   const selectedColor = useMemo(
     () => colors.find((c) => c.id === colorId) ?? null,
     [colors, colorId]
+  )
+  const selectedModel = useMemo(
+    () => models.find((m) => m.id === poolModelId) ?? null,
+    [models, poolModelId]
   )
 
   const readyQtyByModel = useMemo(() => {
@@ -581,118 +588,142 @@ export default function NewOrderPage() {
               Pool Model
             </label>
 
-            <div className="flex flex-col gap-3">
-              <input
-                value={modelSearch}
-                onChange={(e) => setModelSearch(e.target.value)}
-                placeholder="Search model…"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
-              />
-
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={onlyReadyModels}
-                    onChange={(e) => setOnlyReadyModels(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300"
-                  />
-                  Show available pools only (READY stock)
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {visibleModels.length} models shown
-                  </span>
-                  <a
-                    href="/dealer/in-stock"
-                    className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                  >
-                    View Available Stock
-                  </a>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80">
+              <button
+                type="button"
+                onClick={() => setModelPickerOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              >
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    {selectedModel?.name || 'Select pool model'}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {visibleModels.length} models match the current facility and stock filters
+                  </div>
                 </div>
-              </div>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600">
+                  {modelPickerOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </span>
+              </button>
 
-              {visibleModels.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-                  No pool models match the current filters.
+              {modelPickerOpen ? (
+                <div className="border-t border-slate-200 bg-white px-4 py-4">
+                  <div className="flex flex-col gap-3">
+                    <input
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search model…"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    />
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={onlyReadyModels}
+                          onChange={(e) => setOnlyReadyModels(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                        Show available pools only (READY stock)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500">
+                          {visibleModels.length} models shown
+                        </span>
+                        <a
+                          href="/dealer/in-stock"
+                          className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                        >
+                          View Available Stock
+                        </a>
+                      </div>
+                    </div>
+
+                    {visibleModels.length === 0 ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                        No pool models match the current filters.
+                      </div>
+                    ) : null}
+
+                    <div className="max-h-[36rem] overflow-auto pr-1">
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {visibleModels.map((m) => {
+                          const readyQty = readyQtyByModel.get(m.id) || 0
+                          const selected = poolModelId === m.id
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => setPoolModelId(m.id)}
+                              className={[
+                                'text-left rounded-2xl border bg-white overflow-hidden shadow-sm transition',
+                                selected
+                                  ? 'border-sky-300 ring-2 ring-sky-200'
+                                  : 'border-slate-200 hover:border-slate-300',
+                              ].join(' ')}
+                            >
+                              <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
+                                {m.imageUrl ? (
+                                  <img
+                                    src={m.imageUrl}
+                                    alt={m.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm">
+                                    No image
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-4">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="font-bold text-slate-900">{m.name}</div>
+                                  {readyQty > 0 ? (
+                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Available now: {readyQty}
+                                    </span>
+                                  ) : selected ? (
+                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                                      Selected
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                      Build to order
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
+                                  <span>L: {m.lengthFt ?? '-'} ft</span>
+                                  <span>W: {m.widthFt ?? '-'} ft</span>
+                                  <span>D: {m.depthFt ?? '-'} ft</span>
+                                </div>
+                                <div className="mt-2 text-xs text-slate-500">
+                                  Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
+                                </div>
+                                <div className="mt-2 text-xs">
+                                  {m.blueprintUrl ? (
+                                    <a
+                                      href={m.blueprintUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sky-700 underline"
+                                    >
+                                      View dig sheet
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-400">No dig sheet</span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : null}
-
-              <div className="max-h-[36rem] overflow-auto pr-1">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleModels.map((m) => {
-                    const readyQty = readyQtyByModel.get(m.id) || 0
-                    const selected = poolModelId === m.id
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setPoolModelId(m.id)}
-                        className={[
-                          'text-left rounded-2xl border bg-white overflow-hidden shadow-sm transition',
-                          selected
-                            ? 'border-sky-300 ring-2 ring-sky-200'
-                            : 'border-slate-200 hover:border-slate-300',
-                        ].join(' ')}
-                      >
-                        <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
-                          {m.imageUrl ? (
-                            <img
-                              src={m.imageUrl}
-                              alt={m.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm">
-                              No image
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-4">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="font-bold text-slate-900">{m.name}</div>
-                            {readyQty > 0 ? (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Available now: {readyQty}
-                              </span>
-                            ) : selected ? (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                                Selected
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                Build to order
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-2 text-xs text-slate-600 flex flex-wrap gap-2">
-                            <span>L: {m.lengthFt ?? '-'} ft</span>
-                            <span>W: {m.widthFt ?? '-'} ft</span>
-                            <span>D: {m.depthFt ?? '-'} ft</span>
-                          </div>
-                          <div className="mt-2 text-xs text-slate-500">
-                            Factory: {m.defaultFactoryLocation?.name || 'Assigned by admin'}
-                          </div>
-                          <div className="mt-2 text-xs">
-                            {m.blueprintUrl ? (
-                              <a
-                                href={m.blueprintUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sky-700 underline"
-                              >
-                                View dig sheet
-                              </a>
-                            ) : (
-                              <span className="text-slate-400">No dig sheet</span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
             </div>
           </div>
 
