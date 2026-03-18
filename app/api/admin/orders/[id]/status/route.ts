@@ -11,6 +11,7 @@ import { getStatusRequirements } from '@/lib/orderRequirements'
 
 import {
   FLOW_ORDER,
+  labelOrderStatus,
   normalizeOrderStatus,
   type FlowStatus,
   type OrderDocTypeKey,
@@ -325,6 +326,26 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const currentStatus = normalizeOrderStatus(current.status)
     if (!currentStatus) return json('Invalid current status', 400, { from: current.status })
 
+    const trimmedComment = comment.trim()
+    const isCancelMove = currentStatus !== 'CANCELED' && nextStatus === 'CANCELED'
+    const isRestoreMove = currentStatus === 'CANCELED' && nextStatus !== 'CANCELED'
+
+    if (isCancelMove && !trimmedComment) {
+      return json('Cancellation reason is required', 400, {
+        code: 'CANCEL_REASON_REQUIRED',
+        from: currentStatus,
+        to: nextStatus,
+      })
+    }
+
+    if (isRestoreMove && !trimmedComment) {
+      return json('Restore reason is required', 400, {
+        code: 'RESTORE_REASON_REQUIRED',
+        from: currentStatus,
+        to: nextStatus,
+      })
+    }
+
     if (isForwardMove(currentStatus, nextStatus) && !isOneStepForward(currentStatus, nextStatus)) {
       const currentIdx = flowIndex(currentStatus)
       const expectedNext = currentIdx >= 0 ? FLOW_ORDER[currentIdx + 1] ?? null : null
@@ -369,7 +390,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     })
     if (!dbUser) return json('User not found', 404)
 
-    const finalComment = comment?.trim() || 'Status changed'
+    const finalComment = isCancelMove
+      ? `Order canceled: ${trimmedComment}`
+      : isRestoreMove
+      ? `Order restored to ${labelOrderStatus(nextStatus)}: ${trimmedComment}`
+      : trimmedComment || 'Status changed'
 
     await prisma.$transaction(async (tx) => {
       await tx.order.update({

@@ -185,6 +185,15 @@ export async function GET(req: NextRequest) {
             active: true,
           },
         },
+        histories: {
+          where: { status: 'CANCELED' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            comment: true,
+            createdAt: true,
+          },
+        },
       },
     })
 
@@ -193,6 +202,8 @@ export async function GET(req: NextRequest) {
     const items = orders.map((order) => ({
       ...order,
       status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
+      lastCancellationReason: order.histories[0]?.comment ?? null,
+      lastCanceledAt: order.histories[0]?.createdAt?.toISOString() ?? null,
     }))
 
     return NextResponse.json({ items, page, pageSize, total })

@@ -271,6 +271,7 @@ export default function OrderHistoryPage() {
         orderId={orderId}
         open={manualOpen}
         onClose={() => setManualOpen(false)}
+        currentStatus={summary?.status ?? null}
         onSuccess={async () => {
           // refresca todo para que status + timeline + media queden actualizados
           await loadAll()

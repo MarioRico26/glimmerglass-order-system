@@ -172,13 +172,13 @@ export default function AdminStatusBoard() {
     }
   }, [open])
 
-  const patchStatus = async (id: string, status: OrderStatus) => {
+  const patchStatus = async (id: string, status: OrderStatus, comment?: string) => {
     setBusy(true)
     try {
       const res = await fetch(`/api/admin/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, comment: comment || 'Status changed from board' }),
       })
       if (!res.ok) throw new Error('Failed to update status')
       // actualizar lista
@@ -421,7 +421,16 @@ export default function AdminStatusBoard() {
                       <button
                         key={next}
                         disabled={busy}
-                        onClick={() => patchStatus(active.id, next)}
+                        onClick={() => {
+                          if (next !== 'CANCELED') {
+                            void patchStatus(active.id, next)
+                            return
+                          }
+
+                          const reason = window.prompt('Why are you canceling this order?')?.trim() || ''
+                          if (!reason) return
+                          void patchStatus(active.id, next, reason)
+                        }}
                         className={`inline-flex items-center gap-1 text-white px-3 py-2 rounded-lg disabled:opacity-50 ${cls}`}
                       >
                         <Icon size={16} /> {STATUS_LABEL[next]}

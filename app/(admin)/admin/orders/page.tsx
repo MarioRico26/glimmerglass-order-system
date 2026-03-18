@@ -21,6 +21,7 @@ import {
   ArrowUpDown,
   Truck,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
@@ -39,6 +40,8 @@ interface Order {
   factoryLocation: Maybe<{ name: string }>
   createdAt?: string
   requestedShipDate?: string | null
+  lastCancellationReason?: string | null
+  lastCanceledAt?: string | null
 }
 
 type ApiResp = {
@@ -58,6 +61,11 @@ type MissingPayload = {
   }
 }
 
+type StatusActionModalState =
+  | { mode: 'cancel'; orderId: string; orderLabel: string }
+  | { mode: 'restore'; orderId: string; orderLabel: string }
+  | null
+
 // UI constants
 const aqua = '#00B2CA'
 const deep = '#007A99'
@@ -70,6 +78,12 @@ const ALL_STATUS = [
   'CANCELED',
 ] as const
 type StatusKey = (typeof ALL_STATUS)[number]
+const RESTORE_TARGETS: FlowStatus[] = [
+  'PENDING_PAYMENT_APPROVAL',
+  'IN_PRODUCTION',
+  'PRE_SHIPPING',
+  'COMPLETED',
+]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -157,19 +171,41 @@ function NextStep({
   busy,
   onAdvance,
   onCancel,
+  onRestore,
 }: {
   order: Order
   busy: boolean
   onAdvance: (next: FlowStatus) => void
   onCancel: () => void
+  onRestore: () => void
 }) {
   const s = order.status as FlowStatus
 
-  // Completed/Canceled: nada que hacer
-  if (s === 'COMPLETED' || s === 'CANCELED') {
+  if (s === 'COMPLETED') {
     return (
       <div className="flex items-center justify-between gap-2 w-full xl:w-auto">
         <div className="text-xs text-slate-500">No actions</div>
+      </div>
+    )
+  }
+
+  if (s === 'CANCELED') {
+    return (
+      <div className="flex items-center gap-2 w-full xl:w-auto">
+        <button
+          disabled={busy}
+          onClick={onRestore}
+          className={[
+            'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-2xl text-sm font-bold transition',
+            'border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100',
+            'focus:outline-none focus:ring-2 focus:ring-emerald-200',
+            busy ? 'opacity-60 cursor-not-allowed' : '',
+          ].join(' ')}
+          title="Restore canceled order"
+        >
+          <RotateCcw size={16} />
+          Restore
+        </button>
       </div>
     )
   }
@@ -233,6 +269,131 @@ function NextStep({
   )
 }
 
+function StatusActionModal({
+  state,
+  reason,
+  onReasonChange,
+  restoreTarget,
+  onRestoreTargetChange,
+  restoreConfirmed,
+  onRestoreConfirmedChange,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  state: StatusActionModalState
+  reason: string
+  onReasonChange: (value: string) => void
+  restoreTarget: FlowStatus
+  onRestoreTargetChange: (value: FlowStatus) => void
+  restoreConfirmed: boolean
+  onRestoreConfirmedChange: (value: boolean) => void
+  busy: boolean
+  error: string | null
+  onClose: () => void
+  onSubmit: () => void
+}) {
+  if (!state) return null
+
+  const isCancel = state.mode === 'cancel'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+        <div className="space-y-2">
+          <h3 className="text-2xl font-black text-slate-900">
+            {isCancel ? 'Cancel Order' : 'Restore Canceled Order'}
+          </h3>
+          <p className="text-sm text-slate-600">
+            {isCancel
+              ? `Cancel "${state.orderLabel}" and save the reason in the order history.`
+              : `Reactivate "${state.orderLabel}" and place it back into the workflow.`}
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {!isCancel ? (
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-slate-700">Return to step</label>
+              <select
+                value={restoreTarget}
+                onChange={(e) => onRestoreTargetChange(e.target.value as FlowStatus)}
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              >
+                {RESTORE_TARGETS.map((status) => (
+                  <option key={status} value={status}>
+                    {labelOrderStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-slate-700">
+              {isCancel ? 'Cancellation reason' : 'Restore note'}
+            </label>
+            <textarea
+              rows={4}
+              value={reason}
+              onChange={(e) => onReasonChange(e.target.value)}
+              placeholder={
+                isCancel
+                  ? 'Why is this order being canceled?'
+                  : 'Why is this order being restored?'
+              }
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+            />
+          </div>
+
+          {!isCancel ? (
+            <label className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <input
+                type="checkbox"
+                checked={restoreConfirmed}
+                onChange={(e) => onRestoreConfirmedChange(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-200"
+              />
+              <span>I confirm this canceled order should return to the active workflow.</span>
+            </label>
+          ) : null}
+
+          {error ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onSubmit}
+            className={[
+              'inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold text-white',
+              isCancel ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700',
+              busy ? 'cursor-not-allowed opacity-60' : '',
+            ].join(' ')}
+          >
+            {isCancel ? <CircleX size={16} /> : <RotateCcw size={16} />}
+            {busy ? 'Saving...' : isCancel ? 'Cancel Order' : 'Restore Order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AdminOrdersInner() {
   const router = useRouter()
   const pathname = usePathname()
@@ -248,6 +409,11 @@ function AdminOrdersInner() {
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [missingTarget, setMissingTarget] = useState<string | null>(null)
   const [missingUploadHref, setMissingUploadHref] = useState<string | null>(null)
+  const [statusAction, setStatusAction] = useState<StatusActionModalState>(null)
+  const [statusActionReason, setStatusActionReason] = useState('')
+  const [statusActionError, setStatusActionError] = useState<string | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<FlowStatus>('PENDING_PAYMENT_APPROVAL')
+  const [restoreConfirmed, setRestoreConfirmed] = useState(false)
 
   const q = sp.get('q') || ''
   const statusFilter = (sp.get('status') as StatusKey | 'ALL') || 'ALL'
@@ -312,14 +478,51 @@ function AdminOrdersInner() {
     setMissingOpen(true)
   }
 
-  const updateStatus = async (orderId: string, newStatus: FlowStatus) => {
+  const closeStatusAction = () => {
+    setStatusAction(null)
+    setStatusActionReason('')
+    setStatusActionError(null)
+    setRestoreTarget('PENDING_PAYMENT_APPROVAL')
+    setRestoreConfirmed(false)
+  }
+
+  const openCancelModal = (order: Order) => {
+    setStatusAction({
+      mode: 'cancel',
+      orderId: order.id,
+      orderLabel: order.poolModel?.name || `Order ${order.id.slice(0, 8)}`,
+    })
+    setStatusActionReason('')
+    setStatusActionError(null)
+  }
+
+  const openRestoreModal = (order: Order) => {
+    setStatusAction({
+      mode: 'restore',
+      orderId: order.id,
+      orderLabel: order.poolModel?.name || `Order ${order.id.slice(0, 8)}`,
+    })
+    setStatusActionReason('')
+    setStatusActionError(null)
+    setRestoreTarget('PENDING_PAYMENT_APPROVAL')
+    setRestoreConfirmed(false)
+  }
+
+  const updateStatus = async (
+    orderId: string,
+    newStatus: FlowStatus,
+    options?: { comment?: string; suppressAlert?: boolean }
+  ) => {
     try {
       setBusyId(orderId)
 
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, comment: 'Status changed from Orders list' }),
+        body: JSON.stringify({
+          status: newStatus,
+          comment: options?.comment ?? 'Status changed from Orders list',
+        }),
       })
 
       const payload = await safeJson<any>(res)
@@ -340,10 +543,48 @@ function AdminOrdersInner() {
 
       setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)))
       router.refresh()
+      return true
     } catch (e: any) {
+      if (options?.suppressAlert) throw e
       alert(e?.message || 'Could not update status')
+      return false
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const submitStatusAction = async () => {
+    if (!statusAction) return
+
+    const reason = statusActionReason.trim()
+    if (!reason) {
+      setStatusActionError(
+        statusAction.mode === 'cancel'
+          ? 'Cancellation reason is required.'
+          : 'Restore note is required.'
+      )
+      return
+    }
+
+    if (statusAction.mode === 'restore' && !restoreConfirmed) {
+      setStatusActionError('Confirm the restore before sending the order back into the workflow.')
+      return
+    }
+
+    setStatusActionError(null)
+
+    try {
+      const nextStatus =
+        statusAction.mode === 'cancel' ? 'CANCELED' : restoreTarget
+
+      const success = await updateStatus(statusAction.orderId, nextStatus, {
+        comment: reason,
+        suppressAlert: true,
+      })
+
+      if (success) closeStatusAction()
+    } catch (e: any) {
+      setStatusActionError(e?.message || 'Could not update status')
     }
   }
 
@@ -443,6 +684,19 @@ function AdminOrdersInner() {
         missingDocs={missingDocs}
         missingFields={missingFields}
         goToUploadHref={missingUploadHref}
+      />
+      <StatusActionModal
+        state={statusAction}
+        reason={statusActionReason}
+        onReasonChange={setStatusActionReason}
+        restoreTarget={restoreTarget}
+        onRestoreTargetChange={setRestoreTarget}
+        restoreConfirmed={restoreConfirmed}
+        onRestoreConfirmedChange={setRestoreConfirmed}
+        busy={busyId === statusAction?.orderId}
+        error={statusActionError}
+        onClose={closeStatusAction}
+        onSubmit={submitStatusAction}
       />
 
       {/* Header */}
@@ -731,7 +985,24 @@ function AdminOrdersInner() {
                           <div className="xl:col-span-4 min-w-0">
                             <div className="flex flex-col gap-3 xl:items-end">
                               <div className="w-full xl:w-auto flex xl:justify-end">
-                                <StatusBadge status={order.status} />
+                                <div className="flex flex-col gap-2 xl:items-end">
+                                  <StatusBadge status={order.status} />
+                                  {order.lastCancellationReason ? (
+                                    <div className="max-w-full xl:max-w-[320px] rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                                      <div className="font-black uppercase tracking-wide text-[10px] text-rose-700">
+                                        Last Cancellation
+                                      </div>
+                                      <div className="mt-1 font-medium break-words">
+                                        {order.lastCancellationReason.replace(/^Order canceled:\s*/i, '')}
+                                      </div>
+                                      {order.lastCanceledAt ? (
+                                        <div className="mt-1 text-[11px] text-rose-700/80">
+                                          {new Date(order.lastCanceledAt).toLocaleString()}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
 
                               <div className="w-full xl:w-auto">
@@ -739,7 +1010,8 @@ function AdminOrdersInner() {
                                   order={order}
                                   busy={busyId === order.id}
                                   onAdvance={(next) => updateStatus(order.id, next)}
-                                  onCancel={() => updateStatus(order.id, 'CANCELED')}
+                                  onCancel={() => openCancelModal(order)}
+                                  onRestore={() => openRestoreModal(order)}
                                 />
                               </div>
 

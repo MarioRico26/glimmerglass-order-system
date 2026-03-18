@@ -2,12 +2,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { labelOrderStatus, normalizeOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 
 interface Props {
   orderId: string
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  currentStatus?: string | null
 }
 
 type RequirementsState = {
@@ -37,14 +39,13 @@ type RequirementsResponse = {
   requirements?: Partial<RequirementsState>
 }
 
-const STATUSES = [
-  { value: 'PENDING_PAYMENT_APPROVAL', label: 'Pending Payment Approval' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'IN_PRODUCTION', label: 'In Production' },
-  { value: 'PRE_SHIPPING', label: 'Pre-Shipping' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELED', label: 'Canceled' },
-] as const
+const STATUSES: FlowStatus[] = [
+  'PENDING_PAYMENT_APPROVAL',
+  'IN_PRODUCTION',
+  'PRE_SHIPPING',
+  'COMPLETED',
+  'CANCELED',
+]
 
 const DOC_LABELS: Record<string, string> = {
   PROOF_OF_PAYMENT: 'Proof of Payment',
@@ -83,8 +84,15 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
 }
 
-export default function AddManualEntryModal({ orderId, open, onClose, onSuccess }: Props) {
-  const [status, setStatus] = useState<string>('APPROVED')
+export default function AddManualEntryModal({
+  orderId,
+  open,
+  onClose,
+  onSuccess,
+  currentStatus,
+}: Props) {
+  const normalizedCurrentStatus = normalizeOrderStatus(currentStatus) ?? 'PENDING_PAYMENT_APPROVAL'
+  const [status, setStatus] = useState<FlowStatus>(normalizedCurrentStatus)
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null)
@@ -103,6 +111,18 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
   const requiredFields = useMemo(() => requirements?.requiredFields ?? [], [requirements])
   const serialRequired = requiredFields.includes('serialNumber')
   const serialMissing = missingFields.includes('serialNumber')
+  const isCancelAction = status === 'CANCELED' && normalizedCurrentStatus !== 'CANCELED'
+  const isRestoreAction = normalizedCurrentStatus === 'CANCELED' && status !== 'CANCELED'
+  const commentLabel = isCancelAction
+    ? 'Cancellation reason'
+    : isRestoreAction
+    ? 'Restore note'
+    : 'Comment (optional)'
+  const commentPlaceholder = isCancelAction
+    ? 'Why is this order being canceled?'
+    : isRestoreAction
+    ? 'Why is this order being restored?'
+    : 'Optional note...'
   const hint = useMemo(() => {
     if (requirementsLoading) return null
     if (requiredDocs.length === 0 && requiredFields.length === 0) {
@@ -171,13 +191,21 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
 
   useEffect(() => {
     if (!open) return
+    setStatus(normalizedCurrentStatus)
+    setComment('')
     setError(null)
     setUploadInfo(null)
     setSerialNumber('')
     setSerialDirty(false)
+    void loadRequirements(normalizedCurrentStatus)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, orderId, normalizedCurrentStatus])
+
+  useEffect(() => {
+    if (!open) return
     void loadRequirements(status)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, status, orderId])
+  }, [status])
 
   const uploadMissingDoc = async (docType: string, file: File) => {
     setUploadingDoc(docType)
@@ -208,6 +236,11 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
+    if ((isCancelAction || isRestoreAction) && !comment.trim()) {
+      setError(isCancelAction ? 'Cancellation reason is required.' : 'Restore note is required.')
+      return
+    }
+
     setLoading(true)
     setError(null)
     setUploadInfo(null)
@@ -284,32 +317,40 @@ export default function AddManualEntryModal({ orderId, open, onClose, onSuccess 
             <label className="text-sm font-semibold text-slate-700">New Status</label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => setStatus(e.target.value as FlowStatus)}
               required
               className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
             >
               {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+                <option key={s} value={s}>
+                  {labelOrderStatus(s)}
                 </option>
               ))}
             </select>
 
             {hint ? <div className="text-xs text-slate-500 mt-1">{hint}</div> : null}
-            {status === 'APPROVED' ? (
+            {isCancelAction ? (
+              <div className="text-xs text-rose-700 mt-1">
+                Canceling an order now requires a reason and logs it in the order history.
+              </div>
+            ) : null}
+            {isRestoreAction ? (
               <div className="text-xs text-emerald-700 mt-1">
-                Dealer payment proof uploaded at order creation counts automatically.
+                Restoring from canceled reactivates the order and logs the note in the order history.
               </div>
             ) : null}
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-semibold text-slate-700">Comment (optional)</label>
+            <label className="text-sm font-semibold text-slate-700">
+              {commentLabel}
+              {isCancelAction || isRestoreAction ? ' (required)' : ''}
+            </label>
             <textarea
               rows={4}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Optional note…"
+              placeholder={commentPlaceholder}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
           </div>
