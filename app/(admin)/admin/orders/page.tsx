@@ -986,7 +986,7 @@ function AdminOrdersInner() {
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="inline-flex items-center gap-1 text-sky-700 hover:underline font-bold"
-                                      title="View payment proof"
+                                      title="View deposit proof"
                                     >
                                       <ExternalLink size={14} />
                                       View

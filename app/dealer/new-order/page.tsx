@@ -408,7 +408,7 @@ export default function NewOrderPage() {
     if (!paymentProof) {
       setMsg({
         type: 'err',
-        text: 'Please attach the payment proof.',
+        text: 'Please attach the proof of deposit.',
       })
       return
     }
@@ -1207,10 +1207,10 @@ export default function NewOrderPage() {
             />
           </div>
 
-          {/* Payment proof */}
+          {/* Deposit proof */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Payment Proof (image or PDF)
+              Proof of Deposit (image or PDF)
             </label>
             <div className="flex items-center gap-3">
               <label className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50">

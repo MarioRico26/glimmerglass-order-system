@@ -769,7 +769,7 @@ export default function AdminNewOrderPage() {
               <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                    Payment Proof URL (optional)
+                    Proof of Deposit URL (optional)
                   </label>
                   <input
                     value={form.paymentProofUrl}

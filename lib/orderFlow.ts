@@ -41,7 +41,7 @@ export const LEGACY_STATUS_LABELS: Record<LegacyFlowStatus, string> = {
 
 // Labels bonitos para docs
 export const DOC_TYPE_LABELS: Partial<Record<OrderDocTypeKey, string>> = {
-  PROOF_OF_PAYMENT: 'Proof of Payment',
+  PROOF_OF_PAYMENT: 'Proof of Deposit',
   QUOTE: 'Order Form',
   INVOICE: 'Invoice with deposit applied',
 
@@ -106,7 +106,7 @@ export function labelOrderStatus(
  * REGLAS de Mike:
  *
  * Needs Deposit -> In Production requiere:
- *  - Proof of Payment
+ *  - Proof of Deposit
  *  - Order Form
  *  - Invoice with deposit applied
  *

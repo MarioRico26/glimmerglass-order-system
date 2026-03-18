@@ -208,7 +208,7 @@ export default function MyOrdersPage() {
                   ) : (
                     <span
                       className="h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm font-semibold px-3 cursor-not-allowed"
-                      title="No payment proof uploaded yet"
+                      title="No proof of deposit uploaded yet"
                     >
                       Payment proof
                     </span>

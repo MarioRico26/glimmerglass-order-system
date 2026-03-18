@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 type Props = {
   open: boolean
@@ -12,7 +13,7 @@ type Props = {
 }
 
 const DOC_LABELS: Record<string, string> = {
-  PROOF_OF_PAYMENT: 'Proof of Payment',
+  PROOF_OF_PAYMENT: 'Proof of Deposit',
   QUOTE: 'Order Form',
   INVOICE: 'Invoice with deposit applied',
 
@@ -48,6 +49,8 @@ export default function MissingRequirementsModal({
   missingFields = [],
   goToUploadHref = null,
 }: Props) {
+  const { labelForDocType } = useWorkflowDocLabels()
+
   if (!open) return null
 
   return (
@@ -67,7 +70,7 @@ export default function MissingRequirementsModal({
               <div className="text-sm font-bold text-amber-900 mb-2">Required documents missing</div>
               <ul className="list-disc ml-5 text-sm text-amber-900 space-y-1">
                 {missingDocs.map((d) => (
-                  <li key={d}>{DOC_LABELS[d] || d.replaceAll('_', ' ')}</li>
+                  <li key={d}>{labelForDocType(d) || DOC_LABELS[d] || d.replaceAll('_', ' ')}</li>
                 ))}
               </ul>
             </div>

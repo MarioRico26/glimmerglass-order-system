@@ -136,6 +136,15 @@ model OrderStatusRequirementTemplate {
   updatedAt      DateTime     @updatedAt
 }
 
+model WorkflowDocConfig {
+  id        String       @id @default(uuid())
+  docType   OrderDocType @unique
+  label     String
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
 model PoolModel {
   id       String  @id @default(uuid())
   name     String

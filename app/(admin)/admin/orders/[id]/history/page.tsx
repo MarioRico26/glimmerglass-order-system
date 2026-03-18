@@ -8,6 +8,7 @@ import Link from 'next/link'
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { labelOrderStatus } from '@/lib/orderFlow'
+import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 interface OrderHistory {
   id: string
@@ -109,6 +110,7 @@ export default function OrderHistoryPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const { labelForDocType } = useWorkflowDocLabels()
 
   const loadAll = async () => {
     try {
@@ -215,27 +217,27 @@ export default function OrderHistoryPage() {
   const handleApprovePayment = async () => {
     try {
       setSaving(true)
-      setMessage('🔄 Approving payment proof...')
+      setMessage('🔄 Approving deposit proof...')
 
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'IN_PRODUCTION',
-          comment: 'Payment proof approved by admin; order moved to In Production',
+          comment: 'Deposit proof approved by admin; order moved to In Production',
         }),
       })
 
       const payload = await safeJson<{ message?: string; code?: string }>(res)
       if (!res.ok) {
-        throw new Error(payload?.message || 'Could not approve payment proof')
+        throw new Error(payload?.message || 'Could not approve deposit proof')
       }
 
       await loadAll()
-      setMessage('✅ Payment approved and order moved to In Production.')
+      setMessage('✅ Deposit approved and order moved to In Production.')
     } catch (error) {
       console.error('Approve payment error:', error)
-      const msg = error instanceof Error ? error.message : 'Could not approve payment proof'
+      const msg = error instanceof Error ? error.message : 'Could not approve deposit proof'
       setMessage(`❌ ${msg}`)
     } finally {
       setSaving(false)
@@ -475,7 +477,7 @@ export default function OrderHistoryPage() {
                 disabled={saving}
                 className="bg-sky-600 hover:bg-sky-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
               >
-                Approve Payment Proof
+                Approve Deposit Proof
               </button>
             )}
 
@@ -493,7 +495,7 @@ export default function OrderHistoryPage() {
                 rel="noopener noreferrer"
                 className="border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                View Payment Proof
+                View Deposit Proof
               </a>
             )}
 
@@ -551,7 +553,7 @@ export default function OrderHistoryPage() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    {m.docType ? m.docType.replaceAll('_', ' ') : m.type}
+                    {m.docType ? labelForDocType(m.docType) || m.docType.replaceAll('_', ' ') : m.type}
                   </p>
                   <a
                     href={m.fileUrl}

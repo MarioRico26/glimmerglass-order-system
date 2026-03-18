@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 type Media = {
   id: string
@@ -16,7 +17,7 @@ type Media = {
 const DOC_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 
-  PROOF_OF_PAYMENT: 'Proof of Payment',
+  PROOF_OF_PAYMENT: 'Proof of Deposit',
   QUOTE: 'Order Form',
   INVOICE: 'Invoice with deposit applied',
   PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
@@ -78,6 +79,7 @@ export default function OrderMediaPage() {
   const [mediaList, setMediaList] = useState<Media[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const { labelForDocType } = useWorkflowDocLabels()
 
   const fetchMedia = async () => {
     if (!orderId) return
@@ -184,7 +186,7 @@ export default function OrderMediaPage() {
                     <optgroup key={g.title} label={g.title}>
                       {g.items.map((k) => (
                         <option key={k} value={k}>
-                          {DOC_TYPE_LABELS[k] || k}
+                          {labelForDocType(k) || DOC_TYPE_LABELS[k] || k}
                         </option>
                       ))}
                     </optgroup>
@@ -254,7 +256,9 @@ export default function OrderMediaPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-slate-900">
-                          {m.docType ? (DOC_TYPE_LABELS[m.docType] || m.docType) : 'Uncategorized'}
+                          {m.docType
+                            ? labelForDocType(m.docType) || DOC_TYPE_LABELS[m.docType] || m.docType
+                            : 'Uncategorized'}
                         </span>
                         <span className="text-xs rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600">
                           {m.visibleToDealer ? 'Dealer' : 'Internal'}

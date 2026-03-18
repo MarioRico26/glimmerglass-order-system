@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { labelOrderStatus, normalizeOrderStatus, type FlowStatus } from '@/lib/orderFlow'
+import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 interface Props {
   orderId: string
@@ -48,7 +49,7 @@ const STATUSES: FlowStatus[] = [
 ]
 
 const DOC_LABELS: Record<string, string> = {
-  PROOF_OF_PAYMENT: 'Proof of Payment',
+  PROOF_OF_PAYMENT: 'Proof of Deposit',
   QUOTE: 'Order Form',
   INVOICE: 'Invoice with deposit applied',
 
@@ -60,10 +61,6 @@ const DOC_LABELS: Record<string, string> = {
   BILL_OF_LADING: 'Bill of Lading',
   PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
   PAID_INVOICE: 'Paid Invoice',
-}
-
-function niceDoc(d: string) {
-  return DOC_LABELS[d] || d.replaceAll('_', ' ')
 }
 function niceField(f: string) {
   if (f === 'serialNumber') return 'Serial Number'
@@ -91,6 +88,7 @@ export default function AddManualEntryModal({
   onSuccess,
   currentStatus,
 }: Props) {
+  const { labelForDocType } = useWorkflowDocLabels()
   const normalizedCurrentStatus = normalizeOrderStatus(currentStatus) ?? 'PENDING_PAYMENT_APPROVAL'
   const [status, setStatus] = useState<FlowStatus>(normalizedCurrentStatus)
   const [comment, setComment] = useState('')
@@ -123,6 +121,7 @@ export default function AddManualEntryModal({
     : isRestoreAction
     ? 'Why is this order being restored?'
     : 'Optional note...'
+  const niceDoc = (docType: string) => labelForDocType(docType) || DOC_LABELS[docType] || docType.replaceAll('_', ' ')
   const hint = useMemo(() => {
     if (requirementsLoading) return null
     if (requiredDocs.length === 0 && requiredFields.length === 0) {
@@ -135,7 +134,7 @@ export default function AddManualEntryModal({
       ? requiredFields.map((f) => niceField(f)).join(', ')
       : 'none'
     return `Required docs: ${docsText}. Required fields: ${fieldsText}.`
-  }, [requirementsLoading, requiredDocs, requiredFields])
+  }, [requirementsLoading, requiredDocs, requiredFields, labelForDocType])
 
   const loadRequirements = async (targetStatus: string) => {
     setRequirementsLoading(true)

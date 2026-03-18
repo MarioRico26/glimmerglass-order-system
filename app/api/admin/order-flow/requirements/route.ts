@@ -20,6 +20,7 @@ import {
   sanitizeRequirementFields,
   upsertStatusRequirements,
 } from '@/lib/orderRequirements'
+import { listWorkflowDocConfigs, upsertWorkflowDocLabels } from '@/lib/workflowDocConfig'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json(
@@ -32,13 +33,21 @@ function isAdminRole(role: unknown) {
   return role === Role.ADMIN || role === Role.SUPERADMIN
 }
 
-function optionsPayload() {
+async function optionsPayload() {
+  const docConfigs = await listWorkflowDocConfigs()
+  const docMap = new Map(docConfigs.map((item) => [item.docType, item] as const))
+
   return {
     statuses: TEMPLATE_STATUSES.map((status) => ({
       value: status,
       label: STATUS_LABELS[status as FlowStatus] || status.replaceAll('_', ' '),
     })),
-    docs: WORKFLOW_DOC_OPTIONS.map((d) => ({ value: d })),
+    docs: WORKFLOW_DOC_OPTIONS.map((d) => ({
+      value: d,
+      label: docMap.get(d)?.label || d,
+      sortOrder: docMap.get(d)?.sortOrder ?? 0,
+      source: docMap.get(d)?.source || 'default',
+    })),
     fields: REQUIREMENT_FIELD_KEYS.map((f) => ({ value: f })),
   }
 }
@@ -50,14 +59,34 @@ export async function GET() {
     if (!user?.email) return json('Unauthorized', 401)
     if (!isAdminRole(user.role)) return json('Forbidden', 403)
 
-    const items = await listTemplateRequirements()
+    const [items, options] = await Promise.all([listTemplateRequirements(), optionsPayload()])
     return NextResponse.json(
-      { items, options: optionsPayload() },
+      { items, options },
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (e) {
     console.error('GET /api/admin/order-flow/requirements error:', e)
     return json('Internal server error', 500)
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    const user = session?.user as { email?: string; role?: unknown } | undefined
+    if (!user?.email) return json('Unauthorized', 401)
+    if (!isAdminRole(user.role)) return json('Forbidden', 403)
+
+    const body = (await req.json().catch(() => null)) as
+      | { docs?: Array<{ docType?: unknown; label?: unknown; sortOrder?: unknown }> }
+      | null
+
+    const docs = Array.isArray(body?.docs) ? body.docs : []
+    const items = await upsertWorkflowDocLabels(docs)
+    return NextResponse.json({ items }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('PATCH /api/admin/order-flow/requirements error:', e)
+    return json(e instanceof Error ? e.message : 'Internal server error', 500)
   }
 }
 

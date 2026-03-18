@@ -16,6 +16,7 @@ import {
 
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
+import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 type OrderHistory = {
   id: string
@@ -86,6 +87,7 @@ export default function DealerOrderHistoryPage() {
   const [summary, setSummary] = useState<DealerOrderSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { labelForDocType } = useWorkflowDocLabels()
 
   const normalizedMedia = useMemo(() => {
     return media.map((m) => ({ ...m, fileUrl: m.fileUrl ?? m.url ?? '' }))
@@ -254,7 +256,7 @@ export default function DealerOrderHistoryPage() {
           <div className="grid gap-3">
             {normalizedMedia.map((m) => {
               const href = toApiUrl(m.fileUrl || '')
-              const docLabel = labelDocType(m.docType)
+              const docLabel = labelForDocType(m.docType) || labelDocType(m.docType)
               const fallbackLabel = m.type ? m.type.replaceAll('_', ' ') : 'File'
 
               return (
