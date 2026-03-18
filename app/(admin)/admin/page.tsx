@@ -126,7 +126,7 @@ export default function AdminDashboard() {
       {/* Stats */}
             <div className="grid sm:grid-cols-5 gap-4 mb-6">
                 <Stat label="Total Orders" value={t.total || 0} Icon={PackageSearch} />
-                <Stat label="Pending" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
+                <Stat label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
                 <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
                 <Stat label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={CheckCircle2} />
                 <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
@@ -221,7 +221,7 @@ export default function AdminDashboard() {
               <tr>
                 <th className="text-left py-2 pr-4">Factory</th>
                 <th className="text-right py-2 px-3">Total</th>
-                <th className="text-right py-2 px-3">Pending</th>
+                <th className="text-right py-2 px-3">Needs Deposit</th>
                             <th className="text-right py-2 px-3">In Prod.</th>
                             <th className="text-right py-2 px-3">Pre-Ship</th>
                             <th className="text-right py-2 px-3">Completed</th>

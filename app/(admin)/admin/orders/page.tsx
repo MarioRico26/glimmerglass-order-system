@@ -94,7 +94,7 @@ function StatusBadge({ status }: { status: string }) {
       return (
         <span className={`${base} bg-amber-50 text-amber-900 border-amber-200`}>
           <span className={`${dot} bg-amber-500`} />
-          Pending
+          Needs Deposit
         </span>
       )
     case 'IN_PRODUCTION':

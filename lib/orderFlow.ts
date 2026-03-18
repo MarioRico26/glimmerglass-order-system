@@ -27,7 +27,7 @@ export const REQUIREMENT_FIELD_KEYS = [
 export type RequirementFieldKey = (typeof REQUIREMENT_FIELD_KEYS)[number]
 
 export const STATUS_LABELS: Record<FlowStatus, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending Payment Approval',
+  PENDING_PAYMENT_APPROVAL: 'Needs Deposit',
   IN_PRODUCTION: 'In Production',
   PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
@@ -105,7 +105,7 @@ export function labelOrderStatus(
 /**
  * REGLAS de Mike:
  *
- * Pending Payment Approval -> In Production requiere:
+ * Needs Deposit -> In Production requiere:
  *  - Proof of Payment
  *  - Order Form
  *  - Invoice with deposit applied

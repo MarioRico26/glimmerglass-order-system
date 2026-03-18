@@ -32,7 +32,7 @@ const aqua = '#00B2CA'
 const deep = '#007A99'
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
-  PENDING_PAYMENT_APPROVAL: 'Pending',
+  PENDING_PAYMENT_APPROVAL: 'Needs Deposit',
   IN_PRODUCTION: 'In Production',
   COMPLETED: 'Completed',
   CANCELED: 'Canceled',
@@ -460,7 +460,7 @@ function StatusBadge({ status }: { status: OrderStatus | string }) {
   const base = 'px-2 py-1 rounded-full text-xs font-semibold'
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
-      return <span className={`${base} bg-yellow-100 text-yellow-800`}>Pending</span>
+      return <span className={`${base} bg-yellow-100 text-yellow-800`}>Needs Deposit</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
     case 'COMPLETED':

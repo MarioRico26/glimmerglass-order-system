@@ -74,7 +74,7 @@ function statusPill(status: OrderStatus) {
   const base = 'px-2 py-0.5 rounded-full text-[11px] font-bold border leading-none'
   switch (status) {
     case 'PENDING_PAYMENT_APPROVAL':
-      return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Pending</span>
+      return <span className={`${base} bg-amber-50 text-amber-800 border-amber-200`}>Needs Deposit</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-50 text-indigo-800 border-indigo-200`}>In Prod</span>
     case 'PRE_SHIPPING':
