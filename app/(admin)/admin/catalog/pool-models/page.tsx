@@ -459,215 +459,214 @@ export default function PoolModelsPage() {
         ) : filtered.length === 0 ? (
           <div className="py-10 text-center text-slate-500">No pool models found.</div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="py-2 pr-3">Model</th>
-                  <th className="py-2 pr-3">Dimensions (ft)</th>
-                  <th className="py-2 pr-3">Default Factory</th>
-                  <th className="py-2 pr-3">Marker Limits</th>
-                  <th className="py-2 pr-3">Media</th>
-                  <th className="py-2 pr-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((m) => {
-                  const draft = drafts[m.id] ?? toDraft(m)
-                  return (
-                    <tr key={m.id} className="border-b align-top">
-                      <td className="py-3 pr-3 min-w-[220px]">
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            {filtered.map((m) => {
+              const draft = drafts[m.id] ?? toDraft(m)
+              return (
+                <article
+                  key={m.id}
+                  className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pool Model</div>
+                      <input
+                        value={draft.name}
+                        onChange={(e) => setDraftField(m.id, 'name', e.target.value)}
+                        className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-900"
+                      />
+                      <div className="mt-2 text-[11px] text-slate-500 break-all">ID: {m.id}</div>
+                    </div>
+                    <div className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                      {draft.hasIntegratedSpa ? 'Integrated spa' : 'Pool only'}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dimensions (ft)</div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
                         <input
-                          value={draft.name}
-                          onChange={(e) => setDraftField(m.id, 'name', e.target.value)}
-                          className="h-10 w-full rounded-lg border border-slate-200 px-2.5"
+                          value={draft.lengthFt}
+                          onChange={(e) => setDraftField(m.id, 'lengthFt', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          placeholder="Length"
                         />
-                        <div className="mt-1 text-xs text-slate-500">ID: {m.id}</div>
-                      </td>
+                        <input
+                          value={draft.widthFt}
+                          onChange={(e) => setDraftField(m.id, 'widthFt', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          placeholder="Width"
+                        />
+                        <input
+                          value={draft.depthFt}
+                          onChange={(e) => setDraftField(m.id, 'depthFt', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          placeholder="Depth"
+                        />
+                      </div>
+                    </section>
 
-                      <td className="py-3 pr-3 min-w-[230px]">
-                        <div className="grid grid-cols-3 gap-2">
-                          <input
-                            value={draft.lengthFt}
-                            onChange={(e) => setDraftField(m.id, 'lengthFt', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            placeholder="L"
-                          />
-                          <input
-                            value={draft.widthFt}
-                            onChange={(e) => setDraftField(m.id, 'widthFt', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            placeholder="W"
-                          />
-                          <input
-                            value={draft.depthFt}
-                            onChange={(e) => setDraftField(m.id, 'depthFt', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            placeholder="D"
-                          />
-                        </div>
-                      </td>
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Factory & Configuration</div>
+                      <select
+                        value={draft.defaultFactoryLocationId}
+                        onChange={(e) => setDraftField(m.id, 'defaultFactoryLocationId', e.target.value)}
+                        className="mt-3 h-10 w-full rounded-lg border border-slate-200 bg-white px-3"
+                      >
+                        <option value="">No default factory</option>
+                        {factories.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={draft.hasIntegratedSpa}
+                          onChange={(e) =>
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [m.id]: {
+                                ...draft,
+                                hasIntegratedSpa: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Model includes integrated spa
+                      </label>
+                    </section>
+                  </div>
 
-                      <td className="py-3 pr-3 min-w-[230px]">
-                        <select
-                          value={draft.defaultFactoryLocationId}
-                          onChange={(e) => setDraftField(m.id, 'defaultFactoryLocationId', e.target.value)}
-                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5"
-                        >
-                          <option value="">No default factory</option>
-                          {factories.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Marker Limits</div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <input
+                          value={draft.maxSkimmers}
+                          onChange={(e) => setDraftField(m.id, 'maxSkimmers', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step={1}
+                          placeholder="Skimmer"
+                        />
+                        <input
+                          value={draft.maxReturns}
+                          onChange={(e) => setDraftField(m.id, 'maxReturns', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step={1}
+                          placeholder="Return"
+                        />
+                        <input
+                          value={draft.maxMainDrains}
+                          onChange={(e) => setDraftField(m.id, 'maxMainDrains', e.target.value)}
+                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
+                          type="number"
+                          min={0}
+                          step={1}
+                          placeholder="Main drain"
+                        />
+                      </div>
+                    </section>
 
-                      <td className="py-3 pr-3 min-w-[260px]">
-                        <div className="grid grid-cols-3 gap-2">
-                          <input
-                            value={draft.maxSkimmers}
-                            onChange={(e) => setDraftField(m.id, 'maxSkimmers', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step={1}
-                            placeholder="Skim"
-                          />
-                          <input
-                            value={draft.maxReturns}
-                            onChange={(e) => setDraftField(m.id, 'maxReturns', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step={1}
-                            placeholder="Return"
-                          />
-                          <input
-                            value={draft.maxMainDrains}
-                            onChange={(e) => setDraftField(m.id, 'maxMainDrains', e.target.value)}
-                            className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                            type="number"
-                            min={0}
-                            step={1}
-                            placeholder="Drain"
-                          />
-                        </div>
-                        <label className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={draft.hasIntegratedSpa}
-                            onChange={(e) =>
-                              setDrafts((prev) => ({
-                                ...prev,
-                                [m.id]: {
-                                  ...draft,
-                                  hasIntegratedSpa: e.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Integrated spa
-                        </label>
-                      </td>
-
-                      <td className="py-3 pr-3 min-w-[280px]">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="mb-1 text-xs font-semibold text-slate-600">Image</div>
-                            <div className="h-20 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                              {m.imageUrl ? (
-                                <img
-                                  src={m.imageUrl}
-                                  alt={m.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center text-xs text-slate-400">
-                                  No image
-                                </div>
-                              )}
-                            </div>
-                            <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                              {uploading[`${m.id}:image`] ? 'Uploading…' : 'Upload'}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.currentTarget.files?.[0]
-                                  if (file) void uploadMedia(m.id, 'image', file)
-                                  e.currentTarget.value = ''
-                                }}
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Media</div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="mb-1 text-xs font-semibold text-slate-600">Model Image</div>
+                          <div className="h-24 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            {m.imageUrl ? (
+                              <img
+                                src={m.imageUrl}
+                                alt={m.name}
+                                className="h-full w-full object-cover"
                               />
-                            </label>
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>
+                            )}
                           </div>
-                          <div>
-                            <div className="mb-1 text-xs font-semibold text-slate-600">Dig Sheet</div>
-                            <div className="h-20 w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-xs">
-                              {m.blueprintUrl ? (
-                                <a
-                                  href={m.blueprintUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sky-700 underline"
-                                >
-                                  View file
-                                </a>
-                              ) : (
-                                <span className="text-slate-400">No dig sheet</span>
-                              )}
-                            </div>
-                            <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                              {uploading[`${m.id}:blueprint`] ? 'Uploading…' : 'Upload'}
-                              <input
-                                type="file"
-                                accept="application/pdf,image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.currentTarget.files?.[0]
-                                  if (file) void uploadMedia(m.id, 'blueprint', file)
-                                  e.currentTarget.value = ''
-                                }}
-                              />
-                            </label>
-                          </div>
+                          <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                            {uploading[`${m.id}:image`] ? 'Uploading…' : 'Upload image'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.currentTarget.files?.[0]
+                                if (file) void uploadMedia(m.id, 'image', file)
+                                e.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
                         </div>
-                      </td>
+                        <div>
+                          <div className="mb-1 text-xs font-semibold text-slate-600">Dig Sheet</div>
+                          <div className="flex h-24 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-xs">
+                            {m.blueprintUrl ? (
+                              <a
+                                href={m.blueprintUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold text-sky-700 underline"
+                              >
+                                View file
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">No dig sheet</span>
+                            )}
+                          </div>
+                          <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                            {uploading[`${m.id}:blueprint`] ? 'Uploading…' : 'Upload dig sheet'}
+                            <input
+                              type="file"
+                              accept="application/pdf,image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.currentTarget.files?.[0]
+                                if (file) void uploadMedia(m.id, 'blueprint', file)
+                                e.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
 
-                      <td className="py-3 pr-0 text-right min-w-[170px]">
-                        <div className="flex flex-col items-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void onSaveRow(m.id)}
-                            disabled={savingId === m.id}
-                            className="inline-flex h-9 items-center rounded-lg bg-slate-900 px-3 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-60"
-                          >
-                            {savingId === m.id ? 'Saving…' : 'Save changes'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void onDelete(m.id)}
-                            className="inline-flex h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-bold text-rose-700 hover:bg-rose-100"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                  <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => void onDelete(m.id)}
+                      className="inline-flex h-10 items-center rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onSaveRow(m.id)}
+                      disabled={savingId === m.id}
+                      className="inline-flex h-10 items-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {savingId === m.id ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </section>
