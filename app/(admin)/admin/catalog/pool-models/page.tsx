@@ -549,34 +549,43 @@ export default function PoolModelsPage() {
                     <div className="space-y-5">
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dimensions (ft)</div>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <input
-                          value={draft.lengthFt}
-                          onChange={(e) => setDraftField(m.id, 'lengthFt', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          placeholder="Length"
-                        />
-                        <input
-                          value={draft.widthFt}
-                          onChange={(e) => setDraftField(m.id, 'widthFt', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          placeholder="Width"
-                        />
-                        <input
-                          value={draft.depthFt}
-                          onChange={(e) => setDraftField(m.id, 'depthFt', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          placeholder="Depth"
-                        />
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Length</span>
+                          <input
+                            value={draft.lengthFt}
+                            onChange={(e) => setDraftField(m.id, 'lengthFt', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="Length"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Width</span>
+                          <input
+                            value={draft.widthFt}
+                            onChange={(e) => setDraftField(m.id, 'widthFt', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="Width"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Depth</span>
+                          <input
+                            value={draft.depthFt}
+                            onChange={(e) => setDraftField(m.id, 'depthFt', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            placeholder="Depth"
+                          />
+                        </label>
                       </div>
                     </section>
 
@@ -617,34 +626,43 @@ export default function PoolModelsPage() {
                   <div className="mt-5 grid gap-5 md:grid-cols-2">
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Marker Limits</div>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <input
-                          value={draft.maxSkimmers}
-                          onChange={(e) => setDraftField(m.id, 'maxSkimmers', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step={1}
-                          placeholder="Skimmer"
-                        />
-                        <input
-                          value={draft.maxReturns}
-                          onChange={(e) => setDraftField(m.id, 'maxReturns', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step={1}
-                          placeholder="Return"
-                        />
-                        <input
-                          value={draft.maxMainDrains}
-                          onChange={(e) => setDraftField(m.id, 'maxMainDrains', e.target.value)}
-                          className="h-10 rounded-lg border border-slate-200 px-2 text-center"
-                          type="number"
-                          min={0}
-                          step={1}
-                          placeholder="Main drain"
-                        />
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Skimmers</span>
+                          <input
+                            value={draft.maxSkimmers}
+                            onChange={(e) => setDraftField(m.id, 'maxSkimmers', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Skimmer"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Returns</span>
+                          <input
+                            value={draft.maxReturns}
+                            onChange={(e) => setDraftField(m.id, 'maxReturns', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Return"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Main Drains</span>
+                          <input
+                            value={draft.maxMainDrains}
+                            onChange={(e) => setDraftField(m.id, 'maxMainDrains', e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 px-2 text-center"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Main drain"
+                          />
+                        </label>
                       </div>
                     </section>
 
