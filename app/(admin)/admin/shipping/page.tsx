@@ -9,7 +9,6 @@ import {
   ExternalLink,
   GripVertical,
   MapPin,
-  PackageSearch,
   RefreshCw,
   ShipWheel,
   Truck,
@@ -19,6 +18,7 @@ import {
 type Maybe<T> = T | null | undefined
 
 type OrderStatus = 'PRE_SHIPPING'
+type ViewMode = 'WEEK' | 'MONTH'
 
 interface Order {
   id: string
@@ -37,10 +37,9 @@ interface Order {
 
 type ApiOrders = { items: Order[]; total?: number } | Order[]
 
-const aqua = '#00B2CA'
-const deep = '#007A99'
-const OFF_WEEK_KEY = 'OFF_WEEK'
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const UNSCHEDULED_KEY = 'UNSCHEDULED'
+const OUTSIDE_VIEW_KEY = 'OUTSIDE_VIEW'
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -58,8 +57,12 @@ function shippingMethodLabel(value?: string | null) {
   return 'Not set'
 }
 
+function cloneUTC(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
 function startOfWeekUTC(base = new Date()) {
-  const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()))
+  const d = cloneUTC(base)
   const day = d.getUTCDay()
   const diff = day === 0 ? -6 : 1 - day
   d.setUTCDate(d.getUTCDate() + diff)
@@ -72,6 +75,18 @@ function addDaysUTC(base: Date, days: number) {
   return next
 }
 
+function addMonthsUTC(base: Date, months: number) {
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + months, 1))
+}
+
+function startOfMonthUTC(base = new Date()) {
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
+}
+
+function endOfMonthUTC(base = new Date()) {
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0))
+}
+
 function dayKeyUTC(value: Date | string | null | undefined) {
   if (!value) return ''
   const date = typeof value === 'string' ? new Date(value) : value
@@ -79,7 +94,7 @@ function dayKeyUTC(value: Date | string | null | undefined) {
   return date.toISOString().slice(0, 10)
 }
 
-function formatDate(value?: string | null) {
+function formatCompactDate(value?: string | null) {
   if (!value) return '—'
   const d = new Date(value)
   if (Number.isNaN(+d)) return '—'
@@ -93,20 +108,15 @@ function formatLongDate(value?: string | null) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function formatColumnTitle(value: Date) {
-  return value.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
-}
-
 function resolveFactoryName(order: Order) {
   return order.factoryLocation?.name || 'Unassigned Factory'
 }
 
 function compareOrders(a: Order, b: Order) {
+  const aScheduled = a.scheduledShipDate ? +new Date(a.scheduledShipDate) : Number.MAX_SAFE_INTEGER
+  const bScheduled = b.scheduledShipDate ? +new Date(b.scheduledShipDate) : Number.MAX_SAFE_INTEGER
+  if (aScheduled !== bScheduled) return aScheduled - bScheduled
+
   const aRequested = a.requestedShipDate ? +new Date(a.requestedShipDate) : Number.MAX_SAFE_INTEGER
   const bRequested = b.requestedShipDate ? +new Date(b.requestedShipDate) : Number.MAX_SAFE_INTEGER
   if (aRequested !== bRequested) return aRequested - bRequested
@@ -118,9 +128,19 @@ function compareOrders(a: Order, b: Order) {
   return a.id.localeCompare(b.id)
 }
 
-function weekRangeLabel(start: Date) {
-  const end = addDaysUTC(start, 6)
-  return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`
+function periodLabel(viewMode: ViewMode, focusedDate: Date) {
+  if (viewMode === 'WEEK') {
+    const start = startOfWeekUTC(focusedDate)
+    const end = addDaysUTC(start, 6)
+    return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`
+  }
+  return focusedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+
+function buildMonthCells(focusedDate: Date) {
+  const monthStart = startOfMonthUTC(focusedDate)
+  const gridStart = startOfWeekUTC(monthStart)
+  return Array.from({ length: 42 }, (_, i) => addDaysUTC(gridStart, i))
 }
 
 export default function ShippingSchedulePage() {
@@ -129,7 +149,8 @@ export default function ShippingSchedulePage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [auto, setAuto] = useState(false)
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeekUTC(new Date()))
+  const [viewMode, setViewMode] = useState<ViewMode>('WEEK')
+  const [focusedDate, setFocusedDate] = useState<Date>(() => cloneUTC(new Date()))
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [active, setActive] = useState<Order | null>(null)
@@ -142,7 +163,7 @@ export default function ShippingSchedulePage() {
       setError(null)
       const params = new URLSearchParams({
         page: '1',
-        pageSize: '300',
+        pageSize: '200',
         status: 'PRE_SHIPPING',
         sort: 'scheduledShipDate',
         dir: 'asc',
@@ -180,16 +201,10 @@ export default function ShippingSchedulePage() {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        setActive(null)
-      }
+      if (e.key === 'Escape') closeModal()
     }
     const onClick = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        setOpen(false)
-        setActive(null)
-      }
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) closeModal()
     }
     document.addEventListener('keydown', onKey)
     document.addEventListener('mousedown', onClick)
@@ -199,44 +214,49 @@ export default function ShippingSchedulePage() {
     }
   }, [open])
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysUTC(weekStart, i)), [weekStart])
-  const dayKeys = useMemo(() => days.map((d) => dayKeyUTC(d)), [days])
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysUTC(startOfWeekUTC(focusedDate), i)), [focusedDate])
+  const monthCells = useMemo(() => buildMonthCells(focusedDate), [focusedDate])
+  const visibleDates = viewMode === 'WEEK' ? weekDays : monthCells
+  const visibleKeys = useMemo(() => visibleDates.map((d) => dayKeyUTC(d)), [visibleDates])
+  const monthAnchor = startOfMonthUTC(focusedDate)
+  const monthAnchorKey = `${monthAnchor.getUTCFullYear()}-${monthAnchor.getUTCMonth()}`
 
-  const columns = useMemo(() => {
+  const grouped = useMemo(() => {
     const map: Record<string, Order[]> = {
       [UNSCHEDULED_KEY]: [],
-      [OFF_WEEK_KEY]: [],
+      [OUTSIDE_VIEW_KEY]: [],
     }
-    dayKeys.forEach((key) => {
-      map[key] = []
-    })
+
+    for (const key of visibleKeys) map[key] = []
 
     for (const order of orders) {
       const key = dayKeyUTC(order.scheduledShipDate)
       if (!key) {
         map[UNSCHEDULED_KEY].push(order)
-      } else if (dayKeys.includes(key)) {
-        map[key].push(order)
-      } else {
-        map[OFF_WEEK_KEY].push(order)
+        continue
       }
+      if (visibleKeys.includes(key)) {
+        map[key].push(order)
+        continue
+      }
+      map[OUTSIDE_VIEW_KEY].push(order)
     }
 
     Object.keys(map).forEach((key) => map[key].sort(compareOrders))
     return map
-  }, [orders, dayKeys])
+  }, [orders, visibleKeys])
 
   const stats = useMemo(() => {
     const total = orders.length
-    const unscheduled = columns[UNSCHEDULED_KEY]?.length || 0
-    const outsideWeek = columns[OFF_WEEK_KEY]?.length || 0
-    const scheduledThisWeek = total - unscheduled - outsideWeek
+    const unscheduled = grouped[UNSCHEDULED_KEY]?.length || 0
+    const outsideView = grouped[OUTSIDE_VIEW_KEY]?.length || 0
+    const scheduledInView = total - unscheduled - outsideView
     const overdueRequest = orders.filter((o) => {
       if (!o.requestedShipDate || o.scheduledShipDate) return false
-      return dayKeyUTC(o.requestedShipDate) < dayKeyUTC(new Date())
+      return +new Date(o.requestedShipDate) < +new Date()
     }).length
-    return { total, unscheduled, outsideWeek, scheduledThisWeek, overdueRequest }
-  }, [orders, columns])
+    return { total, unscheduled, outsideView, scheduledInView, overdueRequest }
+  }, [orders, grouped])
 
   const saveScheduledShipDate = async (orderId: string, scheduledShipDate: string | null) => {
     setSavingId(orderId)
@@ -261,28 +281,32 @@ export default function ShippingSchedulePage() {
     }
   }
 
-  const onDropColumn = async (columnKey: string) => {
+  const onDropToDate = async (dayKey: string) => {
     if (!draggingId) return
-    const nextValue =
-      columnKey === UNSCHEDULED_KEY
-        ? null
-        : columnKey === OFF_WEEK_KEY
-          ? null
-          : `${columnKey}T12:00:00.000Z`
     const orderId = draggingId
     setDraggingId(null)
-    await saveScheduledShipDate(orderId, nextValue)
+    await saveScheduledShipDate(orderId, `${dayKey}T12:00:00.000Z`)
   }
 
-  const openModal = (order: Order) => {
-    setActive(order)
-    setOpen(true)
+  const onDropToUnscheduled = async () => {
+    if (!draggingId) return
+    const orderId = draggingId
+    setDraggingId(null)
+    await saveScheduledShipDate(orderId, null)
   }
 
   const closeModal = () => {
     setOpen(false)
     setActive(null)
   }
+
+  const navigatePeriod = (direction: -1 | 1) => {
+    setFocusedDate((prev) =>
+      viewMode === 'WEEK' ? addDaysUTC(prev, direction * 7) : addMonthsUTC(prev, direction)
+    )
+  }
+
+  const monthHeaders = DAY_LABELS
 
   return (
     <div
@@ -293,78 +317,104 @@ export default function ShippingSchedulePage() {
           linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
       }}
     >
-      <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6 mb-5">
-        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-          <div>
+      <div className="rounded-3xl border border-white bg-white/72 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6 mb-5">
+        <div className="flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-6">
+          <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 text-xs font-black rounded-full px-3 py-1 border border-slate-200 bg-white/80 text-slate-700">
-              SHIPPING BOARD
+              SHIPPING CALENDAR
             </div>
-            <h1 className="mt-3 text-3xl sm:text-4xl font-black text-slate-900">Ship Schedule</h1>
-            <p className="mt-2 text-slate-600">
-              Pre-shipping orders scheduled by logistics week. Drag cards into a day to assign the real ship date.
+            <h1 className="mt-3 text-3xl sm:text-5xl font-black text-slate-900">Ship Schedule</h1>
+            <p className="mt-3 text-slate-600 text-lg leading-relaxed">
+              Outlook-style shipping calendar for pre-shipping orders. Drag orders into a calendar day to assign the real ship date.
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Requested ship date stays separate from scheduled ship date.
+            <p className="mt-1 text-sm text-slate-500">
+              Requested ship date stays separate from logistics scheduling.
             </p>
-            {error && <p className="mt-2 text-sm text-rose-700">⚠️ {error}</p>}
+            {error && <p className="mt-3 text-sm text-rose-700">⚠️ {error}</p>}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setWeekStart((prev) => addDaysUTC(prev, -7))}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
-            >
-              <ChevronLeft size={16} /> Prev Week
-            </button>
-            <button
-              onClick={() => setWeekStart(startOfWeekUTC(new Date()))}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
-            >
-              <CalendarDays size={16} /> This Week
-            </button>
-            <button
-              onClick={() => setWeekStart((prev) => addDaysUTC(prev, 7))}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
-            >
-              Next Week <ChevronRight size={16} />
-            </button>
-            <button
-              onClick={async () => {
-                setRefreshing(true)
-                await load()
-                setRefreshing(false)
-              }}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} /> Refresh
-            </button>
-            <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                className="accent-sky-600"
-                checked={auto}
-                onChange={(e) => setAuto(e.target.checked)}
-              />
-              Auto
-            </label>
+          <div className="w-full 2xl:w-auto space-y-3">
+            <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+              <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('WEEK')}
+                  className={[
+                    'h-10 px-4 rounded-xl text-sm font-bold transition',
+                    viewMode === 'WEEK' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('MONTH')}
+                  className={[
+                    'h-10 px-4 rounded-xl text-sm font-bold transition',
+                    viewMode === 'MONTH' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  Month
+                </button>
+              </div>
+
+              <button
+                onClick={() => navigatePeriod(-1)}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+              >
+                <ChevronLeft size={16} /> Prev
+              </button>
+              <button
+                onClick={() => setFocusedDate(cloneUTC(new Date()))}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+              >
+                <CalendarDays size={16} /> Today
+              </button>
+              <button
+                onClick={() => navigatePeriod(1)}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+              >
+                Next <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={async () => {
+                  setRefreshing(true)
+                  await load()
+                  setRefreshing(false)
+                }}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+              >
+                <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} /> Refresh
+              </button>
+              <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="accent-sky-600"
+                  checked={auto}
+                  onChange={(e) => setAuto(e.target.checked)}
+                />
+                Auto
+              </label>
+            </div>
+
+            <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">
+              {viewMode === 'WEEK' ? 'Week' : 'Month'}: {periodLabel(viewMode, focusedDate)}
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
-            Week: {weekRangeLabel(weekStart)}
-          </span>
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
             Queue: {stats.total}
           </span>
           <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
-            Scheduled This Week: {stats.scheduledThisWeek}
+            In View: {stats.scheduledInView}
           </span>
           <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
             Unscheduled: {stats.unscheduled}
           </span>
           <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-semibold text-sky-700">
-            Outside Week: {stats.outsideWeek}
+            Outside View: {stats.outsideView}
           </span>
           <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">
             Overdue Request: {stats.overdueRequest}
@@ -372,66 +422,115 @@ export default function ShippingSchedulePage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-4 min-w-max">
-          <ShipColumn
+      <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="space-y-5">
+          <RailCard
             title="Unscheduled"
             subtitle="Ready to assign"
-            count={columns[UNSCHEDULED_KEY]?.length || 0}
+            count={grouped[UNSCHEDULED_KEY]?.length || 0}
+            tone="amber"
             onDragOver={(e) => e.preventDefault()}
-            onDrop={() => onDropColumn(UNSCHEDULED_KEY)}
-            accent="amber"
+            onDrop={onDropToUnscheduled}
           >
-            <OrderCardList
-              orders={columns[UNSCHEDULED_KEY] || []}
+            <CompactOrderList
+              orders={grouped[UNSCHEDULED_KEY] || []}
               loading={loading}
-              savingId={savingId}
               draggingId={draggingId}
+              savingId={savingId}
               onDragStart={setDraggingId}
-              onOpen={openModal}
+              onOpen={(order) => {
+                setActive(order)
+                setOpen(true)
+              }}
             />
-          </ShipColumn>
+          </RailCard>
 
-          {days.map((day) => {
-            const key = dayKeyUTC(day)
-            return (
-              <ShipColumn
-                key={key}
-                title={formatColumnTitle(day)}
-                subtitle="Scheduled ship date"
-                count={columns[key]?.length || 0}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDropColumn(key)}
-                accent="sky"
-              >
-                <OrderCardList
-                  orders={columns[key] || []}
-                  loading={loading}
-                  savingId={savingId}
-                  draggingId={draggingId}
-                  onDragStart={setDraggingId}
-                  onOpen={openModal}
-                />
-              </ShipColumn>
-            )
-          })}
-
-          <ShipColumn
-            title="Outside Week"
-            subtitle="Scheduled elsewhere"
-            count={columns[OFF_WEEK_KEY]?.length || 0}
-            accent="slate"
+          <RailCard
+            title="Outside View"
+            subtitle={viewMode === 'WEEK' ? 'Scheduled outside this week' : 'Scheduled outside this month'}
+            count={grouped[OUTSIDE_VIEW_KEY]?.length || 0}
+            tone="sky"
           >
-            <OrderCardList
-              orders={columns[OFF_WEEK_KEY] || []}
+            <CompactOrderList
+              orders={grouped[OUTSIDE_VIEW_KEY] || []}
               loading={loading}
-              savingId={savingId}
               draggingId={draggingId}
+              savingId={savingId}
               onDragStart={setDraggingId}
-              onOpen={openModal}
+              onOpen={(order) => {
+                setActive(order)
+                setOpen(true)
+              }}
             />
-          </ShipColumn>
-        </div>
+          </RailCard>
+        </aside>
+
+        <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden">
+          {viewMode === 'WEEK' ? (
+            <div className="grid grid-cols-7 min-h-[72vh]">
+              {weekDays.map((day) => {
+                const key = dayKeyUTC(day)
+                const list = grouped[key] || []
+                return (
+                  <DayColumn
+                    key={key}
+                    title={day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                    count={list.length}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => onDropToDate(key)}
+                  >
+                    <CompactOrderList
+                      orders={list}
+                      loading={loading}
+                      draggingId={draggingId}
+                      savingId={savingId}
+                      onDragStart={setDraggingId}
+                      onOpen={(order) => {
+                        setActive(order)
+                        setOpen(true)
+                      }}
+                    />
+                  </DayColumn>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="min-h-[72vh]">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80">
+                {monthHeaders.map((label) => (
+                  <div key={label} className="px-4 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 auto-rows-[180px]">
+                {monthCells.map((day) => {
+                  const key = dayKeyUTC(day)
+                  const isCurrentMonth = `${day.getUTCFullYear()}-${day.getUTCMonth()}` === monthAnchorKey
+                  const list = grouped[key] || []
+                  return (
+                    <MonthCell
+                      key={key}
+                      day={day}
+                      orders={list}
+                      isCurrentMonth={isCurrentMonth}
+                      loading={loading}
+                      draggingId={draggingId}
+                      savingId={savingId}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => onDropToDate(key)}
+                      onDragStart={setDraggingId}
+                      onOpen={(order) => {
+                        setActive(order)
+                        setOpen(true)
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
       {open && active && (
@@ -498,7 +597,7 @@ export default function ShippingSchedulePage() {
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <div className="text-xs text-slate-500">
-                    Tip: drag cards into a day column for the fastest scheduling flow.
+                    Tip: drag an order into any calendar day for faster dispatch planning.
                   </div>
                   <button
                     disabled={savingId === active.id}
@@ -536,11 +635,11 @@ export default function ShippingSchedulePage() {
   )
 }
 
-function ShipColumn({
+function RailCard({
   title,
   subtitle,
   count,
-  accent,
+  tone,
   children,
   onDragOver,
   onDrop,
@@ -548,122 +647,219 @@ function ShipColumn({
   title: string
   subtitle: string
   count: number
-  accent: 'amber' | 'sky' | 'slate'
+  tone: 'amber' | 'sky'
   children: React.ReactNode
   onDragOver?: React.DragEventHandler<HTMLDivElement>
   onDrop?: React.DragEventHandler<HTMLDivElement> | (() => void)
 }) {
-  const tone =
-    accent === 'amber'
-      ? 'border-amber-200 bg-amber-50 text-amber-900'
-      : accent === 'sky'
-        ? 'border-sky-200 bg-sky-50 text-sky-900'
-        : 'border-slate-200 bg-slate-50 text-slate-900'
+  const toneClasses = tone === 'amber'
+    ? 'border-amber-200 bg-amber-50 text-amber-900'
+    : 'border-sky-200 bg-sky-50 text-sky-900'
 
   return (
-    <section className="w-[300px] rounded-3xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden shrink-0">
-      <header className="px-5 py-4 bg-white/75 border-b border-white/70 sticky top-0 z-10">
+    <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden">
+      <header className="px-5 py-4 border-b border-slate-200 bg-white/75">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-lg font-extrabold text-slate-900 truncate">{title}</div>
+          <div>
+            <div className="text-lg font-extrabold text-slate-900">{title}</div>
             <div className="text-xs text-slate-600">{subtitle}</div>
           </div>
-          <span className={`text-xs font-black px-2 py-1 rounded-full border ${tone}`}>
-            {count}
-          </span>
+          <span className={`text-xs font-black px-2 py-1 rounded-full border ${toneClasses}`}>{count}</span>
         </div>
       </header>
-      <div className="p-4 min-h-[68vh] max-h-[68vh] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
+      <div className="p-4 max-h-[300px] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
         {children}
       </div>
     </section>
   )
 }
 
-function OrderCardList({
+function DayColumn({
+  title,
+  count,
+  children,
+  onDragOver,
+  onDrop,
+}: {
+  title: string
+  count: number
+  children: React.ReactNode
+  onDragOver?: React.DragEventHandler<HTMLDivElement>
+  onDrop?: React.DragEventHandler<HTMLDivElement> | (() => void)
+}) {
+  return (
+    <div className="border-r border-slate-200 last:border-r-0 min-h-[72vh]">
+      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 sticky top-0 z-10">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-black text-slate-900">{title}</div>
+          <span className="text-[11px] font-black px-2 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-900">{count}</span>
+        </div>
+      </div>
+      <div className="p-3 h-[calc(72vh-57px)] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function MonthCell({
+  day,
+  orders,
+  isCurrentMonth,
+  loading,
+  draggingId,
+  savingId,
+  onDragOver,
+  onDrop,
+  onDragStart,
+  onOpen,
+}: {
+  day: Date
+  orders: Order[]
+  isCurrentMonth: boolean
+  loading: boolean
+  draggingId: string | null
+  savingId: string | null
+  onDragOver: React.DragEventHandler<HTMLDivElement>
+  onDrop: () => void
+  onDragStart: (id: string) => void
+  onOpen: (order: Order) => void
+}) {
+  return (
+    <div
+      className={[
+        'border-r border-b border-slate-200 p-2 overflow-hidden',
+        isCurrentMonth ? 'bg-white' : 'bg-slate-50/70',
+      ].join(' ')}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className={['text-sm font-bold', isCurrentMonth ? 'text-slate-900' : 'text-slate-400'].join(' ')}>
+          {day.getUTCDate()}
+        </span>
+        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+          {orders.length}
+        </span>
+      </div>
+      {loading ? (
+        <div className="space-y-2">
+          <div className="h-8 rounded-xl bg-slate-100 animate-pulse" />
+          <div className="h-8 rounded-xl bg-slate-100 animate-pulse" />
+        </div>
+      ) : orders.length === 0 ? null : (
+        <div className="space-y-2 overflow-y-auto max-h-[130px] pr-1">
+          {orders.map((order) => (
+            <MiniOrderCard
+              key={order.id}
+              order={order}
+              draggingId={draggingId}
+              savingId={savingId}
+              onDragStart={onDragStart}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CompactOrderList({
   orders,
   loading,
-  savingId,
   draggingId,
+  savingId,
   onDragStart,
   onOpen,
 }: {
   orders: Order[]
   loading: boolean
-  savingId: string | null
   draggingId: string | null
+  savingId: string | null
   onDragStart: (id: string) => void
   onOpen: (order: Order) => void
 }) {
   if (loading) {
     return (
       <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-28 rounded-3xl bg-slate-100 animate-pulse border border-slate-200" />
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-20 rounded-3xl bg-slate-100 animate-pulse border border-slate-200" />
         ))}
       </div>
     )
   }
 
   if (orders.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-center text-slate-500 text-sm px-4">
-        No orders in this column.
-      </div>
-    )
+    return <div className="text-sm text-slate-500 py-8 text-center">No orders in this section.</div>
   }
 
   return (
     <div className="space-y-3">
       {orders.map((order) => (
-        <button
+        <MiniOrderCard
           key={order.id}
-          type="button"
-          draggable
-          onDragStart={() => onDragStart(order.id)}
-          onClick={() => onOpen(order)}
-          className={[
-            'group w-full text-left rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition',
-            'hover:shadow-[0_16px_40px_rgba(2,132,199,0.10)]',
-            draggingId === order.id ? 'opacity-60' : '',
-            savingId === order.id ? 'ring-2 ring-sky-200' : '',
-          ].join(' ')}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="font-extrabold text-slate-900 truncate">
-                {order.poolModel?.name || 'Model'} <span className="text-slate-400">•</span> {order.color?.name || '-'}
-              </div>
-              <div className="mt-1 text-[13px] text-slate-600 truncate">
-                {order.dealer?.name || 'Dealer'}
-              </div>
-            </div>
-            <div className="p-2 rounded-2xl border border-slate-200 bg-white text-slate-500 cursor-grab active:cursor-grabbing shrink-0">
-              <GripVertical size={18} />
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <ShipWheel size={14} /> {shippingMethodLabel(order.shippingMethod)}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <Truck size={14} /> {formatDate(order.requestedShipDate)}
-            </span>
-          </div>
-
-          <div className="mt-3 grid gap-2 text-[12px] text-slate-600">
-            <div className="flex items-start gap-2">
-              <MapPin size={14} className="mt-0.5 shrink-0" />
-              <span className="line-clamp-2">{order.deliveryAddress || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate">{resolveFactoryName(order)}</span>
-              <span className="font-mono text-slate-700 shrink-0">{order.serialNumber || 'No serial'}</span>
-            </div>
-          </div>
-        </button>
+          order={order}
+          draggingId={draggingId}
+          savingId={savingId}
+          onDragStart={onDragStart}
+          onOpen={onOpen}
+        />
       ))}
+    </div>
+  )
+}
+
+function MiniOrderCard({
+  order,
+  draggingId,
+  savingId,
+  onDragStart,
+  onOpen,
+}: {
+  order: Order
+  draggingId: string | null
+  savingId: string | null
+  onDragStart: (id: string) => void
+  onOpen: (order: Order) => void
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(order.id)}
+      onClick={() => onOpen(order)}
+      className={[
+        'group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm cursor-pointer transition',
+        'hover:shadow-[0_12px_30px_rgba(2,132,199,0.10)]',
+        draggingId === order.id ? 'opacity-60' : '',
+        savingId === order.id ? 'ring-2 ring-sky-200' : '',
+      ].join(' ')}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-extrabold text-slate-900">
+            {order.poolModel?.name || 'Order'}
+          </div>
+          <div className="truncate text-[12px] text-slate-600">{order.dealer?.name || 'Dealer'}</div>
+        </div>
+        <div className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 cursor-grab active:cursor-grabbing shrink-0">
+          <GripVertical size={14} />
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+          <ShipWheel size={12} /> {shippingMethodLabel(order.shippingMethod)}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+          <Truck size={12} /> {formatCompactDate(order.requestedShipDate)}
+        </span>
+      </div>
+
+      <div className="mt-2 text-[11px] text-slate-500 truncate">{resolveFactoryName(order)} • {order.serialNumber || 'No serial'}</div>
+      <div className="mt-1 text-[11px] text-slate-500 truncate inline-flex items-center gap-1">
+        <MapPin size={11} /> {order.deliveryAddress || '—'}
+      </div>
     </div>
   )
 }
