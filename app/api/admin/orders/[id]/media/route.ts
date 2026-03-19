@@ -64,13 +64,40 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         docType: true,
         visibleToDealer: true,
         uploadedAt: true,
+        uploadedByUserId: true,
         uploadedByRole: true,
         uploadedByDisplayName: true,
         uploadedByEmail: true,
+        uploadedByUser: {
+          select: {
+            email: true,
+            role: true,
+            dealer: { select: { name: true } },
+          },
+        },
       },
     })
+    const normalizedItems = items.map((item) => {
+      const resolvedRole = item.uploadedByRole ?? item.uploadedByUser?.role ?? null
+      const resolvedEmail = item.uploadedByEmail ?? item.uploadedByUser?.email ?? null
+      const resolvedDisplayName =
+        item.uploadedByDisplayName ??
+        uploaderDisplayNameFor(resolvedRole, item.uploadedByUser?.dealer?.name)
 
-    return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
+      return {
+        id: item.id,
+        fileUrl: item.fileUrl,
+        type: item.type,
+        docType: item.docType,
+        visibleToDealer: item.visibleToDealer,
+        uploadedAt: item.uploadedAt,
+        uploadedByRole: resolvedRole,
+        uploadedByDisplayName: resolvedDisplayName,
+        uploadedByEmail: resolvedEmail,
+      }
+    })
+
+    return NextResponse.json(normalizedItems, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('GET /orders/[id]/media error:', e)
     return NextResponse.json({ message: 'Failed to fetch media' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })

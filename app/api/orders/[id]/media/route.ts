@@ -12,6 +12,18 @@ function json(message: string, status = 400) {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
+function uploaderDisplayNameFor(
+  role?: Role | null,
+  dealerName?: string | null,
+  explicitDisplayName?: string | null
+) {
+  if (explicitDisplayName?.trim()) return explicitDisplayName.trim()
+  if (role === Role.SUPERADMIN) return 'Superadmin'
+  if (role === Role.ADMIN) return 'Admin'
+  if (role === Role.DEALER) return dealerName?.trim() || 'Dealer'
+  return 'User'
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions)
@@ -52,13 +64,41 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         type: true, // MediaType (photo/proof/update/note)
         docType: true, // OrderDocType (WARRANTY/MANUAL/etc)
         uploadedAt: true,
+        uploadedByUserId: true,
         uploadedByRole: true,
         uploadedByDisplayName: true,
         uploadedByEmail: true,
+        uploadedByUser: {
+          select: {
+            email: true,
+            role: true,
+            dealer: { select: { name: true } },
+          },
+        },
       },
     })
+    const normalizedItems = items.map((item) => {
+      const resolvedRole = item.uploadedByRole ?? item.uploadedByUser?.role ?? null
+      const resolvedEmail = item.uploadedByEmail ?? item.uploadedByUser?.email ?? null
+      const resolvedDisplayName = uploaderDisplayNameFor(
+        resolvedRole,
+        item.uploadedByUser?.dealer?.name,
+        item.uploadedByDisplayName
+      )
 
-    return NextResponse.json(items, { headers: { 'Cache-Control': 'no-store' } })
+      return {
+        id: item.id,
+        fileUrl: item.fileUrl,
+        type: item.type,
+        docType: item.docType,
+        uploadedAt: item.uploadedAt,
+        uploadedByRole: resolvedRole,
+        uploadedByDisplayName: resolvedDisplayName,
+        uploadedByEmail: resolvedEmail,
+      }
+    })
+
+    return NextResponse.json(normalizedItems, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('GET /api/orders/[id]/media error:', e)
     return json('Failed to fetch media', 500)
