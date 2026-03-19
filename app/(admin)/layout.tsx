@@ -24,6 +24,7 @@ import {
   Warehouse,
   Menu,
   X,
+  CalendarDays,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -62,6 +63,7 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
           { label: 'Order List', href: '/admin/orders', icon: ClipboardList },
           { label: 'New Order', href: '/admin/orders/new', icon: PlusCircle },
           { label: 'Production Schedule', href: '/admin/production', icon: Factory },
+          { label: 'Ship Schedule', href: '/admin/shipping', icon: CalendarDays },
           { label: 'Workflow Requirements', href: '/admin/order-flow', icon: ClipboardList },
         ],
       },

@@ -95,6 +95,7 @@ model Order {
 
   shippingMethod     String?
   requestedShipDate  DateTime?
+  scheduledShipDate  DateTime?
   serialNumber       String?
   productionPriority Int?
 
