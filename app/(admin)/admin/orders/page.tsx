@@ -761,104 +761,136 @@ function AdminOrdersInner() {
 
       {/* Filters */}
       <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div className="relative w-full lg:w-[420px]">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={q}
-              onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-              placeholder="Search (serial, model, color, dealer, factory, address)"
-              className="w-full pl-11 pr-4 h-11 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
-            />
+        <div className="grid gap-4 xl:grid-cols-12">
+          <div className="xl:col-span-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+              Search
+            </div>
+            <div className="relative">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={q}
+                onChange={(e) => setParams({ q: e.target.value, page: 1 })}
+                placeholder="Search (serial, model, color, dealer, factory, address)"
+                className="w-full pl-11 pr-4 h-12 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2">
-              <Filter size={16} className="text-slate-500" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setParams({ status: e.target.value, page: 1 })}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
-              >
-                <option value="ALL">All statuses</option>
-                {ALL_STATUS.map((s) => (
-                  <option key={s} value={s}>
-                    {labelStatus(s)}
-                  </option>
-                ))}
-              </select>
+          <div className="xl:col-span-8">
+            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+              Filters
             </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                <Filter size={16} className="shrink-0 text-slate-500" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setParams({ status: e.target.value, page: 1 })}
+                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                >
+                  <option value="ALL">All statuses</option>
+                  {ALL_STATUS.map((s) => (
+                    <option key={s} value={s}>
+                      {labelStatus(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="inline-flex items-center gap-2">
-              <UserCircle2 size={16} className="text-slate-500" />
-              <select
-                value={dealerFilter}
-                onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
-              >
-                <option value="ALL">All dealers</option>
-                {dealers.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                <UserCircle2 size={16} className="shrink-0 text-slate-500" />
+                <select
+                  value={dealerFilter}
+                  onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
+                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                >
+                  <option value="ALL">All dealers</option>
+                  {dealers.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                <FactoryIcon size={16} className="shrink-0 text-slate-500" />
+                <select
+                  value={factoryFilter}
+                  onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
+                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                >
+                  <option value="ALL">All factories</option>
+                  {factories.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                <Group size={16} className="shrink-0 text-slate-500" />
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as any)}
+                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                >
+                  <option value="DEALER">Group by dealer</option>
+                  <option value="FACTORY">Group by factory</option>
+                </select>
+              </div>
             </div>
+          </div>
 
-            <div className="inline-flex items-center gap-2">
-              <FactoryIcon size={16} className="text-slate-500" />
-              <select
-                value={factoryFilter}
-                onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
-              >
-                <option value="ALL">All factories</option>
-                {factories.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
+          <div className="xl:col-span-12">
+            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+              Sort
             </div>
-
-            <div className="inline-flex items-center gap-2">
-              <Group size={16} className="text-slate-500" />
-              <select
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value as any)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold"
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => toggleSort('createdAt')}
+                className={[
+                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                  sort === 'createdAt'
+                    ? 'border-sky-200 bg-sky-50 text-sky-900'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                ].join(' ')}
+                title="Sort by order date"
               >
-                <option value="DEALER">Group by dealer</option>
-                <option value="FACTORY">Group by factory</option>
-              </select>
+                <ArrowUpDown size={16} />
+                Order Date
+              </button>
+
+              <button
+                onClick={() => toggleSort('requestedShipDate')}
+                className={[
+                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                  sort === 'requestedShipDate'
+                    ? 'border-sky-200 bg-sky-50 text-sky-900'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                ].join(' ')}
+                title="Sort by requested ship date"
+              >
+                <ArrowUpDown size={16} />
+                Requested Ship Date
+              </button>
+
+              <button
+                onClick={() => toggleSort('status')}
+                className={[
+                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                  sort === 'status'
+                    ? 'border-sky-200 bg-sky-50 text-sky-900'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                ].join(' ')}
+                title="Sort by status"
+              >
+                <ArrowUpDown size={16} />
+                Status
+              </button>
             </div>
-
-            <button
-              onClick={() => toggleSort('createdAt')}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
-              title="Sort by order date"
-            >
-              <ArrowUpDown size={16} />
-              Order Date
-            </button>
-
-            <button
-              onClick={() => toggleSort('requestedShipDate')}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
-              title="Sort by requested ship date"
-            >
-              <ArrowUpDown size={16} />
-              Requested Ship Date
-            </button>
-
-            <button
-              onClick={() => toggleSort('status')}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
-              title="Sort by status"
-            >
-              <ArrowUpDown size={16} />
-              Status
-            </button>
           </div>
         </div>
       </div>
