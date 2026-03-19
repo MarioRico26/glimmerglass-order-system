@@ -305,9 +305,9 @@ export default function AddManualEntryModal({
         className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200"
       >
         <div className="px-5 py-4 border-b border-slate-200">
-          <h3 className="text-xl font-bold text-slate-900">Manual Entry</h3>
+          <h3 className="text-xl font-bold text-slate-900">Edit Status</h3>
           <p className="text-sm text-slate-600 mt-1">
-            Changes status with Mike’s document/field requirements enforced.
+            Move an order forward or backward with workflow requirements enforced.
           </p>
         </div>
 

@@ -541,7 +541,7 @@ export default function OrderHistoryPage() {
               onClick={() => setManualOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
             >
-              + Manual Entry
+              Edit Status
             </button>
 
             {summary.paymentProofUrl && (

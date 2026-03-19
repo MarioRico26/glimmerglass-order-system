@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
+import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import { STATUS_LABELS, labelOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 
 type Maybe<T> = T | null | undefined
@@ -434,6 +435,7 @@ function AdminOrdersInner() {
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<FlowStatus>('PENDING_PAYMENT_APPROVAL')
   const [restoreConfirmed, setRestoreConfirmed] = useState(false)
+  const [manualOrder, setManualOrder] = useState<Order | null>(null)
 
   const q = sp.get('q') || ''
   const statusFilter = (sp.get('status') as StatusKey | 'ALL') || 'ALL'
@@ -704,6 +706,17 @@ function AdminOrdersInner() {
         missingDocs={missingDocs}
         missingFields={missingFields}
         goToUploadHref={missingUploadHref}
+      />
+      <AddManualEntryModal
+        orderId={manualOrder?.id ?? ''}
+        open={!!manualOrder}
+        onClose={() => setManualOrder(null)}
+        currentStatus={manualOrder?.status ?? null}
+        onSuccess={async () => {
+          await load()
+          router.refresh()
+          setManualOrder(null)
+        }}
       />
       <StatusActionModal
         state={statusAction}
@@ -1010,6 +1023,10 @@ function AdminOrdersInner() {
                                     ? new Date(order.scheduledShipDate).toLocaleDateString()
                                     : '—'}
                                 </div>
+                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-semibold text-slate-600">Current Status:</span>
+                                  <StatusBadge status={order.status} />
+                                </div>
                               </div>
 
                               {/* Address + Payment */}
@@ -1053,28 +1070,28 @@ function AdminOrdersInner() {
                           {/* RIGHT: ops */}
                           <div className="xl:col-span-4 min-w-0">
                             <div className="flex flex-col gap-3 xl:items-end">
-                              <div className="w-full xl:w-auto flex xl:justify-end">
-                                <div className="flex flex-col gap-2 xl:items-end">
-                                  <StatusBadge status={order.status} />
-                                  {order.lastCancellationReason ? (
-                                    <div className="max-w-full xl:max-w-[320px] rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
-                                      <div className="font-black uppercase tracking-wide text-[10px] text-rose-700">
-                                        Last Cancellation
-                                      </div>
-                                      <div className="mt-1 font-medium break-words">
-                                        {order.lastCancellationReason.replace(/^Order canceled:\s*/i, '')}
-                                      </div>
-                                      {order.lastCanceledAt ? (
-                                        <div className="mt-1 text-[11px] text-rose-700/80">
-                                          {new Date(order.lastCanceledAt).toLocaleString()}
-                                        </div>
-                                      ) : null}
+                              {order.lastCancellationReason ? (
+                                <div className="w-full xl:w-auto flex xl:justify-end">
+                                  <div className="max-w-full xl:max-w-[320px] rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                                    <div className="font-black uppercase tracking-wide text-[10px] text-rose-700">
+                                      Last Cancellation
                                     </div>
-                                  ) : null}
+                                    <div className="mt-1 font-medium break-words">
+                                      {order.lastCancellationReason.replace(/^Order canceled:\s*/i, '')}
+                                    </div>
+                                    {order.lastCanceledAt ? (
+                                      <div className="mt-1 text-[11px] text-rose-700/80">
+                                        {new Date(order.lastCanceledAt).toLocaleString()}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 </div>
-                              </div>
+                              ) : null}
 
                               <div className="w-full xl:w-auto">
+                                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 xl:text-right">
+                                  Next Step
+                                </div>
                                 <NextStep
                                   order={order}
                                   busy={busyId === order.id}
@@ -1085,6 +1102,15 @@ function AdminOrdersInner() {
                               </div>
 
                               <div className="grid grid-cols-2 xl:flex xl:flex-col gap-2 w-full xl:w-[180px]">
+                                <button
+                                  onClick={() => setManualOrder(order)}
+                                  className="inline-flex items-center justify-center gap-2 h-10 rounded-2xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-900 text-sm font-black"
+                                  title="Edit status or move backward"
+                                >
+                                  <ArrowUpDown size={16} />
+                                  Edit Status
+                                </button>
+
                                 <Link
                                   href={`/admin/orders/${order.id}/history`}
                                   prefetch={false}
