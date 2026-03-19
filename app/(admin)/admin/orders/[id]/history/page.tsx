@@ -60,6 +60,7 @@ interface OrderSummary {
   hardwareMainDrains: boolean
 
   requestedShipDate?: string | null
+  scheduledShipDate?: string | null
   serialNumber?: string | null
   productionPriority?: number | null
 }
@@ -314,6 +315,10 @@ export default function OrderHistoryPage() {
     summary?.requestedShipDate && !isNaN(new Date(summary.requestedShipDate).getTime())
       ? new Date(summary.requestedShipDate).toLocaleDateString()
       : 'Not set'
+  const scheduledShipText =
+    summary?.scheduledShipDate && !isNaN(new Date(summary.scheduledShipDate).getTime())
+      ? new Date(summary.scheduledShipDate).toLocaleDateString()
+      : 'Not scheduled'
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -426,6 +431,9 @@ export default function OrderHistoryPage() {
                 </h3>
                 <p>
                   <span className="font-semibold">Requested Ship Date:</span> {requestedShipText}
+                </p>
+                <p>
+                  <span className="font-semibold">Scheduled Ship Date:</span> {scheduledShipText}
                 </p>
                 <p>
                   <span className="font-semibold">Serial Number:</span>{' '}

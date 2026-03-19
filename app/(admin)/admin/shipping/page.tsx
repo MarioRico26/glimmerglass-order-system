@@ -422,7 +422,51 @@ export default function ShippingSchedulePage() {
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      {!loading && orders.length === 0 ? (
+        <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] p-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+                How It Works
+              </div>
+              <h2 className="mt-3 text-2xl font-black text-slate-900">
+                No orders are ready for shipping yet
+              </h2>
+              <p className="mt-2 text-slate-600 leading-relaxed">
+                This calendar only shows orders in <strong>Pre-Shipping</strong>. Once an order reaches that stage, operations can assign the real ship date here by dragging it from <strong>Unscheduled</strong> into a day on the calendar.
+              </p>
+              <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                Use this board for the real logistics date. Keep <strong>Requested Ship Date</strong> as the dealer request and <strong>Scheduled Ship Date</strong> as the operations commitment.
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Step 1</div>
+                <div className="mt-2 text-lg font-black text-slate-900">Move order to Pre-Shipping</div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Orders only appear here after operations advances them out of production.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Step 2</div>
+                <div className="mt-2 text-lg font-black text-slate-900">Assign a ship date</div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Drag the order onto a calendar day or open the order card and save the date manually.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Step 3</div>
+                <div className="mt-2 text-lg font-black text-slate-900">Review dispatch readiness</div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Use serial number, shipping method and requested date to finalize the outbound schedule.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+      <div className="grid gap-5 2xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="space-y-5">
           <RailCard
             title="Unscheduled"
@@ -532,6 +576,7 @@ export default function ShippingSchedulePage() {
           )}
         </section>
       </div>
+      )}
 
       {open && active && (
         <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">

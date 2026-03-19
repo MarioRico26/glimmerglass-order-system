@@ -42,6 +42,7 @@ interface Order {
   factoryLocation: Maybe<{ name: string }>
   createdAt?: string
   requestedShipDate?: string | null
+  scheduledShipDate?: string | null
   lastCancellationReason?: string | null
   lastCanceledAt?: string | null
 }
@@ -1001,6 +1002,12 @@ function AdminOrdersInner() {
                                   <span className="font-semibold">Requested Ship Date:</span>{' '}
                                   {order.requestedShipDate
                                     ? new Date(order.requestedShipDate).toLocaleDateString()
+                                    : '—'}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-600">
+                                  <span className="font-semibold">Scheduled Ship Date:</span>{' '}
+                                  {order.scheduledShipDate
+                                    ? new Date(order.scheduledShipDate).toLocaleDateString()
                                     : '—'}
                                 </div>
                               </div>

@@ -103,6 +103,7 @@ async function getOrderSummary(orderId: string) {
 
       shippingMethod: true,
       requestedShipDate: true,
+      scheduledShipDate: true,
       serialNumber: true,
       productionPriority: true,
 
@@ -142,6 +143,7 @@ async function getOrderSummary(orderId: string) {
 
     shippingMethod: order.shippingMethod ?? null,
     requestedShipDate: order.requestedShipDate ? order.requestedShipDate.toISOString() : null,
+    scheduledShipDate: order.scheduledShipDate ? order.scheduledShipDate.toISOString() : null,
     serialNumber: order.serialNumber ?? null,
     productionPriority:
       typeof order.productionPriority === 'number' ? order.productionPriority : null,
