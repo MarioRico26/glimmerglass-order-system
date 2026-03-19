@@ -140,7 +140,7 @@ export default function OrderMediaPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="w-full p-6 xl:p-8">
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="px-6 py-5 border-b border-slate-100">
           <h1 className="text-2xl font-black text-slate-900">Upload Media</h1>

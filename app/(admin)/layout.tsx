@@ -235,7 +235,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       >
         {/* Top bar */}
         <header className="sticky top-0 z-40 backdrop-blur-md bg-white/74 border-b [border-color:var(--gg-border)]">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="w-full px-5 xl:px-6 2xl:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 className="lg:hidden -ml-1 rounded-lg p-2 hover:bg-white transition"
@@ -261,7 +261,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[280px_1fr] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
+        <div className="w-full px-5 xl:px-6 2xl:px-8 py-6 grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
           <div className={menuOpen ? 'block lg:block' : 'hidden lg:block'}>
             <AdminNav onNavigate={() => setMenuOpen(false)} />
           </div>

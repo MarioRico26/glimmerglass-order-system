@@ -184,7 +184,7 @@ export default function DailyInventoryPage() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="w-full px-6 xl:px-8 py-10">
         <div className="rounded-3xl bg-white/80 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
           <div className="flex flex-col gap-6">
             <div className="flex items-start justify-between gap-6">

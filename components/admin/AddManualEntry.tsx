@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { labelOrderStatus, normalizeOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
@@ -99,6 +100,7 @@ export default function AddManualEntryModal({
   const [dragOverDoc, setDragOverDoc] = useState<string | null>(null)
   const [serialNumber, setSerialNumber] = useState('')
   const [serialDirty, setSerialDirty] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [requirements, setRequirements] = useState<RequirementsState | null>(null)
@@ -187,6 +189,19 @@ export default function AddManualEntryModal({
       setRequirementsLoading(false)
     }
   }
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted || !open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [mounted, open])
 
   useEffect(() => {
     if (!open) return
@@ -294,15 +309,15 @@ export default function AddManualEntryModal({
     }
   }
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <form
         onSubmit={handleSubmit}
-        className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200"
+        className="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
         <div className="px-5 py-4 border-b border-slate-200">
           <h3 className="text-xl font-bold text-slate-900">Edit Status</h3>
@@ -575,6 +590,7 @@ export default function AddManualEntryModal({
           </div>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   )
 }

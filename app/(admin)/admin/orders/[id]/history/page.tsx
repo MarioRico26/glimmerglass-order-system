@@ -303,7 +303,7 @@ export default function OrderHistoryPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="w-full p-6 xl:p-8">
         <div className="flex justify-center items-center h-64 text-gray-600">
           Loading order data...
         </div>
@@ -321,7 +321,7 @@ export default function OrderHistoryPage() {
       : 'Not scheduled'
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="w-full p-6 xl:p-8">
       {/* ✅ tu modal real (y aquí el error ya sale dentro del modal, no “detrás”) */}
       <AddManualEntryModal
         orderId={orderId}
