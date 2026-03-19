@@ -32,6 +32,9 @@ type OrderMedia = {
   uploadedAt?: string
   fileUrl?: string
   url?: string
+  uploadedByRole?: string | null
+  uploadedByDisplayName?: string | null
+  uploadedByEmail?: string | null
 }
 
 type DealerOrderSummary = {
@@ -80,6 +83,15 @@ const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
 
 function labelStatus(status: string) {
   return labelOrderStatus(status, { preserveLegacyApproved: true })
+}
+
+function formatUploader(media: Pick<OrderMedia, 'uploadedByDisplayName' | 'uploadedByEmail'>) {
+  const displayName = media.uploadedByDisplayName?.trim()
+  const email = media.uploadedByEmail?.trim()
+  if (displayName && email) return `${displayName} • ${email}`
+  if (displayName) return displayName
+  if (email) return email
+  return 'Legacy upload'
 }
 
 export default function DealerOrderHistoryPage() {
@@ -294,9 +306,14 @@ export default function DealerOrderHistoryPage() {
                     </a>
 
                     {m.uploadedAt ? (
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        Uploaded: {new Date(m.uploadedAt).toLocaleString()}
-                      </div>
+                      <>
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          Uploaded: {new Date(m.uploadedAt).toLocaleString()}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Uploaded by: {formatUploader(m)}
+                        </div>
+                      </>
                     ) : null}
                   </div>
                 </div>

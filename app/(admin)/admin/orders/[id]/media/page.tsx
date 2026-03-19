@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
+import { labelDocType } from '@/lib/orderFlow'
 
 type Media = {
   id: string
@@ -12,26 +13,9 @@ type Media = {
   visibleToDealer?: boolean
   fileUrl: string
   uploadedAt: string
-}
-
-const DOC_TYPE_LABELS: Record<string, string> = {
-  OTHER: 'Other',
-
-  PROOF_OF_PAYMENT: 'Proof of Deposit',
-  QUOTE: 'Order Form',
-  INVOICE: 'Invoice with deposit applied',
-  PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
-  PAID_INVOICE: 'Paid Invoice',
-  BILL_OF_LADING: 'Bill of Lading',
-
-  BUILD_SHEET: 'Build Sheet',
-  POST_PRODUCTION_MEDIA: 'Post-production Photos/Video',
-
-  SHIPPING_CHECKLIST: 'Shipping Checklist',
-  PRE_SHIPPING_MEDIA: 'Pre-shipping Photos/Video',
-
-  WARRANTY: 'Warranty',
-  MANUAL: 'Manual',
+  uploadedByRole?: string | null
+  uploadedByDisplayName?: string | null
+  uploadedByEmail?: string | null
 }
 
 const DOC_GROUPS: Array<{ title: string; items: string[] }> = [
@@ -61,6 +45,15 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   } catch {
     return null
   }
+}
+
+function formatUploader(media: Pick<Media, 'uploadedByDisplayName' | 'uploadedByEmail'>) {
+  const displayName = media.uploadedByDisplayName?.trim()
+  const email = media.uploadedByEmail?.trim()
+  if (displayName && email) return `${displayName} • ${email}`
+  if (displayName) return displayName
+  if (email) return email
+  return 'Legacy upload'
 }
 
 export default function OrderMediaPage() {
@@ -158,9 +151,7 @@ export default function OrderMediaPage() {
 
         <div className="p-6">
           <form onSubmit={handleSubmit} className="grid gap-4">
-            {/* ✅ Layout stable: 1 col (mobile), 2 cols (md), 4 cols (lg) */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-start">
-              {/* File */}
               <div className="lg:col-span-2">
                 <label className="block text-sm font-semibold text-slate-700 mb-1">File</label>
                 <input
@@ -172,7 +163,6 @@ export default function OrderMediaPage() {
                 />
               </div>
 
-              {/* Doc Type */}
               <div className="lg:col-span-1">
                 <label className="block text-sm font-semibold text-slate-700 mb-1">
                   Document Type
@@ -186,7 +176,7 @@ export default function OrderMediaPage() {
                     <optgroup key={g.title} label={g.title}>
                       {g.items.map((k) => (
                         <option key={k} value={k}>
-                          {labelForDocType(k) || DOC_TYPE_LABELS[k] || k}
+                          {labelForDocType(k) || labelDocType(k) || k}
                         </option>
                       ))}
                     </optgroup>
@@ -197,7 +187,6 @@ export default function OrderMediaPage() {
                 </p>
               </div>
 
-              {/* Visibility + Upload (no overlap) */}
               <div className="lg:col-span-1 flex flex-col gap-2">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
@@ -230,9 +219,7 @@ export default function OrderMediaPage() {
               </div>
             </div>
 
-            {message && (
-              <div className="text-sm font-medium text-slate-700">{message}</div>
-            )}
+            {message && <div className="text-sm font-medium text-slate-700">{message}</div>}
           </form>
 
           <div className="mt-8">
@@ -257,7 +244,7 @@ export default function OrderMediaPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-slate-900">
                           {m.docType
-                            ? labelForDocType(m.docType) || DOC_TYPE_LABELS[m.docType] || m.docType
+                            ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType
                             : 'Uncategorized'}
                         </span>
                         <span className="text-xs rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600">
@@ -276,6 +263,10 @@ export default function OrderMediaPage() {
                       >
                         View / Download
                       </a>
+
+                      <div className="text-xs text-slate-500 mt-1">
+                        Uploaded by: {formatUploader(m)}
+                      </div>
                     </div>
 
                     <div className="text-xs text-slate-500 whitespace-nowrap">

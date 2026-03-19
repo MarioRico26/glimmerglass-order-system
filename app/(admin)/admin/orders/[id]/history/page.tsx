@@ -8,7 +8,7 @@ import { PencilLine } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
-import { labelOrderStatus } from '@/lib/orderFlow'
+import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 
 interface OrderHistory {
@@ -25,6 +25,9 @@ interface OrderMedia {
   type: string
   docType?: string | null
   uploadedAt: string
+  uploadedByRole?: string | null
+  uploadedByDisplayName?: string | null
+  uploadedByEmail?: string | null
 }
 
 interface OrderSummary {
@@ -103,6 +106,15 @@ function extractItems<T>(value: T[] | { items: T[] } | null): T[] {
     return value.items
   }
   return []
+}
+
+function formatUploader(media: Pick<OrderMedia, 'uploadedByDisplayName' | 'uploadedByEmail'>) {
+  const displayName = media.uploadedByDisplayName?.trim()
+  const email = media.uploadedByEmail?.trim()
+  if (displayName && email) return `${displayName} • ${email}`
+  if (displayName) return displayName
+  if (email) return email
+  return 'Legacy upload'
 }
 
 export default function OrderHistoryPage() {
@@ -589,7 +601,7 @@ export default function OrderHistoryPage() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    {m.docType ? labelForDocType(m.docType) || m.docType.replaceAll('_', ' ') : m.type}
+                    {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : m.type}
                   </p>
                   <a
                     href={m.fileUrl}
@@ -599,6 +611,9 @@ export default function OrderHistoryPage() {
                   >
                     View File
                   </a>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Uploaded by: {formatUploader(m)}
+                  </p>
                 </div>
                 <p className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</p>
               </div>

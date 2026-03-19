@@ -35,6 +35,13 @@ function isAdminRole(role: unknown) {
   return role === Role.ADMIN || role === Role.SUPERADMIN
 }
 
+function uploaderDisplayNameFor(role?: Role | null, dealerName?: string | null) {
+  if (role === Role.SUPERADMIN) return 'Superadmin'
+  if (role === Role.ADMIN) return 'Admin'
+  if (role === Role.DEALER) return dealerName?.trim() || 'Dealer'
+  return 'User'
+}
+
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
     const session = await getServerSession(authOptions)
@@ -57,6 +64,9 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         docType: true,
         visibleToDealer: true,
         uploadedAt: true,
+        uploadedByRole: true,
+        uploadedByDisplayName: true,
+        uploadedByEmail: true,
       },
     })
 
@@ -99,6 +109,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     // ✅ dealer visibility
     const visibleToDealer = toBool(form.get('visibleToDealer'), true)
 
+    const uploader =
+      session.user.email
+        ? await prisma.user.findUnique({
+            where: { email: session.user.email.toLowerCase().trim() },
+            include: { dealer: { select: { name: true } } },
+          })
+        : null
+
+    const uploadedByRole = uploader?.role ?? ((session.user as { role?: Role | null }).role ?? null)
+    const uploadedByEmail = uploader?.email ?? session.user.email ?? null
+    const uploadedByDisplayName = uploaderDisplayNameFor(uploadedByRole, uploader?.dealer?.name)
+
     const buf = await file.arrayBuffer()
     const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9_.-]/g, '_')
     const key = `orders/${orderId}/${Date.now()}-${safeName}`
@@ -116,6 +138,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         type: toMediaTypeFromMime(file.type), // technical type
         docType,                               // business type
         visibleToDealer,
+        uploadedByUserId: uploader?.id ?? null,
+        uploadedByRole,
+        uploadedByDisplayName,
+        uploadedByEmail,
       },
       select: {
         id: true,
@@ -124,6 +150,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         docType: true,
         visibleToDealer: true,
         uploadedAt: true,
+        uploadedByRole: true,
+        uploadedByDisplayName: true,
+        uploadedByEmail: true,
       },
     })
 

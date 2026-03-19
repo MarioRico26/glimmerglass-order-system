@@ -52,6 +52,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         type: true, // MediaType (photo/proof/update/note)
         docType: true, // OrderDocType (WARRANTY/MANUAL/etc)
         uploadedAt: true,
+        uploadedByRole: true,
+        uploadedByDisplayName: true,
+        uploadedByEmail: true,
       },
     })
 

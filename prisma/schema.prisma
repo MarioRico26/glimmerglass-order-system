@@ -17,6 +17,7 @@ model User {
   dealer   Dealer? @relation(fields: [dealerId], references: [id])
 
   histories     OrderHistory[]
+  mediaUploads  OrderMedia[] @relation("OrderMediaUploader")
   inventoryTxns InventoryTxn[] @relation("InventoryTxnActor")
   passwordResetTokens PasswordResetToken[]
 
@@ -124,8 +125,16 @@ model OrderMedia {
   type       MediaType
   uploadedAt DateTime  @default(now())
 
+  uploadedByUserId   String?
+  uploadedByUser     User?         @relation("OrderMediaUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  uploadedByRole     Role?
+  uploadedByDisplayName String?
+  uploadedByEmail    String?
+
   docType         OrderDocType?
   visibleToDealer Boolean       @default(true)
+
+  @@index([uploadedByUserId])
 }
 
 model OrderStatusRequirementTemplate {
