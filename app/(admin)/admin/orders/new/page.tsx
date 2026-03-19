@@ -57,11 +57,11 @@ function isPdf(url: string | null | undefined) {
 function penetrationLabel(mode: '' | PenetrationMode) {
   switch (mode) {
     case 'NO_PENETRATIONS':
-      return 'No penetrations (white goods ship loose)'
+      return 'No penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITHOUT_INSTALL':
-      return 'Glimmerglass cuts penetrations (white goods ship loose)'
+      return 'Glimmerglass cuts penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITH_INSTALL':
-      return 'Glimmerglass installs hardware'
+      return 'Glimmerglass installs hardware ($75 per return/main drain, skimmer ships loose)'
     case 'OTHER':
       return 'Other'
     default:
@@ -603,30 +603,30 @@ export default function AdminNewOrderPage() {
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Hardware & Penetrations</div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Penetration Option
+                  Hardware (please check one)
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
                   {([
                     {
                       value: 'NO_PENETRATIONS',
-                      title: 'No penetrations',
-                      detail: 'White goods ship loose.',
+                      title: 'No penetrations (whitegoods ship loose)',
+                      detail: '',
                     },
                     {
                       value: 'PENETRATIONS_WITHOUT_INSTALL',
-                      title: 'Glimmerglass cuts penetrations',
-                      detail: 'White goods ship loose.',
+                      title: 'Glimmerglass cuts penetrations (whitegoods ship loose)',
+                      detail: '',
                     },
                     {
                       value: 'PENETRATIONS_WITH_INSTALL',
-                      title: 'Glimmerglass installs hardware',
-                      detail: 'Follow current order form pricing/installation policy.',
+                      title: 'Glimmerglass installs hardware ($75 per return/main drain, skimmer ships loose)',
+                      detail: '',
                     },
                     {
                       value: 'OTHER',
                       title: 'Other',
-                      detail: 'Use notes below to describe the requested setup.',
+                      detail: 'Describe an alternate hardware request.',
                     },
                   ] as const).map((option) => {
                     const selected = form.penetrationMode === option.value
@@ -696,7 +696,7 @@ export default function AdminNewOrderPage() {
 
                 {form.penetrationMode ? (
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                    Selected option: <span className="font-semibold">{penetrationLabel(form.penetrationMode)}</span>
+                    Selected hardware request: <span className="font-semibold">{penetrationLabel(form.penetrationMode)}</span>
                   </div>
                 ) : null}
               </div>
@@ -707,7 +707,7 @@ export default function AdminNewOrderPage() {
                 </div>
               ) : form.penetrationMode === 'NO_PENETRATIONS' ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Marker placement is disabled when <span className="font-semibold">No penetrations</span> is selected.
+                  Schematic markup is disabled when <span className="font-semibold">No penetrations</span> is selected.
                 </div>
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
@@ -716,8 +716,8 @@ export default function AdminNewOrderPage() {
                       <div className="text-sm font-semibold text-slate-900">Dig Sheet Marker Placement</div>
                       <p className="text-xs text-slate-600">
                         {activeModel?.hasIntegratedSpa
-                          ? 'Skimmer, main drains, spa jets, and returns follow the standard fitting configuration shown. Please indicate changes if required.'
-                          : 'Skimmer, main drains, and returns follow the standard fitting configuration shown. Please indicate changes if required.'}
+                          ? 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. Spa jet configuration follows the integrated spa schematic.'
+                          : 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. (Standard placement only on Main Drains)'}
                       </p>
                     </div>
                     <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">

@@ -42,11 +42,11 @@ function labelStatus(status: string) {
 function labelPenetrationMode(mode?: string | null) {
   switch (mode) {
     case 'NO_PENETRATIONS':
-      return 'No penetrations'
+      return 'No penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITHOUT_INSTALL':
-      return 'Glimmerglass cuts penetrations'
+      return 'Glimmerglass cuts penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITH_INSTALL':
-      return 'Glimmerglass installs hardware'
+      return 'Glimmerglass installs hardware ($75 per return/main drain, skimmer ships loose)'
     case 'OTHER':
       return 'Other'
     default:

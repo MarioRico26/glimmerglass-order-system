@@ -155,9 +155,9 @@ export default function DealerOrderHistoryPage() {
           title="Dig Sheet Markers"
           subtitle={
             summary?.poolModel?.hasIntegratedSpa
-              ? 'Standard spa fitting configuration shown. Markers indicate requested changes saved on your order.'
-              : 'Standard fitting configuration shown. Markers indicate requested changes saved on your order.'
-          }
+              ? 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. Spa jet configuration follows the integrated spa schematic.'
+              : 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. (Standard placement only on Main Drains)'
+        }
           blueprintUrl={summary?.poolModel?.blueprintUrl ?? null}
           markers={summary?.blueprintMarkers ?? []}
         />

@@ -76,11 +76,11 @@ const SHIPPING_LABELS: Record<string, string> = {
 function labelPenetrationMode(mode?: string | null) {
   switch (mode) {
     case 'NO_PENETRATIONS':
-      return 'No penetrations (white goods ship loose)'
+      return 'No penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITHOUT_INSTALL':
-      return 'Glimmerglass cuts penetrations (white goods ship loose)'
+      return 'Glimmerglass cuts penetrations (whitegoods ship loose)'
     case 'PENETRATIONS_WITH_INSTALL':
-      return 'Glimmerglass installs hardware'
+      return 'Glimmerglass installs hardware ($75 per return/main drain, skimmer ships loose)'
     case 'OTHER':
       return 'Other'
     default:
@@ -471,7 +471,7 @@ export default function OrderHistoryPage() {
 
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                  Penetration Request
+                  Hardware Request
                 </div>
                 <div className="space-y-2 text-slate-800">
                   <div>
@@ -497,8 +497,8 @@ export default function OrderHistoryPage() {
                 title="Dig Sheet Markers"
                 subtitle={
                   summary.poolModel?.hasIntegratedSpa
-                    ? 'Standard spa fitting configuration shown. Use markers only to indicate requested changes.'
-                    : 'Standard fitting configuration shown. Use markers only to indicate requested changes.'
+                    ? 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. Spa jet configuration follows the integrated spa schematic.'
+                    : 'Skimmer, Main Drains, and Returns included (white only). Standard fitting placement shown above—please indicate on schematic if alternate placement is necessary. (Standard placement only on Main Drains)'
                 }
                 blueprintUrl={summary.poolModel?.blueprintUrl ?? null}
                 markers={summary.blueprintMarkers ?? []}
@@ -749,23 +749,23 @@ export default function OrderHistoryPage() {
                     {([
                       {
                         value: 'NO_PENETRATIONS',
-                        title: 'No penetrations',
-                        detail: 'White goods ship loose.',
+                        title: 'No penetrations (whitegoods ship loose)',
+                        detail: '',
                       },
                       {
                         value: 'PENETRATIONS_WITHOUT_INSTALL',
-                        title: 'Glimmerglass cuts penetrations',
-                        detail: 'White goods ship loose.',
+                        title: 'Glimmerglass cuts penetrations (whitegoods ship loose)',
+                        detail: '',
                       },
                       {
                         value: 'PENETRATIONS_WITH_INSTALL',
-                        title: 'Glimmerglass installs hardware',
-                        detail: 'Use current production/order form policy.',
+                        title: 'Glimmerglass installs hardware ($75 per return/main drain, skimmer ships loose)',
+                        detail: '',
                       },
                       {
                         value: 'OTHER',
                         title: 'Other',
-                        detail: 'Describe the requested setup below.',
+                        detail: 'Describe an alternate hardware request.',
                       },
                     ] as const).map((option) => {
                       const selected = editPenetrationMode === option.value
