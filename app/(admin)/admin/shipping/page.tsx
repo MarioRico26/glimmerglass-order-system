@@ -158,6 +158,8 @@ export default function ShippingSchedulePage() {
   const [open, setOpen] = useState(false)
   const [unscheduledExpanded, setUnscheduledExpanded] = useState(true)
   const [outsideExpanded, setOutsideExpanded] = useState(false)
+  const [railWidth, setRailWidth] = useState(280)
+  const [resizingRail, setResizingRail] = useState(false)
   const modalRef = useRef<HTMLDivElement | null>(null)
 
   const load = async () => {
@@ -200,6 +202,29 @@ export default function ShippingSchedulePage() {
     }, 20000)
     return () => clearInterval(timer)
   }, [auto])
+
+  useEffect(() => {
+    if (!resizingRail) return
+
+    const onMove = (e: MouseEvent) => {
+      const next = Math.max(240, Math.min(460, e.clientX - 48))
+      setRailWidth(next)
+    }
+
+    const onUp = () => setResizingRail(false)
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [resizingRail])
 
   useEffect(() => {
     if (!open) return
@@ -474,7 +499,10 @@ export default function ShippingSchedulePage() {
           </div>
         </section>
       ) : (
-      <div className="grid gap-5 2xl:grid-cols-[280px_minmax(0,1fr)]">
+      <div
+        className="grid gap-5 xl:grid-cols-1 2xl:[grid-template-columns:minmax(240px,var(--ship-rail-width))_12px_minmax(0,1fr)]"
+        style={{ ['--ship-rail-width' as string]: `${railWidth}px` }}
+      >
         <aside className="space-y-5">
           <RailCard
             title="Unscheduled"
@@ -520,6 +548,22 @@ export default function ShippingSchedulePage() {
             />
           </RailCard>
         </aside>
+
+        <div className="hidden 2xl:flex items-stretch justify-center">
+          <button
+            type="button"
+            onMouseDown={() => setResizingRail(true)}
+            className={[
+              'group relative h-full w-3 rounded-full border border-slate-200/80 bg-white/70 backdrop-blur-sm',
+              'shadow-[0_10px_24px_rgba(13,47,69,0.08)] transition hover:bg-white',
+              resizingRail ? 'ring-2 ring-sky-200 bg-white' : '',
+            ].join(' ')}
+            aria-label="Resize shipping side panel"
+            title="Drag to resize side panel"
+          >
+            <span className="absolute inset-y-6 left-1/2 -translate-x-1/2 w-1 rounded-full bg-slate-300 group-hover:bg-sky-400" />
+          </button>
+        </div>
 
         <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden">
           {viewMode === 'WEEK' ? (
