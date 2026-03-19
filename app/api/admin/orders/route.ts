@@ -237,15 +237,21 @@ export async function POST(req: NextRequest) {
     const penetrationModeRaw = body?.penetrationMode
     const penetrationMode: PenetrationMode =
       penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
-      penetrationModeRaw === 'NO_PENETRATIONS'
+      penetrationModeRaw === 'NO_PENETRATIONS' ||
+      penetrationModeRaw === 'OTHER'
         ? penetrationModeRaw
         : 'PENETRATIONS_WITHOUT_INSTALL'
+    const penetrationNotes =
+      typeof body?.penetrationNotes === 'string' ? body.penetrationNotes.trim() : ''
 
     const requiredFields = ['deliveryAddress', 'dealerId', 'poolModelId', 'colorId', 'factoryLocationId']
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json({ message: `Missing required field: ${field}` }, { status: 400 })
       }
+    }
+    if (penetrationMode === 'OTHER' && !penetrationNotes) {
+      return NextResponse.json({ message: 'penetrationNotes is required when penetrationMode is OTHER' }, { status: 400 })
     }
 
     const markerResult = parseBlueprintMarkers(body?.blueprintMarkers)
@@ -317,6 +323,7 @@ export async function POST(req: NextRequest) {
           blueprintMarkers,
           shippingMethod: body.shippingMethod || null,
           penetrationMode,
+          penetrationNotes: penetrationNotes || null,
           hardwareSkimmer: body.hardwareSkimmer || false,
           hardwareAutocover: body.hardwareAutocover || false,
           hardwareReturns: body.hardwareReturns || false,

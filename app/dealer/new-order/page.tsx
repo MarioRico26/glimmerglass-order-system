@@ -22,6 +22,7 @@ type PoolModel = {
   depthFt: number | null
   imageUrl?: string | null
   blueprintUrl?: string | null
+  hasIntegratedSpa?: boolean
   maxSkimmers?: number | null
   maxReturns?: number | null
   maxMainDrains?: number | null
@@ -48,6 +49,7 @@ type PenetrationMode =
   | 'PENETRATIONS_WITH_INSTALL'
   | 'PENETRATIONS_WITHOUT_INSTALL'
   | 'NO_PENETRATIONS'
+  | 'OTHER'
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
@@ -82,6 +84,7 @@ export default function NewOrderPage() {
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
   const [markerError, setMarkerError] = useState('')
   const [penetrationMode, setPenetrationMode] = useState<PenetrationMode>('PENETRATIONS_WITHOUT_INSTALL')
+  const [penetrationNotes, setPenetrationNotes] = useState('')
   const blueprintRef = useRef<HTMLDivElement | null>(null)
   const [readyStockRows, setReadyStockRows] = useState<ReadyStockSummary[]>([])
   const [inStock, setInStock] = useState<
@@ -389,6 +392,21 @@ export default function NewOrderPage() {
     return `Production Date: ${d.toLocaleDateString()}`
   }
 
+  function labelPenetrationMode(value: PenetrationMode) {
+    switch (value) {
+      case 'NO_PENETRATIONS':
+        return 'No penetrations (white goods ship loose)'
+      case 'PENETRATIONS_WITHOUT_INSTALL':
+        return 'Glimmerglass cuts penetrations (white goods ship loose)'
+      case 'PENETRATIONS_WITH_INSTALL':
+        return 'Glimmerglass installs hardware'
+      case 'OTHER':
+        return 'Other'
+      default:
+        return value
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setMsg(null)
@@ -430,6 +448,13 @@ export default function NewOrderPage() {
       })
       return
     }
+    if (penetrationMode === 'OTHER' && !penetrationNotes.trim()) {
+      setMsg({
+        type: 'err',
+        text: 'Please add notes when "Other" is selected.',
+      })
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -442,6 +467,7 @@ export default function NewOrderPage() {
       formData.append('notes', notes)
       formData.append('shippingMethod', shippingMethod)
       formData.append('penetrationMode', penetrationMode)
+      formData.append('penetrationNotes', penetrationNotes.trim())
 
       // nuevo campo (como string ISO de date sin hora)
       formData.append('requestedShipDate', requestedShipDate)
@@ -484,6 +510,7 @@ export default function NewOrderPage() {
       setHardwareMainDrains(false)
       setHardwareAutocover(null)
       setPenetrationMode('PENETRATIONS_WITHOUT_INSTALL')
+      setPenetrationNotes('')
       setMarkers([])
       setMarkerType('skimmer')
       setMarkerError('')
@@ -874,37 +901,89 @@ export default function NewOrderPage() {
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Penetration Option
             </label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-              <label className="flex items-start gap-2 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  name="penetrationMode"
-                  checked={penetrationMode === 'PENETRATIONS_WITH_INSTALL'}
-                  onChange={() => setPenetrationMode('PENETRATIONS_WITH_INSTALL')}
-                  className="mt-1"
-                />
-                <span>Glimmerglass installs hardware ($125 per skimmer, $75 per return)</span>
-              </label>
-              <label className="flex items-start gap-2 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  name="penetrationMode"
-                  checked={penetrationMode === 'PENETRATIONS_WITHOUT_INSTALL'}
-                  onChange={() => setPenetrationMode('PENETRATIONS_WITHOUT_INSTALL')}
-                  className="mt-1"
-                />
-                <span>Glimmerglass cuts penetrations, white goods ship loose</span>
-              </label>
-              <label className="flex items-start gap-2 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  name="penetrationMode"
-                  checked={penetrationMode === 'NO_PENETRATIONS'}
-                  onChange={() => setPenetrationMode('NO_PENETRATIONS')}
-                  className="mt-1"
-                />
-                <span>No penetrations</span>
-              </label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                {([
+                  {
+                    value: 'NO_PENETRATIONS',
+                    title: 'No penetrations',
+                    detail: 'White goods ship loose.',
+                  },
+                  {
+                    value: 'PENETRATIONS_WITHOUT_INSTALL',
+                    title: 'Glimmerglass cuts penetrations',
+                    detail: 'White goods ship loose.',
+                  },
+                  {
+                    value: 'PENETRATIONS_WITH_INSTALL',
+                    title: 'Glimmerglass installs hardware',
+                    detail: 'Follow current order form pricing/installation policy.',
+                  },
+                  {
+                    value: 'OTHER',
+                    title: 'Other',
+                    detail: 'Use notes below to describe the requested setup.',
+                  },
+                ] as const).map((option) => {
+                  const selected = penetrationMode === option.value
+                  return (
+                    <label
+                      key={option.value}
+                      className={[
+                        'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition',
+                        selected
+                          ? 'border-sky-300 bg-white shadow-sm ring-2 ring-sky-100'
+                          : 'border-slate-200 bg-white hover:border-slate-300',
+                      ].join(' ')}
+                    >
+                      <input
+                        type="radio"
+                        name="penetrationMode"
+                        checked={selected}
+                        onChange={() => setPenetrationMode(option.value)}
+                        className="mt-1"
+                      />
+                      <span className="block">
+                        <span className="block text-sm font-semibold text-slate-900">{option.title}</span>
+                        <span className="block text-xs text-slate-600">{option.detail}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!!hardwareAutocover}
+                    onChange={(e) => setHardwareAutocover(e.target.checked)}
+                  />
+                  Please check if an autocover is to be installed
+                </label>
+                <p className="mt-1 text-xs text-slate-500">
+                  Autocovers are not provided/installed by Glimmerglass.
+                </p>
+              </div>
+
+              {penetrationMode === 'OTHER' ? (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Other Penetration Notes
+                  </label>
+                  <textarea
+                    value={penetrationNotes}
+                    onChange={(e) => setPenetrationNotes(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    placeholder="Describe the requested penetration setup."
+                  />
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                Selected option: <span className="font-semibold">{labelPenetrationMode(penetrationMode)}</span>
+              </div>
             </div>
           </div>
 
@@ -925,7 +1004,9 @@ export default function NewOrderPage() {
             ) : (
               <div className="space-y-3">
                 <div className="text-xs text-slate-500">
-                  Standard fitting configuration shown, please indicate changes if required.
+                  {activeModel?.hasIntegratedSpa
+                    ? 'Skimmer, main drains, spa jets, and returns follow the standard fitting configuration shown. Please indicate changes if required.'
+                    : 'Skimmer, main drains, and returns follow the standard fitting configuration shown. Please indicate changes if required.'}
                 </div>
                 <div className="text-xs text-slate-500">
                   Model limits:
@@ -1143,78 +1224,6 @@ export default function NewOrderPage() {
                 className="pointer-events-none absolute right-3 top-2.5 text-slate-300"
                 size={18}
               />
-            </div>
-          </div>
-
-          {/* Hardware selection */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Hardware Included
-            </label>
-            <div className="grid sm:grid-cols-3 gap-3">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={hardwareSkimmer}
-                  onChange={(e) => setHardwareSkimmer(e.target.checked)}
-                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
-                />
-                <span>Skimmer</span>
-              </label>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={hardwareReturns}
-                  onChange={(e) => setHardwareReturns(e.target.checked)}
-                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
-                />
-                <span>Returns</span>
-              </label>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={hardwareMainDrains}
-                  onChange={(e) => setHardwareMainDrains(e.target.checked)}
-                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-200"
-                />
-                <span>Main Drains</span>
-              </label>
-            </div>
-
-            {/* Autocover en otra línea con Yes / No */}
-            <div className="mt-4">
-              <p className="text-sm font-medium text-slate-700 mb-2">
-                Autocover Required?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setHardwareAutocover(true)}
-                  className={[
-                    'flex-1 inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium',
-                    hardwareAutocover === true
-                      ? 'border-sky-400 bg-sky-50 text-sky-800'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHardwareAutocover(false)}
-                  className={[
-                    'flex-1 inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium',
-                    hardwareAutocover === false
-                      ? 'border-slate-400 bg-slate-50 text-slate-800'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  No
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                This helps production plan hardware and lead times correctly.
-              </p>
             </div>
           </div>
 

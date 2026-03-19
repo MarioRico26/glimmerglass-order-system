@@ -24,6 +24,8 @@ type Order = {
   paymentProofUrl?: string | null
   notes?: string | null
   createdAt: string
+  penetrationMode?: string | null
+  penetrationNotes?: string | null
   hardwareSkimmer?: boolean
   hardwareAutocover?: boolean
   hardwareReturns?: boolean
@@ -35,6 +37,21 @@ const deep = '#007A99'
 
 function labelStatus(status: string) {
   return labelOrderStatus(status)
+}
+
+function labelPenetrationMode(mode?: string | null) {
+  switch (mode) {
+    case 'NO_PENETRATIONS':
+      return 'No penetrations'
+    case 'PENETRATIONS_WITHOUT_INSTALL':
+      return 'Glimmerglass cuts penetrations'
+    case 'PENETRATIONS_WITH_INSTALL':
+      return 'Glimmerglass installs hardware'
+    case 'OTHER':
+      return 'Other'
+    default:
+      return 'Not set'
+  }
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -178,19 +195,23 @@ export default function MyOrdersPage() {
                     </div>
                   ) : null}
 
-                  {/* HARDWARE CHECKS */}
                   <div className="pt-1">
-                    <div className="text-slate-500 font-semibold mb-1">Hardware:</div>
-                    <ul className="pl-4 space-y-1 text-slate-700 list-disc">
-                      {o.hardwareSkimmer && <li>Skimmer</li>}
-                      {o.hardwareMainDrains && <li>Main Drains</li>}
-                      {o.hardwareReturns && <li>Returns</li>}
-                      {o.hardwareAutocover && <li>Auto Cover</li>}
-                      {!o.hardwareSkimmer &&
-                        !o.hardwareMainDrains &&
-                        !o.hardwareReturns &&
-                        !o.hardwareAutocover && <li className="text-slate-500">None</li>}
-                    </ul>
+                    <div className="text-slate-500 font-semibold mb-1">Penetrations:</div>
+                    <div className="space-y-1 text-slate-700">
+                      <div>
+                        <span className="text-slate-500">Option:</span>{' '}
+                        {labelPenetrationMode(o.penetrationMode)}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Autocover:</span>{' '}
+                        {o.hardwareAutocover ? 'Requested' : 'Not requested'}
+                      </div>
+                      {o.penetrationNotes ? (
+                        <div className="line-clamp-3">
+                          <span className="text-slate-500">Other notes:</span> {o.penetrationNotes}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 

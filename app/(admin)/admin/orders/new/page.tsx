@@ -13,6 +13,7 @@ type PoolModel = {
   depthFt?: number | null
   imageUrl?: string | null
   blueprintUrl?: string | null
+  hasIntegratedSpa?: boolean
   maxSkimmers?: number | null
   maxReturns?: number | null
   maxMainDrains?: number | null
@@ -25,6 +26,7 @@ type PenetrationMode =
   | 'PENETRATIONS_WITH_INSTALL'
   | 'PENETRATIONS_WITHOUT_INSTALL'
   | 'NO_PENETRATIONS'
+  | 'OTHER'
 
 type BlueprintMarker = {
   type: 'skimmer' | 'return' | 'drain'
@@ -50,6 +52,21 @@ function toErrorMessage(error: unknown, fallback: string) {
 function isPdf(url: string | null | undefined) {
   if (!url) return false
   return url.toLowerCase().split('?')[0].endsWith('.pdf')
+}
+
+function penetrationLabel(mode: '' | PenetrationMode) {
+  switch (mode) {
+    case 'NO_PENETRATIONS':
+      return 'No penetrations (white goods ship loose)'
+    case 'PENETRATIONS_WITHOUT_INSTALL':
+      return 'Glimmerglass cuts penetrations (white goods ship loose)'
+    case 'PENETRATIONS_WITH_INSTALL':
+      return 'Glimmerglass installs hardware'
+    case 'OTHER':
+      return 'Other'
+    default:
+      return 'Select penetration option'
+  }
 }
 
 export default function AdminNewOrderPage() {
@@ -93,9 +110,7 @@ export default function AdminNewOrderPage() {
     shippingMethod: '' as '' | 'PICK_UP' | 'QUOTE',
     requestedShipDate: '',
     penetrationMode: '' as '' | PenetrationMode,
-    hardwareSkimmer: false,
-    hardwareReturns: false,
-    hardwareMainDrains: false,
+    penetrationNotes: '',
     hardwareAutocover: false,
   })
 
@@ -238,6 +253,10 @@ export default function AdminNewOrderPage() {
       setError('Please select a penetration option.')
       return
     }
+    if (form.penetrationMode === 'OTHER' && !form.penetrationNotes.trim()) {
+      setError('Please add notes when "Other" is selected.')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -251,6 +270,7 @@ export default function AdminNewOrderPage() {
         deliveryAddress: form.deliveryAddress.trim(),
         notes: form.notes.trim() || null,
         penetrationMode: form.penetrationMode,
+        penetrationNotes: form.penetrationNotes.trim() || null,
         blueprintMarkers:
           form.penetrationMode === 'NO_PENETRATIONS'
             ? null
@@ -259,9 +279,6 @@ export default function AdminNewOrderPage() {
               : null,
         shippingMethod: form.shippingMethod || null,
         requestedShipDate: form.requestedShipDate || null,
-        hardwareSkimmer: form.hardwareSkimmer,
-        hardwareReturns: form.hardwareReturns,
-        hardwareMainDrains: form.hardwareMainDrains,
         hardwareAutocover: form.hardwareAutocover,
       }
 
@@ -284,9 +301,7 @@ export default function AdminNewOrderPage() {
         shippingMethod: '',
         requestedShipDate: '',
         penetrationMode: '',
-        hardwareSkimmer: false,
-        hardwareReturns: false,
-        hardwareMainDrains: false,
+        penetrationNotes: '',
         hardwareAutocover: false,
       })
       setMarkers([])
@@ -586,63 +601,68 @@ export default function AdminNewOrderPage() {
 
             <section className="space-y-3">
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Hardware & Penetrations</div>
-              <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                    Penetration Option
-                  </label>
-                  <select
-                    value={form.penetrationMode}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        penetrationMode: e.target.value as '' | PenetrationMode,
-                      }))
-                    }
-                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  >
-                    <option value="">Select penetration option</option>
-                    <option value="PENETRATIONS_WITH_INSTALL">
-                      Glimmerglass installs hardware ($125 per skimmer, $75 per return)
-                    </option>
-                    <option value="PENETRATIONS_WITHOUT_INSTALL">
-                      Glimmerglass cuts penetrations, white goods ship loose
-                    </option>
-                    <option value="NO_PENETRATIONS">No penetrations</option>
-                  </select>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Penetration Option
                 </div>
-                <div className="grid gap-3 grid-cols-2 md:grid-cols-4 rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-1">
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.hardwareSkimmer}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, hardwareSkimmer: e.target.checked }))
-                      }
-                    />
-                    Skimmer
-                  </label>
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.hardwareReturns}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, hardwareReturns: e.target.checked }))
-                      }
-                    />
-                    Returns
-                  </label>
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.hardwareMainDrains}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, hardwareMainDrains: e.target.checked }))
-                      }
-                    />
-                    Main Drains
-                  </label>
-                  <label className="inline-flex items-center gap-2 text-sm">
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {([
+                    {
+                      value: 'NO_PENETRATIONS',
+                      title: 'No penetrations',
+                      detail: 'White goods ship loose.',
+                    },
+                    {
+                      value: 'PENETRATIONS_WITHOUT_INSTALL',
+                      title: 'Glimmerglass cuts penetrations',
+                      detail: 'White goods ship loose.',
+                    },
+                    {
+                      value: 'PENETRATIONS_WITH_INSTALL',
+                      title: 'Glimmerglass installs hardware',
+                      detail: 'Follow current order form pricing/installation policy.',
+                    },
+                    {
+                      value: 'OTHER',
+                      title: 'Other',
+                      detail: 'Use notes below to describe the requested setup.',
+                    },
+                  ] as const).map((option) => {
+                    const selected = form.penetrationMode === option.value
+                    return (
+                      <label
+                        key={option.value}
+                        className={[
+                          'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition',
+                          selected
+                            ? 'border-sky-300 bg-white shadow-sm ring-2 ring-sky-100'
+                            : 'border-slate-200 bg-white hover:border-slate-300',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="radio"
+                          name="penetrationMode"
+                          className="mt-1"
+                          checked={selected}
+                          onChange={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              penetrationMode: option.value,
+                            }))
+                          }
+                        />
+                        <span className="block">
+                          <span className="block text-sm font-semibold text-slate-900">{option.title}</span>
+                          <span className="block text-xs text-slate-600">{option.detail}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
                     <input
                       type="checkbox"
                       checked={form.hardwareAutocover}
@@ -650,9 +670,35 @@ export default function AdminNewOrderPage() {
                         setForm((prev) => ({ ...prev, hardwareAutocover: e.target.checked }))
                       }
                     />
-                    Autocover
+                    Please check if an autocover is to be installed
                   </label>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Autocovers are not provided/installed by Glimmerglass.
+                  </p>
                 </div>
+
+                {form.penetrationMode === 'OTHER' ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Other Penetration Notes
+                    </label>
+                    <textarea
+                      value={form.penetrationNotes}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, penetrationNotes: e.target.value }))
+                      }
+                      rows={3}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      placeholder="Describe the requested penetration setup."
+                    />
+                  </div>
+                ) : null}
+
+                {form.penetrationMode ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                    Selected option: <span className="font-semibold">{penetrationLabel(form.penetrationMode)}</span>
+                  </div>
+                ) : null}
               </div>
 
               {!form.penetrationMode ? (
@@ -669,7 +715,9 @@ export default function AdminNewOrderPage() {
                     <div>
                       <div className="text-sm font-semibold text-slate-900">Dig Sheet Marker Placement</div>
                       <p className="text-xs text-slate-600">
-                        Standard fitting configuration shown, please indicate changes if required.
+                        {activeModel?.hasIntegratedSpa
+                          ? 'Skimmer, main drains, spa jets, and returns follow the standard fitting configuration shown. Please indicate changes if required.'
+                          : 'Skimmer, main drains, and returns follow the standard fitting configuration shown. Please indicate changes if required.'}
                       </p>
                     </div>
                     <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">

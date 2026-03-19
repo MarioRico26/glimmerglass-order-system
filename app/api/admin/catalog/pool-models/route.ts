@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       imageUrl,
       blueprintUrl,
       defaultFactoryLocationId,
+      hasIntegratedSpa,
       maxSkimmers,
       maxReturns,
       maxMainDrains,
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
     if (typeof defaultFactoryLocationId === 'string' && defaultFactoryLocationId.trim() !== '') {
       data.defaultFactoryLocationId = defaultFactoryLocationId.trim()
     }
+    data.hasIntegratedSpa = Boolean(hasIntegratedSpa)
 
     const numericLimits = [
       ['maxSkimmers', maxSkimmers],
@@ -147,6 +149,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (typeof data.defaultFactoryLocationId === 'string') {
       data.defaultFactoryLocationId = data.defaultFactoryLocationId.trim()
+    }
+    if (data.hasIntegratedSpa !== undefined) {
+      data.hasIntegratedSpa = Boolean(data.hasIntegratedSpa)
     }
 
     const limitKeys = ['maxSkimmers', 'maxReturns', 'maxMainDrains'] as const

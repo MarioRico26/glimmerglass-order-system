@@ -10,7 +10,15 @@ function toSummaryDTO(o: any) {
     deliveryAddress: o.deliveryAddress,
     status: o.status,
     paymentProofUrl: o.paymentProofUrl ?? null,
-    poolModel: o.poolModel ? { name: o.poolModel.name } : null,
+    penetrationMode: o.penetrationMode,
+    penetrationNotes: o.penetrationNotes ?? null,
+    poolModel: o.poolModel
+      ? {
+          name: o.poolModel.name,
+          blueprintUrl: o.poolModel.blueprintUrl ?? null,
+          hasIntegratedSpa: !!o.poolModel.hasIntegratedSpa,
+        }
+      : null,
     color: o.color ? { name: o.color.name } : null,
     dealer: o.dealer
       ? {
@@ -58,6 +66,9 @@ export async function PATCH(
       requestedShipDate,
       serialNumber,
       productionPriority,
+      penetrationMode,
+      penetrationNotes,
+      hardwareAutocover,
     } = body as {
       factoryLocationId?: string | null
       shippingMethod?: string | null
@@ -66,6 +77,9 @@ export async function PATCH(
       requestedShipDate?: string | null
       serialNumber?: string | null
       productionPriority?: number | null
+      penetrationMode?: string | null
+      penetrationNotes?: string | null
+      hardwareAutocover?: boolean | null
     }
 
     const data: any = {}
@@ -112,6 +126,35 @@ export async function PATCH(
       data.productionPriority = null
     }
 
+    if (
+      penetrationMode === 'PENETRATIONS_WITH_INSTALL' ||
+      penetrationMode === 'PENETRATIONS_WITHOUT_INSTALL' ||
+      penetrationMode === 'NO_PENETRATIONS' ||
+      penetrationMode === 'OTHER'
+    ) {
+      data.penetrationMode = penetrationMode
+      if (penetrationMode === 'NO_PENETRATIONS') {
+        data.blueprintMarkers = null
+      }
+    }
+
+    if (typeof penetrationNotes === 'string' || penetrationNotes === null) {
+      data.penetrationNotes = typeof penetrationNotes === 'string' ? penetrationNotes.trim() || null : null
+    }
+
+    if (typeof hardwareAutocover === 'boolean') {
+      data.hardwareAutocover = hardwareAutocover
+    } else if (hardwareAutocover === null) {
+      data.hardwareAutocover = false
+    }
+
+    if (data.penetrationMode === 'OTHER' && !data.penetrationNotes) {
+      return NextResponse.json(
+        { message: 'Other penetration notes are required when penetration option is Other' },
+        { status: 400 }
+      )
+    }
+
     const userEmail =
       session?.user && typeof session.user === 'object' && 'email' in session.user
         ? (session.user as { email?: string | null }).email
@@ -132,7 +175,7 @@ export async function PATCH(
               state: true,
             },
           },
-          poolModel: { select: { name: true } },
+          poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
           color: { select: { name: true } },
           factoryLocation: { select: { id: true, name: true } },
         },

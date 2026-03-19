@@ -118,6 +118,7 @@ export async function POST(req: NextRequest) {
     const shippingMethodRaw = formData.get('shippingMethod')?.toString().trim() || ''
     const penetrationModeRaw =
       formData.get('penetrationMode')?.toString().trim() || 'PENETRATIONS_WITHOUT_INSTALL'
+    const penetrationNotes = formData.get('penetrationNotes')?.toString().trim() || ''
     const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
     const blueprintMarkersRaw = formData.get('blueprintMarkers')?.toString().trim() || ''
     const poolStockId = formData.get('poolStockId')?.toString().trim() || ''
@@ -147,11 +148,15 @@ export async function POST(req: NextRequest) {
     if (
       penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
       penetrationModeRaw === 'PENETRATIONS_WITHOUT_INSTALL' ||
-      penetrationModeRaw === 'NO_PENETRATIONS'
+      penetrationModeRaw === 'NO_PENETRATIONS' ||
+      penetrationModeRaw === 'OTHER'
     ) {
       penetrationMode = penetrationModeRaw
     } else {
       return jsonError('Invalid penetration mode', 400)
+    }
+    if (penetrationMode === 'OTHER' && !penetrationNotes) {
+      return jsonError('Penetration notes are required when "Other" is selected', 400)
     }
 
     // Validar requestedShipDate (mínimo 4 semanas en el futuro)
@@ -313,6 +318,7 @@ export async function POST(req: NextRequest) {
           notes: notes || null,
           blueprintMarkers,
           penetrationMode,
+          penetrationNotes: penetrationNotes || null,
           status: 'PENDING_PAYMENT_APPROVAL',
           paymentProofUrl,
           shippingMethod,
@@ -377,6 +383,7 @@ export async function POST(req: NextRequest) {
           hardwareReturns,
           hardwareMainDrains,
           penetrationMode,
+          penetrationNotes: penetrationNotes || null,
           poolStockId: poolStockId || null,
           reservedFromStock: Boolean(poolStockId),
         },

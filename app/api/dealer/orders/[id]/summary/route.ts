@@ -47,7 +47,10 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     select: {
       id: true,
       blueprintMarkers: true,
-      poolModel: { select: { name: true, blueprintUrl: true } },
+      penetrationMode: true,
+      penetrationNotes: true,
+      hardwareAutocover: true,
+      poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
     },
   })
 
@@ -59,5 +62,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     id: order.id,
     poolModel: order.poolModel,
     blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),
+    penetrationMode: order.penetrationMode,
+    penetrationNotes: order.penetrationNotes ?? null,
+    hardwareAutocover: !!order.hardwareAutocover,
   })
 }

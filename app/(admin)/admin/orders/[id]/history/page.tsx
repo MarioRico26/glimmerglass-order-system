@@ -34,6 +34,8 @@ interface OrderSummary {
   status: string
   paymentProofUrl?: string | null
   blueprintMarkers?: BlueprintMarker[]
+  penetrationMode?: string | null
+  penetrationNotes?: string | null
 
   dealer?: {
     name: string
@@ -44,7 +46,7 @@ interface OrderSummary {
     state?: string | null
   } | null
 
-  poolModel?: { name: string; blueprintUrl?: string | null } | null
+  poolModel?: { name: string; blueprintUrl?: string | null; hasIntegratedSpa?: boolean } | null
   color?: { name: string } | null
   factory?: { id: string; name: string } | null
   shippingMethod?: string | null
@@ -69,6 +71,21 @@ interface FactoryLocation {
 const SHIPPING_LABELS: Record<string, string> = {
   PICK_UP: 'Pick Up',
   QUOTE: 'Glimmerglass Freight (quote to be provided)',
+}
+
+function labelPenetrationMode(mode?: string | null) {
+  switch (mode) {
+    case 'NO_PENETRATIONS':
+      return 'No penetrations (white goods ship loose)'
+    case 'PENETRATIONS_WITHOUT_INSTALL':
+      return 'Glimmerglass cuts penetrations (white goods ship loose)'
+    case 'PENETRATIONS_WITH_INSTALL':
+      return 'Glimmerglass installs hardware'
+    case 'OTHER':
+      return 'Other'
+    default:
+      return 'Not set'
+  }
 }
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
@@ -105,6 +122,9 @@ export default function OrderHistoryPage() {
   const [editPriority, setEditPriority] = useState<string>('')
   const [editDeliveryAddress, setEditDeliveryAddress] = useState<string>('')
   const [editNotes, setEditNotes] = useState<string>('')
+  const [editPenetrationMode, setEditPenetrationMode] = useState<string>('')
+  const [editPenetrationNotes, setEditPenetrationNotes] = useState<string>('')
+  const [editAutocover, setEditAutocover] = useState(false)
 
   const [editing, setEditing] = useState(false)
 
@@ -139,6 +159,9 @@ export default function OrderHistoryPage() {
         setSelectedShippingMethod(orderData.shippingMethod || '')
         setEditDeliveryAddress(orderData.deliveryAddress || '')
         setEditNotes(orderData.notes || '')
+        setEditPenetrationMode(orderData.penetrationMode || '')
+        setEditPenetrationNotes(orderData.penetrationNotes || '')
+        setEditAutocover(!!orderData.hardwareAutocover)
 
         if (orderData.requestedShipDate) {
           const d = new Date(orderData.requestedShipDate)
@@ -172,6 +195,10 @@ export default function OrderHistoryPage() {
 
   const handleSaveChanges = async () => {
     try {
+      if (editPenetrationMode === 'OTHER' && !editPenetrationNotes.trim()) {
+        setMessage('❌ Other penetration notes are required when penetration option is Other.')
+        return
+      }
       setSaving(true)
       setMessage('🔄 Saving changes...')
 
@@ -183,6 +210,9 @@ export default function OrderHistoryPage() {
         requestedShipDate: editRequestedDate || null,
         serialNumber: editSerialNumber || null,
         productionPriority: editPriority ? Number(editPriority) : null,
+        penetrationMode: editPenetrationMode || null,
+        penetrationNotes: editPenetrationNotes || null,
+        hardwareAutocover: editAutocover,
       }
 
       const res = await fetch(`/api/admin/orders/${orderId}/factory`, {
@@ -199,6 +229,9 @@ export default function OrderHistoryPage() {
         setSelectedShippingMethod(updated.shippingMethod || '')
         setEditDeliveryAddress(updated.deliveryAddress || '')
         setEditNotes(updated.notes || '')
+        setEditPenetrationMode(updated.penetrationMode || '')
+        setEditPenetrationNotes(updated.penetrationNotes || '')
+        setEditAutocover(!!updated.hardwareAutocover)
 
         setEditSerialNumber(updated.serialNumber || '')
         setEditPriority(typeof updated.productionPriority === 'number' ? String(updated.productionPriority) : '')
@@ -269,12 +302,6 @@ export default function OrderHistoryPage() {
     summary?.requestedShipDate && !isNaN(new Date(summary.requestedShipDate).getTime())
       ? new Date(summary.requestedShipDate).toLocaleDateString()
       : 'Not set'
-
-  const hardwareAllOff =
-    !summary?.hardwareSkimmer &&
-    !summary?.hardwareReturns &&
-    !summary?.hardwareMainDrains &&
-    !summary?.hardwareAutocover
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -444,46 +471,35 @@ export default function OrderHistoryPage() {
 
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                  Hardware Selected
+                  Penetration Request
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'Skimmer', on: summary.hardwareSkimmer },
-                    { label: 'Returns', on: summary.hardwareReturns },
-                    { label: 'Main Drains', on: summary.hardwareMainDrains },
-                    { label: 'Autocover', on: summary.hardwareAutocover },
-                  ].map((h) => (
-                    <span
-                      key={h.label}
-                      className={[
-                        'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border',
-                        h.on
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : 'bg-white text-slate-500 border-slate-200',
-                      ].join(' ')}
-                    >
-                      <span
-                        className={[
-                          'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black',
-                          h.on ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500',
-                        ].join(' ')}
-                      >
-                        ✓
-                      </span>
-                      {h.label}
-                    </span>
-                  ))}
+                <div className="space-y-2 text-slate-800">
+                  <div>
+                    <span className="font-semibold">Option:</span>{' '}
+                    {labelPenetrationMode(summary.penetrationMode)}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Autocover:</span>{' '}
+                    {summary.hardwareAutocover ? 'Requested' : 'Not requested'}
+                  </div>
+                  {summary.penetrationNotes ? (
+                    <div>
+                      <div className="font-semibold">Other Notes:</div>
+                      <div className="mt-1 whitespace-pre-wrap text-slate-700">{summary.penetrationNotes}</div>
+                    </div>
+                  ) : null}
                 </div>
-
-                {hardwareAllOff && <p className="mt-2 text-xs text-slate-500">None selected.</p>}
               </div>
             </div>
 
             <div className="px-6 pb-6">
               <BlueprintMarkersCard
                 title="Dig Sheet Markers"
-                subtitle="Marker positions captured by dealer during order creation."
+                subtitle={
+                  summary.poolModel?.hasIntegratedSpa
+                    ? 'Standard spa fitting configuration shown. Use markers only to indicate requested changes.'
+                    : 'Standard fitting configuration shown. Use markers only to indicate requested changes.'
+                }
                 blueprintUrl={summary.poolModel?.blueprintUrl ?? null}
                 markers={summary.blueprintMarkers ?? []}
               />
@@ -721,6 +737,95 @@ export default function OrderHistoryPage() {
                       disabled={saving}
                     />
                   </div>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
+                  Penetrations
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {([
+                      {
+                        value: 'NO_PENETRATIONS',
+                        title: 'No penetrations',
+                        detail: 'White goods ship loose.',
+                      },
+                      {
+                        value: 'PENETRATIONS_WITHOUT_INSTALL',
+                        title: 'Glimmerglass cuts penetrations',
+                        detail: 'White goods ship loose.',
+                      },
+                      {
+                        value: 'PENETRATIONS_WITH_INSTALL',
+                        title: 'Glimmerglass installs hardware',
+                        detail: 'Use current production/order form policy.',
+                      },
+                      {
+                        value: 'OTHER',
+                        title: 'Other',
+                        detail: 'Describe the requested setup below.',
+                      },
+                    ] as const).map((option) => {
+                      const selected = editPenetrationMode === option.value
+                      return (
+                        <label
+                          key={option.value}
+                          className={[
+                            'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition',
+                            selected
+                              ? 'border-sky-300 bg-sky-50 ring-2 ring-sky-100'
+                              : 'border-slate-200 bg-white hover:border-slate-300',
+                          ].join(' ')}
+                        >
+                          <input
+                            type="radio"
+                            name="editPenetrationMode"
+                            checked={selected}
+                            onChange={() => setEditPenetrationMode(option.value)}
+                            className="mt-1"
+                            disabled={saving}
+                          />
+                          <span className="block">
+                            <span className="block text-sm font-semibold text-slate-900">{option.title}</span>
+                            <span className="block text-xs text-slate-600">{option.detail}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={editAutocover}
+                        onChange={(e) => setEditAutocover(e.target.checked)}
+                        disabled={saving}
+                      />
+                      Please check if an autocover is to be installed
+                    </label>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Autocovers are not provided/installed by Glimmerglass.
+                    </p>
+                  </div>
+
+                  {editPenetrationMode === 'OTHER' ? (
+                    <div>
+                      <label className="block text-sm font-semibold mb-1 text-slate-700">
+                        Other Penetration Notes
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editPenetrationNotes}
+                        onChange={(e) => setEditPenetrationNotes(e.target.value)}
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        disabled={saving}
+                        placeholder="Describe the requested penetration setup..."
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>

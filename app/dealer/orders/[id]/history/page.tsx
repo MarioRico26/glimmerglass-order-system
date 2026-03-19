@@ -36,8 +36,11 @@ type OrderMedia = {
 
 type DealerOrderSummary = {
   id: string
-  poolModel?: { name: string; blueprintUrl?: string | null } | null
+  poolModel?: { name: string; blueprintUrl?: string | null; hasIntegratedSpa?: boolean } | null
   blueprintMarkers?: BlueprintMarker[]
+  penetrationMode?: string | null
+  penetrationNotes?: string | null
+  hardwareAutocover?: boolean
 }
 
 const aqua = '#00B2CA'
@@ -150,7 +153,11 @@ export default function DealerOrderHistoryPage() {
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">
         <BlueprintMarkersCard
           title="Dig Sheet Markers"
-          subtitle="Skimmer, return and drain points saved on your order."
+          subtitle={
+            summary?.poolModel?.hasIntegratedSpa
+              ? 'Standard spa fitting configuration shown. Markers indicate requested changes saved on your order.'
+              : 'Standard fitting configuration shown. Markers indicate requested changes saved on your order.'
+          }
           blueprintUrl={summary?.poolModel?.blueprintUrl ?? null}
           markers={summary?.blueprintMarkers ?? []}
         />

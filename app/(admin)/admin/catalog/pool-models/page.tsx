@@ -17,6 +17,7 @@ type PoolModel = {
   depthFt: number | null
   imageUrl?: string | null
   blueprintUrl?: string | null
+  hasIntegratedSpa?: boolean
   defaultFactoryLocationId?: string | null
   defaultFactoryLocation?: { id: string; name: string } | null
   maxSkimmers?: number | null
@@ -33,6 +34,7 @@ type ModelDraft = {
   maxSkimmers: string
   maxReturns: string
   maxMainDrains: string
+  hasIntegratedSpa: boolean
 }
 
 type CreateForm = {
@@ -44,6 +46,7 @@ type CreateForm = {
   maxSkimmers: string
   maxReturns: string
   maxMainDrains: string
+  hasIntegratedSpa: boolean
 }
 
 const EMPTY_FORM: CreateForm = {
@@ -55,6 +58,7 @@ const EMPTY_FORM: CreateForm = {
   maxSkimmers: '',
   maxReturns: '',
   maxMainDrains: '',
+  hasIntegratedSpa: false,
 }
 
 function toDraft(model: PoolModel): ModelDraft {
@@ -67,6 +71,7 @@ function toDraft(model: PoolModel): ModelDraft {
     maxSkimmers: model.maxSkimmers == null ? '' : String(model.maxSkimmers),
     maxReturns: model.maxReturns == null ? '' : String(model.maxReturns),
     maxMainDrains: model.maxMainDrains == null ? '' : String(model.maxMainDrains),
+    hasIntegratedSpa: !!model.hasIntegratedSpa,
   }
 }
 
@@ -180,6 +185,7 @@ export default function PoolModelsPage() {
         maxSkimmers: parseIntOrNull(form.maxSkimmers),
         maxReturns: parseIntOrNull(form.maxReturns),
         maxMainDrains: parseIntOrNull(form.maxMainDrains),
+        hasIntegratedSpa: form.hasIntegratedSpa,
       }
 
       if (!payload.name) throw new Error('Model name is required')
@@ -219,6 +225,7 @@ export default function PoolModelsPage() {
                 maxSkimmers: '',
                 maxReturns: '',
                 maxMainDrains: '',
+                hasIntegratedSpa: false,
               })),
         [field]: value,
       },
@@ -243,6 +250,7 @@ export default function PoolModelsPage() {
         maxSkimmers: parseIntOrNull(draft.maxSkimmers),
         maxReturns: parseIntOrNull(draft.maxReturns),
         maxMainDrains: parseIntOrNull(draft.maxMainDrains),
+        hasIntegratedSpa: draft.hasIntegratedSpa,
       }
 
       if (!payload.name) throw new Error('Model name is required')
@@ -415,6 +423,15 @@ export default function PoolModelsPage() {
           />
         </div>
 
+        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={form.hasIntegratedSpa}
+            onChange={(e) => setForm((prev) => ({ ...prev, hasIntegratedSpa: e.target.checked }))}
+          />
+          Model includes integrated spa
+        </label>
+
         <div className="flex justify-end">
           <button
             type="submit"
@@ -545,6 +562,22 @@ export default function PoolModelsPage() {
                             placeholder="Drain"
                           />
                         </div>
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={draft.hasIntegratedSpa}
+                            onChange={(e) =>
+                              setDrafts((prev) => ({
+                                ...prev,
+                                [m.id]: {
+                                  ...draft,
+                                  hasIntegratedSpa: e.target.checked,
+                                },
+                              }))
+                            }
+                          />
+                          Integrated spa
+                        </label>
                       </td>
 
                       <td className="py-3 pr-3 min-w-[280px]">

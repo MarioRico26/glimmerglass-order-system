@@ -13,6 +13,7 @@ export async function GET() {
         depthFt: true,
         imageUrl: true,
         blueprintUrl: true,
+        hasIntegratedSpa: true,
         maxSkimmers: true,
         maxReturns: true,
         maxMainDrains: true,
@@ -39,6 +40,7 @@ export async function GET() {
       })
       const items = legacyItems.map((row) => ({
         ...row,
+        hasIntegratedSpa: false,
         maxSkimmers: null,
         maxReturns: null,
         maxMainDrains: null,
@@ -58,6 +60,7 @@ export async function GET() {
           depthFt: null,
           imageUrl: null,
           blueprintUrl: null,
+          hasIntegratedSpa: false,
           maxSkimmers: null,
           maxReturns: null,
           maxMainDrains: null,

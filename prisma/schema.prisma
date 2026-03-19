@@ -67,6 +67,7 @@ model Order {
   notes           String?
   blueprintMarkers Json?
   penetrationMode PenetrationMode @default(PENETRATIONS_WITHOUT_INSTALL)
+  penetrationNotes String?
   createdAt       DateTime    @default(now())
 
   // hardware checkboxes
@@ -154,6 +155,7 @@ model PoolModel {
   shape    String?
   imageUrl String?
   blueprintUrl String?
+  hasIntegratedSpa Boolean @default(false)
   maxSkimmers Int?
   maxReturns Int?
   maxMainDrains Int?
@@ -493,6 +495,7 @@ enum PenetrationMode {
   PENETRATIONS_WITH_INSTALL
   PENETRATIONS_WITHOUT_INSTALL
   NO_PENETRATIONS
+  OTHER
 }
 
 enum MediaType {

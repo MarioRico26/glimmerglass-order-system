@@ -98,6 +98,8 @@ async function getOrderSummary(orderId: string) {
       status: true,
       paymentProofUrl: true,
       blueprintMarkers: true,
+      penetrationMode: true,
+      penetrationNotes: true,
 
       shippingMethod: true,
       requestedShipDate: true,
@@ -112,7 +114,7 @@ async function getOrderSummary(orderId: string) {
       dealer: {
         select: { name: true, email: true, phone: true, address: true, city: true, state: true },
       },
-      poolModel: { select: { name: true, blueprintUrl: true } },
+      poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
       color: { select: { name: true } },
       factoryLocation: { select: { id: true, name: true } },
     },
@@ -127,6 +129,8 @@ async function getOrderSummary(orderId: string) {
     status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
     paymentProofUrl: order.paymentProofUrl ?? null,
     blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),
+    penetrationMode: order.penetrationMode,
+    penetrationNotes: order.penetrationNotes ?? null,
 
     dealer: order.dealer ?? null,
     poolModel: order.poolModel ?? null,
@@ -204,8 +208,7 @@ async function getMissingForTarget(
     media.map((m) => m.docType).filter(Boolean) as OrderDocType[]
   )
 
-  // Dealer order creation already requires payment proof.
-  // If it exists on the order, treat PROOF_OF_PAYMENT as satisfied.
+  // If a legacy payment proof URL exists on the order, treat PROOF_OF_PAYMENT as satisfied.
   if (order.paymentProofUrl) {
     present.add('PROOF_OF_PAYMENT')
   }
