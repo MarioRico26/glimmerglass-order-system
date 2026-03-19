@@ -325,7 +325,7 @@ export default function ShippingSchedulePage() {
             </div>
             <h1 className="mt-3 text-3xl sm:text-5xl font-black text-slate-900">Ship Schedule</h1>
             <p className="mt-3 text-slate-600 text-lg leading-relaxed">
-              Outlook-style shipping calendar for pre-shipping orders. Drag orders into a calendar day to assign the real ship date.
+              Schedule real ship dates for pre-shipping orders. Drag an order onto a calendar day or open it to set the shipping date manually.
             </p>
             <p className="mt-1 text-sm text-slate-500">
               Requested ship date stays separate from logistics scheduling.
