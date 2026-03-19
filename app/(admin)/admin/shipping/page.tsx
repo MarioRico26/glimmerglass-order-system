@@ -11,6 +11,7 @@ import {
   GripVertical,
   MapPin,
   RefreshCw,
+  Search,
   ShipWheel,
   Truck,
   X,
@@ -158,9 +159,14 @@ export default function ShippingSchedulePage() {
   const [open, setOpen] = useState(false)
   const [unscheduledExpanded, setUnscheduledExpanded] = useState(true)
   const [outsideExpanded, setOutsideExpanded] = useState(false)
+  const [unscheduledHeight, setUnscheduledHeight] = useState(380)
+  const [outsideHeight, setOutsideHeight] = useState(320)
+  const [railFilter, setRailFilter] = useState('')
   const [railWidth, setRailWidth] = useState(280)
   const [resizingRail, setResizingRail] = useState(false)
+  const [resizingPanel, setResizingPanel] = useState<null | 'unscheduled' | 'outside'>(null)
   const modalRef = useRef<HTMLDivElement | null>(null)
+  const panelResizeRef = useRef<{ startY: number; startHeight: number; panel: 'unscheduled' | 'outside' } | null>(null)
 
   const load = async () => {
     try {
@@ -227,6 +233,36 @@ export default function ShippingSchedulePage() {
   }, [resizingRail])
 
   useEffect(() => {
+    if (!resizingPanel || !panelResizeRef.current) return
+
+    const onMove = (e: MouseEvent) => {
+      const context = panelResizeRef.current
+      if (!context) return
+      const delta = e.clientY - context.startY
+      const next = Math.max(220, Math.min(760, context.startHeight + delta))
+      if (context.panel === 'unscheduled') setUnscheduledHeight(next)
+      else setOutsideHeight(next)
+    }
+
+    const onUp = () => {
+      setResizingPanel(null)
+      panelResizeRef.current = null
+    }
+
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [resizingPanel])
+
+  useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeModal()
@@ -249,6 +285,26 @@ export default function ShippingSchedulePage() {
   const monthAnchor = startOfMonthUTC(focusedDate)
   const monthAnchorKey = `${monthAnchor.getUTCFullYear()}-${monthAnchor.getUTCMonth()}`
 
+  const filteredOrders = useMemo(() => {
+    const q = railFilter.trim().toLowerCase()
+    if (!q) return orders
+    return orders.filter((order) => {
+      const haystack = [
+        order.poolModel?.name,
+        order.color?.name,
+        order.dealer?.name,
+        order.factoryLocation?.name,
+        order.serialNumber,
+        order.shippingMethod,
+        order.deliveryAddress,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [orders, railFilter])
+
   const grouped = useMemo(() => {
     const map: Record<string, Order[]> = {
       [UNSCHEDULED_KEY]: [],
@@ -257,7 +313,7 @@ export default function ShippingSchedulePage() {
 
     for (const key of visibleKeys) map[key] = []
 
-    for (const order of orders) {
+    for (const order of filteredOrders) {
       const key = dayKeyUTC(order.scheduledShipDate)
       if (!key) {
         map[UNSCHEDULED_KEY].push(order)
@@ -272,19 +328,19 @@ export default function ShippingSchedulePage() {
 
     Object.keys(map).forEach((key) => map[key].sort(compareOrders))
     return map
-  }, [orders, visibleKeys])
+  }, [filteredOrders, visibleKeys])
 
   const stats = useMemo(() => {
-    const total = orders.length
+    const total = filteredOrders.length
     const unscheduled = grouped[UNSCHEDULED_KEY]?.length || 0
     const outsideView = grouped[OUTSIDE_VIEW_KEY]?.length || 0
     const scheduledInView = total - unscheduled - outsideView
-    const overdueRequest = orders.filter((o) => {
+    const overdueRequest = filteredOrders.filter((o) => {
       if (!o.requestedShipDate || o.scheduledShipDate) return false
       return +new Date(o.requestedShipDate) < +new Date()
     }).length
     return { total, unscheduled, outsideView, scheduledInView, overdueRequest }
-  }, [orders, grouped])
+  }, [filteredOrders, grouped])
 
   const saveScheduledShipDate = async (orderId: string, scheduledShipDate: string | null) => {
     setSavingId(orderId)
@@ -453,6 +509,21 @@ export default function ShippingSchedulePage() {
             Overdue Request: {stats.overdueRequest}
           </span>
         </div>
+        <div className="mt-4 max-w-xl">
+          <label className="block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
+            Quick Filter
+          </label>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={railFilter}
+              onChange={(e) => setRailFilter(e.target.value)}
+              placeholder="Filter by dealer, model, serial, factory or address"
+              className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-[13px] text-slate-800 shadow-sm"
+            />
+          </div>
+        </div>
       </div>
 
       {!loading && orders.length === 0 ? (
@@ -511,6 +582,11 @@ export default function ShippingSchedulePage() {
             tone="amber"
             expanded={unscheduledExpanded}
             onToggle={() => setUnscheduledExpanded((v) => !v)}
+            height={unscheduledHeight}
+            onResizeStart={(startY, startHeight) => {
+              panelResizeRef.current = { startY, startHeight, panel: 'unscheduled' }
+              setResizingPanel('unscheduled')
+            }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDropToUnscheduled}
           >
@@ -534,6 +610,11 @@ export default function ShippingSchedulePage() {
             tone="sky"
             expanded={outsideExpanded}
             onToggle={() => setOutsideExpanded((v) => !v)}
+            height={outsideHeight}
+            onResizeStart={(startY, startHeight) => {
+              panelResizeRef.current = { startY, startHeight, panel: 'outside' }
+              setResizingPanel('outside')
+            }}
           >
             <CompactOrderList
               orders={grouped[OUTSIDE_VIEW_KEY] || []}
@@ -743,6 +824,8 @@ function RailCard({
   tone,
   expanded,
   onToggle,
+  height,
+  onResizeStart,
   children,
   onDragOver,
   onDrop,
@@ -753,6 +836,8 @@ function RailCard({
   tone: 'amber' | 'sky'
   expanded: boolean
   onToggle: () => void
+  height: number
+  onResizeStart: (startY: number, startHeight: number) => void
   children: React.ReactNode
   onDragOver?: React.DragEventHandler<HTMLDivElement>
   onDrop?: React.DragEventHandler<HTMLDivElement> | (() => void)
@@ -785,9 +870,28 @@ function RailCard({
         </div>
       </header>
       {expanded ? (
-        <div className="p-4 max-h-[380px] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
-          {children}
-        </div>
+        <>
+          <div
+            className="p-4 overflow-y-auto"
+            style={{ height }}
+            onDragOver={onDragOver}
+            onDrop={onDrop as any}
+          >
+            {children}
+          </div>
+          <div className="border-t border-slate-100 bg-white/80 px-4 py-2">
+            <button
+              type="button"
+              onMouseDown={(e) => onResizeStart(e.clientY, height)}
+              className="group flex w-full cursor-ns-resize items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+              title="Drag to resize panel height"
+            >
+              <span className="h-1.5 w-8 rounded-full bg-slate-300 group-hover:bg-sky-400" />
+              Resize
+              <span className="h-1.5 w-8 rounded-full bg-slate-300 group-hover:bg-sky-400" />
+            </button>
+          </div>
+        </>
       ) : (
         <div className="px-5 py-4 text-sm text-slate-500">Panel collapsed.</div>
       )}
