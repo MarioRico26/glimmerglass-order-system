@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -155,6 +156,8 @@ export default function ShippingSchedulePage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [active, setActive] = useState<Order | null>(null)
   const [open, setOpen] = useState(false)
+  const [unscheduledExpanded, setUnscheduledExpanded] = useState(true)
+  const [outsideExpanded, setOutsideExpanded] = useState(false)
   const modalRef = useRef<HTMLDivElement | null>(null)
 
   const load = async () => {
@@ -307,6 +310,11 @@ export default function ShippingSchedulePage() {
   }
 
   const monthHeaders = DAY_LABELS
+  const outsidePeriodTitle = viewMode === 'WEEK' ? 'Outside Current Week' : 'Outside Current Month'
+  const outsidePeriodSubtitle =
+    viewMode === 'WEEK'
+      ? 'Already scheduled, but not inside this week'
+      : 'Already scheduled, but not inside this month'
 
   return (
     <div
@@ -414,7 +422,7 @@ export default function ShippingSchedulePage() {
             Unscheduled: {stats.unscheduled}
           </span>
           <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-semibold text-sky-700">
-            Outside View: {stats.outsideView}
+            Outside Period: {stats.outsideView}
           </span>
           <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">
             Overdue Request: {stats.overdueRequest}
@@ -473,6 +481,8 @@ export default function ShippingSchedulePage() {
             subtitle="Ready to assign"
             count={grouped[UNSCHEDULED_KEY]?.length || 0}
             tone="amber"
+            expanded={unscheduledExpanded}
+            onToggle={() => setUnscheduledExpanded((v) => !v)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDropToUnscheduled}
           >
@@ -490,10 +500,12 @@ export default function ShippingSchedulePage() {
           </RailCard>
 
           <RailCard
-            title="Outside View"
-            subtitle={viewMode === 'WEEK' ? 'Scheduled outside this week' : 'Scheduled outside this month'}
+            title={outsidePeriodTitle}
+            subtitle={outsidePeriodSubtitle}
             count={grouped[OUTSIDE_VIEW_KEY]?.length || 0}
             tone="sky"
+            expanded={outsideExpanded}
+            onToggle={() => setOutsideExpanded((v) => !v)}
           >
             <CompactOrderList
               orders={grouped[OUTSIDE_VIEW_KEY] || []}
@@ -685,6 +697,8 @@ function RailCard({
   subtitle,
   count,
   tone,
+  expanded,
+  onToggle,
   children,
   onDragOver,
   onDrop,
@@ -693,6 +707,8 @@ function RailCard({
   subtitle: string
   count: number
   tone: 'amber' | 'sky'
+  expanded: boolean
+  onToggle: () => void
   children: React.ReactNode
   onDragOver?: React.DragEventHandler<HTMLDivElement>
   onDrop?: React.DragEventHandler<HTMLDivElement> | (() => void)
@@ -709,12 +725,28 @@ function RailCard({
             <div className="text-lg font-extrabold text-slate-900">{title}</div>
             <div className="text-xs text-slate-600">{subtitle}</div>
           </div>
-          <span className={`text-xs font-black px-2 py-1 rounded-full border ${toneClasses}`}>{count}</span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-black px-2 py-1 rounded-full border ${toneClasses}`}>{count}</span>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-expanded={expanded}
+              aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
+              title={expanded ? 'Collapse panel' : 'Expand panel'}
+            >
+              <ChevronDown size={16} className={expanded ? 'transition-transform' : '-rotate-90 transition-transform'} />
+            </button>
+          </div>
         </div>
       </header>
-      <div className="p-4 max-h-[300px] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
-        {children}
-      </div>
+      {expanded ? (
+        <div className="p-4 max-h-[380px] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
+          {children}
+        </div>
+      ) : (
+        <div className="px-5 py-4 text-sm text-slate-500">Panel collapsed.</div>
+      )}
     </section>
   )
 }
