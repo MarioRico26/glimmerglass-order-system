@@ -35,6 +35,7 @@ interface Order {
   deliveryAddress: string
   status: string
   paymentProofUrl?: string | null
+  serialNumber?: string | null
   poolModel: Maybe<{ name: string }>
   color: Maybe<{ name: string }>
   dealer: Maybe<{ name: string }>
@@ -766,7 +767,7 @@ function AdminOrdersInner() {
             <input
               value={q}
               onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-              placeholder="Search (model, color, dealer, factory, address)"
+              placeholder="Search (serial, model, color, dealer, factory, address)"
               className="w-full pl-11 pr-4 h-11 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
             />
           </div>
@@ -920,7 +921,7 @@ function AdminOrdersInner() {
                       <div className="col-span-8 grid grid-cols-3 gap-4">
                         <div>Model</div>
                         <div>Dealer</div>
-                        <div>Address & Payment</div>
+                        <div>Address, Serial & Payment</div>
                       </div>
                       <div className="col-span-4 text-right">Status • Next step • Links</div>
                     </div>
@@ -976,6 +977,17 @@ function AdminOrdersInner() {
                               <div className="min-w-0">
                                 <div className="text-slate-700 leading-snug break-words overflow-hidden">
                                   <span className="block">{order.deliveryAddress}</span>
+                                </div>
+
+                                <div className="mt-2 text-sm text-slate-600 flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold">Serial:</span>
+                                  {order.serialNumber ? (
+                                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs text-slate-800">
+                                      {order.serialNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">Not assigned</span>
+                                  )}
                                 </div>
 
                                 <div className="mt-2 text-sm text-slate-600 flex items-center gap-2 flex-wrap">

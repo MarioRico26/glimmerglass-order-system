@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
     if (q) {
       where.OR = [
         { deliveryAddress: { contains: q, mode: 'insensitive' } },
+        { serialNumber: { contains: q, mode: 'insensitive' } },
         { dealer: { name: { contains: q, mode: 'insensitive' } } },
         { poolModel: { name: { contains: q, mode: 'insensitive' } } },
         { color: { name: { contains: q, mode: 'insensitive' } } },
@@ -130,6 +131,7 @@ export async function GET(req: NextRequest) {
         // ✅ LO QUE NECESITA EL BOARD
         requestedShipDate: true,
         productionPriority: true,
+        serialNumber: true,
 
         hardwareSkimmer: true,
         hardwareAutocover: true,
