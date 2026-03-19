@@ -145,7 +145,7 @@ function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean;
       href={item.href}
       onClick={onNavigate}
       className={[
-        'group flex items-center justify-between rounded-xl px-3 py-2 text-[15px] transition',
+        'group flex items-center justify-between rounded-xl px-3 py-2 text-[14px] transition',
         active ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/70' : 'text-slate-700 hover:bg-white/70',
       ].join(' ')}
     >
@@ -244,7 +244,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
-              <div className="font-black text-[18px] tracking-tight [font-family:var(--font-heading)] [color:var(--gg-navy-800)]">
+              <div className="font-black text-[16px] tracking-tight [font-family:var(--font-heading)] [color:var(--gg-navy-800)]">
                 Glimmerglass FiberGlass Pools • Admin • Portal
               </div>
             </div>
@@ -265,7 +265,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className={menuOpen ? 'block lg:block' : 'hidden lg:block'}>
             <AdminNav onNavigate={() => setMenuOpen(false)} />
           </div>
-          <main className="min-w-0">
+          <main className="min-w-0 text-[15px] leading-[1.45]">
             <div className="rounded-2xl border bg-white/86 backdrop-blur-xl p-4 sm:p-6 shadow-[0_24px_64px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
               {children}
             </div>

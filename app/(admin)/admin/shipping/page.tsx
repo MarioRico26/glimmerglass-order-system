@@ -318,24 +318,24 @@ export default function ShippingSchedulePage() {
 
   return (
     <div
-      className="min-h-screen p-6"
+      className="min-h-screen p-4 xl:p-5"
       style={{
         background: `radial-gradient(1100px 700px at 85% 0%, #E6F7FA 0%, transparent 60%),
           radial-gradient(800px 500px at 8% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
           linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
       }}
     >
-      <div className="rounded-3xl border border-white bg-white/72 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6 mb-5">
+      <div className="rounded-[2rem] border border-white bg-white/78 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,122,153,0.10)] p-5 xl:p-6 mb-5">
         <div className="flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-6">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 text-xs font-black rounded-full px-3 py-1 border border-slate-200 bg-white/80 text-slate-700">
+            <div className="inline-flex items-center gap-2 text-[11px] font-black rounded-full px-3 py-1 border border-slate-200 bg-white/90 text-slate-700 tracking-[0.18em]">
               SHIPPING CALENDAR
             </div>
-            <h1 className="mt-3 text-3xl sm:text-5xl font-black text-slate-900">Ship Schedule</h1>
-            <p className="mt-3 text-slate-600 text-lg leading-relaxed">
+            <h1 className="mt-3 text-3xl xl:text-[3.35rem] leading-none font-black text-slate-900">Ship Schedule</h1>
+            <p className="mt-3 text-slate-600 text-base xl:text-[17px] leading-relaxed max-w-2xl">
               Schedule real ship dates for pre-shipping orders. Drag an order onto a calendar day or open it to set the shipping date manually.
             </p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-[13px] text-slate-500">
               Requested ship date stays separate from logistics scheduling.
             </p>
             {error && <p className="mt-3 text-sm text-rose-700">⚠️ {error}</p>}
@@ -348,7 +348,7 @@ export default function ShippingSchedulePage() {
                   type="button"
                   onClick={() => setViewMode('WEEK')}
                   className={[
-                    'h-10 px-4 rounded-xl text-sm font-bold transition',
+                    'h-9 px-4 rounded-xl text-[13px] font-bold transition',
                     viewMode === 'WEEK' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
                   ].join(' ')}
                 >
@@ -358,7 +358,7 @@ export default function ShippingSchedulePage() {
                   type="button"
                   onClick={() => setViewMode('MONTH')}
                   className={[
-                    'h-10 px-4 rounded-xl text-sm font-bold transition',
+                    'h-9 px-4 rounded-xl text-[13px] font-bold transition',
                     viewMode === 'MONTH' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
                   ].join(' ')}
                 >
@@ -368,19 +368,19 @@ export default function ShippingSchedulePage() {
 
               <button
                 onClick={() => navigatePeriod(-1)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
               >
                 <ChevronLeft size={16} /> Prev
               </button>
               <button
                 onClick={() => setFocusedDate(cloneUTC(new Date()))}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
               >
                 <CalendarDays size={16} /> Today
               </button>
               <button
                 onClick={() => navigatePeriod(1)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -390,11 +390,11 @@ export default function ShippingSchedulePage() {
                   await load()
                   setRefreshing(false)
                 }}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
               >
                 <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} /> Refresh
               </button>
-              <label className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white text-slate-900 font-semibold cursor-pointer">
+              <label className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white text-[13px] text-slate-900 font-semibold cursor-pointer">
                 <input
                   type="checkbox"
                   className="accent-sky-600"
@@ -405,26 +405,26 @@ export default function ShippingSchedulePage() {
               </label>
             </div>
 
-            <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">
+            <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-bold text-slate-700 shadow-sm">
               {viewMode === 'WEEK' ? 'Week' : 'Month'}: {periodLabel(viewMode, focusedDate)}
             </div>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 shadow-sm">
             Queue: {stats.total}
           </span>
-          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+          <span className="inline-flex items-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-700 shadow-sm">
             In View: {stats.scheduledInView}
           </span>
-          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+          <span className="inline-flex items-center rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-700 shadow-sm">
             Unscheduled: {stats.unscheduled}
           </span>
-          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-semibold text-sky-700">
+          <span className="inline-flex items-center rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-semibold text-sky-700 shadow-sm">
             Outside Period: {stats.outsideView}
           </span>
-          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">
+          <span className="inline-flex items-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700 shadow-sm">
             Overdue Request: {stats.overdueRequest}
           </span>
         </div>
@@ -474,7 +474,7 @@ export default function ShippingSchedulePage() {
           </div>
         </section>
       ) : (
-      <div className="grid gap-5 2xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid gap-5 2xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="space-y-5">
           <RailCard
             title="Unscheduled"
@@ -766,13 +766,13 @@ function DayColumn({
 }) {
   return (
     <div className="border-r border-slate-200 last:border-r-0 min-h-[72vh]">
-      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/80 sticky top-0 z-10">
+      <div className="px-3 py-3 border-b border-slate-200 bg-slate-50/80 sticky top-0 z-10">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-black text-slate-900">{title}</div>
-          <span className="text-[11px] font-black px-2 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-900">{count}</span>
+          <div className="text-[13px] font-black text-slate-900 leading-tight">{title}</div>
+          <span className="text-[10px] font-black px-2 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-900">{count}</span>
         </div>
       </div>
-      <div className="p-3 h-[calc(72vh-57px)] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
+      <div className="p-2.5 h-[calc(72vh-57px)] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
         {children}
       </div>
     </div>
@@ -812,7 +812,7 @@ function MonthCell({
       onDrop={onDrop}
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className={['text-sm font-bold', isCurrentMonth ? 'text-slate-900' : 'text-slate-400'].join(' ')}>
+        <span className={['text-[13px] font-bold', isCurrentMonth ? 'text-slate-900' : 'text-slate-400'].join(' ')}>
           {day.getUTCDate()}
         </span>
         <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
@@ -825,7 +825,7 @@ function MonthCell({
           <div className="h-8 rounded-xl bg-slate-100 animate-pulse" />
         </div>
       ) : orders.length === 0 ? null : (
-        <div className="space-y-2 overflow-y-auto max-h-[130px] pr-1">
+        <div className="space-y-1.5 overflow-y-auto max-h-[128px] pr-1">
           {orders.map((order) => (
             <MiniOrderCard
               key={order.id}
@@ -906,25 +906,25 @@ function MiniOrderCard({
       onDragStart={() => onDragStart(order.id)}
       onClick={() => onOpen(order)}
       className={[
-        'group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm cursor-pointer transition',
-        'hover:shadow-[0_12px_30px_rgba(2,132,199,0.10)]',
+        'group rounded-2xl border border-slate-200/90 bg-white/96 px-3 py-2.5 shadow-sm cursor-pointer transition',
+        'hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(2,132,199,0.12)]',
         draggingId === order.id ? 'opacity-60' : '',
         savingId === order.id ? 'ring-2 ring-sky-200' : '',
       ].join(' ')}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-extrabold text-slate-900">
+          <div className="truncate text-[13px] font-extrabold text-slate-900">
             {order.poolModel?.name || 'Order'}
           </div>
-          <div className="truncate text-[12px] text-slate-600">{order.dealer?.name || 'Dealer'}</div>
+          <div className="truncate text-[11px] text-slate-600">{order.dealer?.name || 'Dealer'}</div>
         </div>
         <div className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 cursor-grab active:cursor-grabbing shrink-0">
           <GripVertical size={14} />
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
           <ShipWheel size={12} /> {shippingMethodLabel(order.shippingMethod)}
         </span>
@@ -933,8 +933,8 @@ function MiniOrderCard({
         </span>
       </div>
 
-      <div className="mt-2 text-[11px] text-slate-500 truncate">{resolveFactoryName(order)} • {order.serialNumber || 'No serial'}</div>
-      <div className="mt-1 text-[11px] text-slate-500 truncate inline-flex items-center gap-1">
+      <div className="mt-2 text-[10px] text-slate-500 truncate">{resolveFactoryName(order)} • {order.serialNumber || 'No serial'}</div>
+      <div className="mt-1 text-[10px] text-slate-500 truncate inline-flex items-center gap-1">
         <MapPin size={11} /> {order.deliveryAddress || '—'}
       </div>
     </div>
@@ -951,8 +951,8 @@ function Field({
   wrap?: boolean
 }) {
   return (
-    <div className="text-sm">
-      <div className="text-slate-500">{label}</div>
+    <div className="text-[13px]">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <div className={`font-semibold text-slate-900 ${wrap ? '' : 'truncate'}`}>{children}</div>
     </div>
   )
