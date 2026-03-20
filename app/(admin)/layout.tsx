@@ -225,7 +225,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <div
-        className="min-h-screen relative flex flex-col"
+        className="min-h-screen relative flex flex-col print:bg-white"
         style={{
           background:
             `radial-gradient(1100px 700px at 80% 0%, rgba(35,189,215,0.20) 0%, transparent 60%),
@@ -234,7 +234,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         }}
       >
         {/* Top bar */}
-        <header className="sticky top-0 z-40 backdrop-blur-md bg-white/74 border-b [border-color:var(--gg-border)]">
+        <header className="sticky top-0 z-40 backdrop-blur-md bg-white/74 border-b [border-color:var(--gg-border)] print:hidden">
           <div className="w-full px-5 xl:px-6 2xl:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
@@ -261,19 +261,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="w-full px-5 xl:px-6 2xl:px-8 py-6 grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1">
-          <div className={menuOpen ? 'block lg:block' : 'hidden lg:block'}>
+        <div className="w-full px-5 xl:px-6 2xl:px-8 py-6 grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:min-h-[calc(100vh-4rem)] flex-1 print:block print:px-0 print:py-0">
+          <div className={`${menuOpen ? 'block lg:block' : 'hidden lg:block'} print:hidden`}>
             <AdminNav onNavigate={() => setMenuOpen(false)} />
           </div>
           <main className="min-w-0 text-[15px] leading-[1.45]">
-            <div className="rounded-2xl border bg-white/86 backdrop-blur-xl p-4 sm:p-6 shadow-[0_24px_64px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)]">
+            <div className="rounded-2xl border bg-white/86 backdrop-blur-xl p-4 sm:p-6 shadow-[0_24px_64px_rgba(13,47,69,0.14)] [border-color:var(--gg-border)] print:rounded-none print:border-0 print:bg-transparent print:p-0 print:shadow-none">
               {children}
             </div>
           </main>
         </div>
 
         <div
-          className="h-1 w-full"
+          className="h-1 w-full print:hidden"
           style={{ backgroundImage: 'linear-gradient(90deg, var(--gg-aqua-600), var(--gg-navy-800))' }}
         />
       </div>

@@ -401,6 +401,7 @@ export default function ShippingSchedulePage() {
 
   return (
     <div
+      data-ship-print-root
       className="min-h-screen p-4 xl:p-5 print:min-h-0 print:p-0"
       style={{
         background: `radial-gradient(1100px 700px at 85% 0%, #E6F7FA 0%, transparent 60%),
@@ -591,7 +592,7 @@ export default function ShippingSchedulePage() {
         </section>
       ) : (
       <div
-        className="grid gap-5 xl:grid-cols-1 2xl:[grid-template-columns:minmax(240px,var(--ship-rail-width))_12px_minmax(0,1fr)]"
+        className="grid gap-5 xl:grid-cols-1 2xl:[grid-template-columns:minmax(240px,var(--ship-rail-width))_12px_minmax(0,1fr)] print:hidden"
         style={{ ['--ship-rail-width' as string]: `${railWidth}px` }}
       >
         <aside className="space-y-5">
@@ -734,6 +735,26 @@ export default function ShippingSchedulePage() {
         </section>
       </div>
       )}
+
+      <section className="hidden print:block">
+        {viewMode === 'WEEK' ? (
+          <PrintWeekView
+            days={weekDays}
+            grouped={grouped}
+            unscheduled={grouped[UNSCHEDULED_KEY] || []}
+            outside={grouped[OUTSIDE_VIEW_KEY] || []}
+          />
+        ) : (
+          <PrintMonthView
+            monthHeaders={monthHeaders}
+            monthCells={monthCells}
+            grouped={grouped}
+            unscheduled={grouped[UNSCHEDULED_KEY] || []}
+            outside={grouped[OUTSIDE_VIEW_KEY] || []}
+            monthAnchorKey={monthAnchorKey}
+          />
+        )}
+      </section>
 
       {open && active && (
         <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1139,6 +1160,139 @@ function Field({
     <div className="text-[13px]">
       <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <div className={`font-semibold text-slate-900 ${wrap ? '' : 'truncate'}`}>{children}</div>
+    </div>
+  )
+}
+
+function PrintOrderLine({ order }: { order: Order }) {
+  return (
+    <div className="rounded-lg border border-slate-300 bg-white px-2 py-1.5">
+      <div className="text-[10px] font-bold text-slate-900">
+        {order.poolModel?.name || 'Order'}{order.color?.name ? ` • ${order.color.name}` : ''}
+      </div>
+      <div className="text-[9px] text-slate-700">
+        {order.dealer?.name || 'Dealer'} • {resolveFactoryName(order)}
+      </div>
+      <div className="text-[9px] text-slate-600">
+        {shippingMethodLabel(order.shippingMethod)} • Req {formatCompactDate(order.requestedShipDate)} • {order.serialNumber || 'No serial'}
+      </div>
+    </div>
+  )
+}
+
+function PrintWeekView({
+  days,
+  grouped,
+  unscheduled,
+  outside,
+}: {
+  days: Date[]
+  grouped: Record<string, Order[]>
+  unscheduled: Order[]
+  outside: Order[]
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-7 gap-2">
+        {days.map((day) => {
+          const key = dayKeyUTC(day)
+          const list = grouped[key] || []
+          return (
+            <div key={key} className="rounded-xl border border-slate-300 bg-white p-2 align-top">
+              <div className="border-b border-slate-200 pb-1">
+                <div className="text-[11px] font-black text-slate-900">
+                  {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                </div>
+                <div className="text-[9px] text-slate-500">{list.length} scheduled</div>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {list.length ? list.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">No orders</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {(unscheduled.length > 0 || outside.length > 0) && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-300 bg-white p-3">
+            <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
+            <div className="mt-2 space-y-1.5">
+              {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-300 bg-white p-3">
+            <div className="text-[11px] font-black text-slate-900">Outside Period</div>
+            <div className="mt-2 space-y-1.5">
+              {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PrintMonthView({
+  monthHeaders,
+  monthCells,
+  grouped,
+  unscheduled,
+  outside,
+  monthAnchorKey,
+}: {
+  monthHeaders: string[]
+  monthCells: Date[]
+  grouped: Record<string, Order[]>
+  unscheduled: Order[]
+  outside: Order[]
+  monthAnchorKey: string
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-7 border border-slate-300">
+        {monthHeaders.map((label) => (
+          <div key={label} className="border-b border-r border-slate-300 bg-slate-50 px-2 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
+            {label}
+          </div>
+        ))}
+        {monthCells.map((day) => {
+          const key = dayKeyUTC(day)
+          const list = grouped[key] || []
+          const isCurrentMonth = `${day.getUTCFullYear()}-${day.getUTCMonth()}` === monthAnchorKey
+          return (
+            <div key={key} className={`min-h-[110px] border-r border-b border-slate-300 px-2 py-1.5 ${isCurrentMonth ? 'bg-white' : 'bg-slate-50/70'}`}>
+              <div className={`text-[10px] font-black ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>{day.getUTCDate()}</div>
+              <div className="mt-1 space-y-1">
+                {list.slice(0, 4).map((order) => (
+                  <div key={order.id} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[9px] leading-tight">
+                    <div className="font-bold text-slate-900 truncate">{order.poolModel?.name || 'Order'}</div>
+                    <div className="truncate text-slate-600">{order.dealer?.name || 'Dealer'}</div>
+                  </div>
+                ))}
+                {list.length > 4 ? <div className="text-[9px] text-slate-500">+{list.length - 4} more</div> : null}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {(unscheduled.length > 0 || outside.length > 0) && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-300 bg-white p-3">
+            <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
+            <div className="mt-2 space-y-1.5">
+              {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-300 bg-white p-3">
+            <div className="text-[11px] font-black text-slate-900">Outside Period</div>
+            <div className="mt-2 space-y-1.5">
+              {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
