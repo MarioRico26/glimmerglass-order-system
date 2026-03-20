@@ -865,6 +865,10 @@ export default function ShippingSchedulePage() {
             background: #fff !important;
           }
 
+          [data-ship-print-root] {
+            background: #fff !important;
+          }
+
           body * {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
@@ -1205,7 +1209,7 @@ function PrintWeekView({
                 </div>
                 <div className="text-[9px] text-slate-500">{list.length} scheduled</div>
               </div>
-              <div className="mt-2 space-y-1.5">
+              <div className="mt-2 min-h-[34px] space-y-1">
                 {list.length ? list.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">No orders</div>}
               </div>
             </div>
@@ -1217,13 +1221,13 @@ function PrintWeekView({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-slate-300 bg-white p-3">
             <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
             </div>
           </div>
           <div className="rounded-xl border border-slate-300 bg-white p-3">
             <div className="text-[11px] font-black text-slate-900">Outside Period</div>
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
             </div>
           </div>
@@ -1281,13 +1285,13 @@ function PrintMonthView({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-slate-300 bg-white p-3">
             <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
             </div>
           </div>
           <div className="rounded-xl border border-slate-300 bg-white p-3">
             <div className="text-[11px] font-black text-slate-900">Outside Period</div>
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
             </div>
           </div>
