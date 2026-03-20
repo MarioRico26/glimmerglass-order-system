@@ -98,6 +98,7 @@ model Order {
   scheduledShipDate  DateTime?
   serialNumber       String?
   productionPriority Int?
+  scheduledProductionDate DateTime?
 
   // Inventory (optional link)
   inventoryTxns InventoryTxn[]

@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
       'status',
       'requestedShipDate',
       'scheduledShipDate',
+      'scheduledProductionDate',
       'productionPriority',
     ])
     const safeSort = allowedSort.has(sort) ? sort : 'createdAt'
@@ -132,6 +133,7 @@ export async function GET(req: NextRequest) {
         // ✅ LO QUE NECESITA EL BOARD
         requestedShipDate: true,
         scheduledShipDate: true,
+        scheduledProductionDate: true,
         productionPriority: true,
         serialNumber: true,
 
@@ -335,6 +337,9 @@ export async function POST(req: NextRequest) {
 
           requestedShipDate: body.requestedShipDate ? new Date(body.requestedShipDate) : null,
           scheduledShipDate: body.scheduledShipDate ? new Date(body.scheduledShipDate) : null,
+          scheduledProductionDate: body.scheduledProductionDate
+            ? new Date(body.scheduledProductionDate)
+            : null,
           productionPriority:
             typeof body.productionPriority === 'number' ? body.productionPriority : null,
         },

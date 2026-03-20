@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const priorityRaw = body?.productionPriority
     const shipRaw = body?.requestedShipDate
+    const productionDateRaw = body?.scheduledProductionDate
 
     const productionPriority =
       priorityRaw === null || priorityRaw === '' || priorityRaw === undefined
@@ -42,18 +43,27 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         ? null
         : new Date(String(shipRaw))
 
+    const scheduledProductionDate =
+      productionDateRaw === null || productionDateRaw === '' || productionDateRaw === undefined
+        ? null
+        : new Date(String(productionDateRaw))
+
     if (requestedShipDate && Number.isNaN(+requestedShipDate)) {
       return NextResponse.json({ message: 'Invalid requestedShipDate' }, { status: 400 })
+    }
+    if (scheduledProductionDate && Number.isNaN(+scheduledProductionDate)) {
+      return NextResponse.json({ message: 'Invalid scheduledProductionDate' }, { status: 400 })
     }
 
     const updated = await prisma.order.update({
       where: { id },
-      data: { productionPriority, requestedShipDate },
+      data: { productionPriority, requestedShipDate, scheduledProductionDate },
       select: {
         id: true,
         status: true,
         productionPriority: true,
         requestedShipDate: true,
+        scheduledProductionDate: true,
         createdAt: true,
         deliveryAddress: true,
         paymentProofUrl: true,
