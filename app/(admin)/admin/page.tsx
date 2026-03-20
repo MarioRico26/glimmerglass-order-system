@@ -1,11 +1,22 @@
-// app/(admin)/admin/page.tsx
 'use client'
 
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { PackageSearch, CheckCircle2, Clock, CircleCheckBig, CircleX } from 'lucide-react'
+import {
+  ArrowRight,
+  Boxes,
+  CalendarDays,
+  CheckCircle2,
+  CircleAlert,
+  CircleCheckBig,
+  CircleX,
+  Clock3,
+  Factory,
+  PackageSearch,
+  Truck,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -15,6 +26,9 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  BarChart,
+  Bar,
+  Legend,
 } from 'recharts'
 
 type FactoryRow = {
@@ -42,10 +56,45 @@ type PoolStockSummary = {
 }
 
 const emptyMetrics: Metrics = {
-    totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, CANCELED: 0 },
+  totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, CANCELED: 0 },
   monthly: [],
   recent: [],
   byFactory: [],
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'PENDING_PAYMENT_APPROVAL':
+      return 'Needs Deposit'
+    case 'IN_PRODUCTION':
+      return 'In Production'
+    case 'PRE_SHIPPING':
+      return 'Pre-Shipping'
+    case 'COMPLETED':
+      return 'Completed'
+    case 'CANCELED':
+      return 'Canceled'
+    default:
+      return status.replaceAll('_', ' ')
+  }
+}
+
+function statusPill(status: string) {
+  const base = 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold'
+  switch (status) {
+    case 'PENDING_PAYMENT_APPROVAL':
+      return <span className={`${base} border-amber-200 bg-amber-50 text-amber-800`}>Needs Deposit</span>
+    case 'IN_PRODUCTION':
+      return <span className={`${base} border-indigo-200 bg-indigo-50 text-indigo-800`}>In Production</span>
+    case 'PRE_SHIPPING':
+      return <span className={`${base} border-violet-200 bg-violet-50 text-violet-800`}>Pre-Shipping</span>
+    case 'COMPLETED':
+      return <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-800`}>Completed</span>
+    case 'CANCELED':
+      return <span className={`${base} border-rose-200 bg-rose-50 text-rose-800`}>Canceled</span>
+    default:
+      return <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>{statusLabel(status)}</span>
+  }
 }
 
 export default function AdminDashboard() {
@@ -100,121 +149,190 @@ export default function AdminDashboard() {
     )
   }, [poolStock])
 
-  if (loading) return <div className="p-2 text-slate-600">Loading…</div>
-
-  const Stat = ({ label, value, Icon }:{
-    label: string; value: number | string; Icon: LucideIcon
-  }) => (
-    <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-slate-600 text-sm">{label}</p>
-        <Icon size={18} className="text-slate-500" />
-      </div>
-      <div className="mt-2 text-3xl font-black text-slate-900">{value}</div>
-    </div>
+  const factoryLoadData = useMemo(
+    () =>
+      metrics.byFactory.map((f) => ({
+        name: f.factoryName,
+        production: f.totals.IN_PRODUCTION || 0,
+        preShipping: f.totals.PRE_SHIPPING || 0,
+        needsDeposit: f.totals.PENDING_PAYMENT_APPROVAL || 0,
+      })),
+    [metrics.byFactory]
   )
 
+  const actionLinks = [
+    { label: 'Order List', href: '/admin/orders', Icon: PackageSearch, tone: 'slate' },
+    { label: 'Production Schedule', href: '/admin/production', Icon: Factory, tone: 'indigo' },
+    { label: 'Ship Schedule', href: '/admin/shipping', Icon: CalendarDays, tone: 'sky' },
+    { label: 'Pool Stock', href: '/admin/pool-stock', Icon: Boxes, tone: 'emerald' },
+  ] as const
+
+  if (loading) return <div className="p-2 text-slate-600">Loading…</div>
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Admin Dashboard</h1>
-        <p className="text-slate-600">
-          Welcome, {session?.user?.email} ({session?.user?.role})
-        </p>
-      </div>
-
-      {/* Stats */}
-            <div className="grid sm:grid-cols-5 gap-4 mb-6">
-                <Stat label="Total Orders" value={t.total || 0} Icon={PackageSearch} />
-                <Stat label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
-                <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
-                <Stat label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={CheckCircle2} />
-                <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
+    <div className="space-y-6">
+      <section className="rounded-[2rem] border border-white bg-white/82 p-6 xl:p-7 shadow-[0_24px_64px_rgba(13,47,69,0.14)] backdrop-blur-xl">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px] xl:items-start">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-[11px] font-black tracking-[0.18em] text-slate-700">
+              OPERATIONS OVERVIEW
             </div>
+            <h1 className="mt-3 text-3xl xl:text-[3.4rem] leading-none font-black text-slate-900">
+              Admin Dashboard
+            </h1>
+            <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-slate-600 xl:text-[17px]">
+              Live operational snapshot across orders, production, shipping, and finished pool stock.
+            </p>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Signed in as {session?.user?.email} ({session?.user?.role})
+            </p>
 
-      {/* Pool stock snapshot (always visible near top) */}
-      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4 mb-6">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-lg font-bold text-slate-900">Pool Stock Snapshot</h3>
-          <Link
-            href="/admin/pool-stock"
-            className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Open Pool Stock
-          </Link>
-        </div>
-        <div className="grid sm:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Ready</div>
-            <div className="text-2xl font-black text-emerald-800">{poolStockTotals.READY}</div>
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {actionLinks.map(({ label, href, Icon, tone }) => (
+                <QuickAction key={href} label={label} href={href} Icon={Icon} tone={tone} />
+              ))}
+            </div>
           </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Reserved</div>
-            <div className="text-2xl font-black text-amber-800">{poolStockTotals.RESERVED}</div>
-          </div>
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2">
-            <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">In Production</div>
-            <div className="text-2xl font-black text-indigo-800">{poolStockTotals.IN_PRODUCTION}</div>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-            <div className="text-xs font-semibold text-rose-700 uppercase tracking-wide">Damaged</div>
-            <div className="text-2xl font-black text-rose-800">{poolStockTotals.DAMAGED}</div>
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)]">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-300">Operations Pulse</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <PulseRow label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} tone="amber" />
+              <PulseRow label="In Production" value={t.IN_PRODUCTION || 0} tone="indigo" />
+              <PulseRow label="Pre-Shipping" value={t.PRE_SHIPPING || 0} tone="violet" />
+              <PulseRow label="Ready Pool Stock" value={poolStockTotals.READY || 0} tone="emerald" />
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Chart + Recent */}
-      <div className="grid xl:grid-cols-3 gap-6 mb-6">
-        <div className="xl:col-span-2 rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-slate-900">Orders last 6 months</h3>
+      <section className="grid gap-4 xl:grid-cols-5">
+        <StatCard label="Total Orders" value={t.total || 0} Icon={PackageSearch} tone="slate" />
+        <StatCard label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock3} tone="amber" />
+        <StatCard label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} tone="indigo" />
+        <StatCard label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={Truck} tone="violet" />
+        <StatCard label="Completed" value={t.COMPLETED || 0} Icon={CheckCircle2} tone="emerald" />
+      </section>
+
+      <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Volume</div>
+              <h2 className="mt-1 text-xl font-black text-slate-900">Orders Last 6 Months</h2>
+            </div>
           </div>
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={metrics.monthly}>
                 <defs>
                   <linearGradient id="gradAdmin" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={aqua} stopOpacity={0.8} />
-                    <stop offset="100%" stopColor={deep} stopOpacity={0.2} />
+                    <stop offset="0%" stopColor={aqua} stopOpacity={0.82} />
+                    <stop offset="100%" stopColor={deep} stopOpacity={0.18} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6eef2" />
                 <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
                 <Tooltip />
-                <Area type="monotone" dataKey="count" stroke={deep} fill="url(#gradAdmin)" />
+                <Area type="monotone" dataKey="count" stroke={deep} strokeWidth={2.5} fill="url(#gradAdmin)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Recent orders</h3>
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Recent Activity</div>
+              <h2 className="mt-1 text-xl font-black text-slate-900">Latest Orders</h2>
+            </div>
+            <Link href="/admin/orders" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50">
+              Open Orders <ArrowRight size={15} />
+            </Link>
+          </div>
           {metrics.recent.length === 0 ? (
             <div className="text-slate-500">No recent orders.</div>
           ) : (
             <div className="space-y-3">
               {metrics.recent.map((o) => (
-                <div key={o.id} className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-slate-900">{o.dealer} • {o.factory}</div>
-                    <div className="text-sm text-slate-600">
-                      {o.model} ({o.color}) • {new Date(o.createdAt).toLocaleDateString()}
+                <Link key={o.id} href={`/admin/orders/${o.id}/history`} className="block rounded-2xl border border-slate-200 bg-white/90 p-4 transition hover:border-sky-200 hover:shadow-[0_12px_30px_rgba(2,132,199,0.08)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[14px] font-extrabold text-slate-900">{o.model} • {o.color}</div>
+                      <div className="mt-1 truncate text-[13px] text-slate-600">{o.dealer} • {o.factory}</div>
+                      <div className="mt-1 text-[12px] text-slate-500">{new Date(o.createdAt).toLocaleString()}</div>
                     </div>
+                    {statusPill(o.status)}
                   </div>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                    {o.status.replaceAll('_', ' ')}
-                  </span>
-                </div>
+                </Link>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* By factory */}
-      <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-        <h3 className="text-lg font-bold text-slate-900 mb-3">By factory</h3>
+      <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="mb-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Factory Load</div>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Orders by Factory Stage</h2>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={factoryLoadData} layout="vertical" margin={{ left: 16, right: 16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6eef2" />
+                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" width={120} tick={{ fill: '#475569', fontSize: 12 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                <Bar dataKey="production" name="In Production" fill="#6366f1" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="preShipping" name="Pre-Shipping" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="needsDeposit" name="Needs Deposit" fill="#f59e0b" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Finished Pools</div>
+              <h2 className="mt-1 text-xl font-black text-slate-900">Pool Stock Snapshot</h2>
+            </div>
+            <Link href="/admin/pool-stock" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50">
+              Open Pool Stock <ArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SnapshotCard label="Ready" value={poolStockTotals.READY} tone="emerald" />
+            <SnapshotCard label="Reserved" value={poolStockTotals.RESERVED} tone="amber" />
+            <SnapshotCard label="In Production" value={poolStockTotals.IN_PRODUCTION} tone="indigo" />
+            <SnapshotCard label="Damaged" value={poolStockTotals.DAMAGED} tone="rose" />
+          </div>
+
+          <div className="mt-5 space-y-2">
+            {poolStock.map((row) => (
+              <div key={row.factoryId} className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[14px] font-extrabold text-slate-900">{row.factoryName}</div>
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">Ready {row.totals.READY}</span>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">Reserved {row.totals.RESERVED}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {poolStock.length === 0 && <div className="text-slate-500">No stock data.</div>}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+        <div className="mb-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Factory Detail</div>
+          <h2 className="mt-1 text-xl font-black text-slate-900">By Factory</h2>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="text-slate-600">
@@ -222,63 +340,137 @@ export default function AdminDashboard() {
                 <th className="text-left py-2 pr-4">Factory</th>
                 <th className="text-right py-2 px-3">Total</th>
                 <th className="text-right py-2 px-3">Needs Deposit</th>
-                            <th className="text-right py-2 px-3">In Prod.</th>
-                            <th className="text-right py-2 px-3">Pre-Ship</th>
-                            <th className="text-right py-2 px-3">Completed</th>
+                <th className="text-right py-2 px-3">In Production</th>
+                <th className="text-right py-2 px-3">Pre-Shipping</th>
+                <th className="text-right py-2 px-3">Completed</th>
+                <th className="text-right py-2 pl-3">Canceled</th>
               </tr>
             </thead>
             <tbody>
               {metrics.byFactory.map((f) => (
                 <tr key={f.factoryId} className="border-t border-slate-100">
-                  <td className="py-2 pr-4 font-medium text-slate-900">{f.factoryName}</td>
-                  <td className="py-2 px-3 text-right">{f.totals.total}</td>
-                  <td className="py-2 px-3 text-right">{f.totals.PENDING_PAYMENT_APPROVAL}</td>
-                                <td className="py-2 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
-                                <td className="py-2 px-3 text-right">{f.totals.PRE_SHIPPING}</td>
-                                <td className="py-2 px-3 text-right">{f.totals.COMPLETED}</td>
-                            </tr>
-                        ))}
-                        {metrics.byFactory.length === 0 && (
-                            <tr><td colSpan={6} className="py-3 text-slate-500">No data.</td></tr>
-                        )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Pool stock summary */}
-      <div className="mt-6 rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,122,153,0.10)] p-4">
-        <h3 className="text-lg font-bold text-slate-900 mb-3">Pool stock by factory (detail)</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="text-slate-600">
-              <tr>
-                <th className="text-left py-2 pr-4">Factory</th>
-                <th className="text-right py-2 px-3">Ready</th>
-                <th className="text-right py-2 px-3">Reserved</th>
-                <th className="text-right py-2 px-3">In Production</th>
-                <th className="text-right py-2 px-3">Damaged</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poolStock.map((row) => (
-                <tr key={row.factoryId} className="border-t border-slate-100">
-                  <td className="py-2 pr-4 font-medium text-slate-900">{row.factoryName}</td>
-                  <td className="py-2 px-3 text-right">{row.totals.READY}</td>
-                  <td className="py-2 px-3 text-right">{row.totals.RESERVED}</td>
-                  <td className="py-2 px-3 text-right">{row.totals.IN_PRODUCTION}</td>
-                  <td className="py-2 px-3 text-right">{row.totals.DAMAGED}</td>
+                  <td className="py-3 pr-4 font-semibold text-slate-900">{f.factoryName}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.total}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.PENDING_PAYMENT_APPROVAL}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.PRE_SHIPPING}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.COMPLETED}</td>
+                  <td className="py-3 pl-3 text-right">{f.totals.CANCELED}</td>
                 </tr>
               ))}
-              {poolStock.length === 0 && (
+              {metrics.byFactory.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-3 text-slate-500">No stock data.</td>
+                  <td colSpan={7} className="py-4 text-slate-500">No data.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+      </section>
+    </div>
+  )
+}
+
+function QuickAction({
+  label,
+  href,
+  Icon,
+  tone,
+}: {
+  label: string
+  href: string
+  Icon: LucideIcon
+  tone: 'slate' | 'indigo' | 'sky' | 'emerald'
+}) {
+  const tones = {
+    slate: 'border-slate-200 bg-white text-slate-900 hover:border-slate-300',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-900 hover:border-indigo-300',
+    sky: 'border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300',
+  }
+  return (
+    <Link href={href} className={`group rounded-[1.4rem] border px-4 py-4 transition shadow-sm ${tones[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+          <Icon size={18} />
+        </div>
+        <ArrowRight size={16} className="opacity-55 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
+      <div className="mt-4 text-[15px] font-black">{label}</div>
+    </Link>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  Icon,
+  tone,
+}: {
+  label: string
+  value: number | string
+  Icon: LucideIcon
+  tone: 'slate' | 'amber' | 'indigo' | 'violet' | 'emerald'
+}) {
+  const tones = {
+    slate: 'border-slate-200 bg-white/82 text-slate-900',
+    amber: 'border-amber-200 bg-amber-50/88 text-amber-900',
+    indigo: 'border-indigo-200 bg-indigo-50/88 text-indigo-900',
+    violet: 'border-violet-200 bg-violet-50/88 text-violet-900',
+    emerald: 'border-emerald-200 bg-emerald-50/88 text-emerald-900',
+  }
+  return (
+    <div className={`rounded-[1.6rem] border p-4 shadow-[0_12px_36px_rgba(13,47,69,0.08)] ${tones[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] font-semibold opacity-80">{label}</div>
+        <Icon size={18} className="opacity-75" />
+      </div>
+      <div className="mt-3 text-[2rem] leading-none font-black">{value}</div>
+    </div>
+  )
+}
+
+function PulseRow({ label, value, tone }: { label: string; value: number; tone: 'amber' | 'indigo' | 'violet' | 'emerald' }) {
+  const tones = {
+    amber: 'bg-amber-500',
+    indigo: 'bg-indigo-500',
+    violet: 'bg-violet-500',
+    emerald: 'bg-emerald-500',
+  }
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-200">
+          <span className={`h-2.5 w-2.5 rounded-full ${tones[tone]}`} />
+          {label}
+        </div>
+        <div className="text-[1.3rem] font-black text-white">{value}</div>
+      </div>
+    </div>
+  )
+}
+
+function SnapshotCard({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'indigo' | 'rose' }) {
+  const tones = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-900',
+    rose: 'border-rose-200 bg-rose-50 text-rose-900',
+  }
+  const icons = {
+    emerald: Factory,
+    amber: CircleAlert,
+    indigo: CircleCheckBig,
+    rose: CircleX,
+  }
+  const Icon = icons[tone]
+  return (
+    <div className={`rounded-[1.35rem] border px-4 py-4 ${tones[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[12px] font-semibold uppercase tracking-[0.12em] opacity-80">{label}</div>
+        <Icon size={16} className="opacity-75" />
+      </div>
+      <div className="mt-3 text-[1.9rem] leading-none font-black">{value}</div>
     </div>
   )
 }
