@@ -409,7 +409,7 @@ export default function ShippingSchedulePage() {
           linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
       }}
     >
-      <div className="hidden print:block mb-4 border-b border-slate-300 pb-4">
+      <div data-ship-print-header className="hidden print:block mb-4 border-b border-slate-300 pb-4">
         <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Glimmerglass Shipping Calendar</div>
         <h1 className="mt-2 text-2xl font-black text-slate-900">Ship Schedule</h1>
         <div className="mt-2 text-sm text-slate-700">
@@ -421,7 +421,7 @@ export default function ShippingSchedulePage() {
         </div>
       </div>
 
-      <div className="rounded-[2rem] border border-white bg-white/78 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,122,153,0.10)] p-5 xl:p-6 mb-5 print:hidden">
+      <div data-ship-screen className="rounded-[2rem] border border-white bg-white/78 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,122,153,0.10)] p-5 xl:p-6 mb-5 print:hidden">
         <div className="flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-6">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 text-[11px] font-black rounded-full px-3 py-1 border border-slate-200 bg-white/90 text-slate-700 tracking-[0.18em]">
@@ -592,6 +592,7 @@ export default function ShippingSchedulePage() {
         </section>
       ) : (
       <div
+        data-ship-screen
         className="grid gap-5 xl:grid-cols-1 2xl:[grid-template-columns:minmax(240px,var(--ship-rail-width))_12px_minmax(0,1fr)] print:hidden"
         style={{ ['--ship-rail-width' as string]: `${railWidth}px` }}
       >
@@ -736,7 +737,7 @@ export default function ShippingSchedulePage() {
       </div>
       )}
 
-      <section className="hidden print:block">
+      <section data-ship-print className="hidden print:block">
         {viewMode === 'WEEK' ? (
           <PrintWeekView
             days={weekDays}
@@ -863,6 +864,18 @@ export default function ShippingSchedulePage() {
 
           [data-ship-print-root] {
             background: #fff !important;
+          }
+
+          [data-ship-screen] {
+            display: none !important;
+          }
+
+          [data-ship-print] {
+            display: block !important;
+          }
+
+          [data-ship-print-header] {
+            display: block !important;
           }
 
           body * {
