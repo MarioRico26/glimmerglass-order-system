@@ -10,6 +10,7 @@ import {
   ExternalLink,
   GripVertical,
   MapPin,
+  Printer,
   RefreshCw,
   Search,
   ShipWheel,
@@ -396,17 +397,30 @@ export default function ShippingSchedulePage() {
     viewMode === 'WEEK'
       ? 'Already scheduled, but not inside this week'
       : 'Already scheduled, but not inside this month'
+  const generatedAt = new Date().toLocaleString()
 
   return (
     <div
-      className="min-h-screen p-4 xl:p-5"
+      className="min-h-screen p-4 xl:p-5 print:min-h-0 print:p-0"
       style={{
         background: `radial-gradient(1100px 700px at 85% 0%, #E6F7FA 0%, transparent 60%),
           radial-gradient(800px 500px at 8% 90%, rgba(0,178,202,0.10) 0%, transparent 60%),
           linear-gradient(180deg, #F7FBFD 0%, #EBF6F9 100%)`,
       }}
     >
-      <div className="rounded-[2rem] border border-white bg-white/78 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,122,153,0.10)] p-5 xl:p-6 mb-5">
+      <div className="hidden print:block mb-4 border-b border-slate-300 pb-4">
+        <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Glimmerglass Shipping Calendar</div>
+        <h1 className="mt-2 text-2xl font-black text-slate-900">Ship Schedule</h1>
+        <div className="mt-2 text-sm text-slate-700">
+          {viewMode === 'WEEK' ? 'Week' : 'Month'}: {periodLabel(viewMode, focusedDate)}
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
+          Generated: {generatedAt}
+          {railFilter.trim() ? ` • Filter: ${railFilter.trim()}` : ''}
+        </div>
+      </div>
+
+      <div className="rounded-[2rem] border border-white bg-white/78 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,122,153,0.10)] p-5 xl:p-6 mb-5 print:hidden">
         <div className="flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-6">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 text-[11px] font-black rounded-full px-3 py-1 border border-slate-200 bg-white/90 text-slate-700 tracking-[0.18em]">
@@ -474,6 +488,12 @@ export default function ShippingSchedulePage() {
                 className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
               >
                 <RefreshCw size={16} className={refreshing ? 'animate-spin-slow' : ''} /> Refresh
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-[13px] text-slate-900 font-semibold"
+              >
+                <Printer size={16} /> Print
               </button>
               <label className="inline-flex items-center gap-2 h-9 px-4 rounded-2xl border border-slate-200 bg-white text-[13px] text-slate-900 font-semibold cursor-pointer">
                 <input
@@ -630,7 +650,7 @@ export default function ShippingSchedulePage() {
           </RailCard>
         </aside>
 
-        <div className="hidden 2xl:flex items-stretch justify-center">
+        <div className="hidden 2xl:flex items-stretch justify-center print:hidden">
           <button
             type="button"
             onMouseDown={() => setResizingRail(true)}
@@ -646,7 +666,7 @@ export default function ShippingSchedulePage() {
           </button>
         </div>
 
-        <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden">
+        <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden print:shadow-none print:border-slate-300 print:bg-white">
           {viewMode === 'WEEK' ? (
             <div className="grid grid-cols-7 min-h-[72vh]">
               {weekDays.map((day) => {
@@ -812,6 +832,23 @@ export default function ShippingSchedulePage() {
         .animate-spin-slow {
           animation: spin 1.2s linear infinite;
         }
+
+        @media print {
+          @page {
+            size: landscape;
+            margin: 0.5in;
+          }
+
+          html,
+          body {
+            background: #fff !important;
+          }
+
+          body * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
       `}</style>
     </div>
   )
@@ -847,7 +884,7 @@ function RailCard({
     : 'border-sky-200 bg-sky-50 text-sky-900'
 
   return (
-    <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden">
+    <section className="rounded-3xl border border-white bg-white/82 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,122,153,0.10)] overflow-hidden print:break-inside-avoid print:shadow-none print:border-slate-300 print:bg-white">
       <header className="px-5 py-4 border-b border-slate-200 bg-white/75">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -859,7 +896,7 @@ function RailCard({
             <button
               type="button"
               onClick={onToggle}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 print:hidden"
               aria-expanded={expanded}
               aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
               title={expanded ? 'Collapse panel' : 'Expand panel'}
@@ -879,7 +916,7 @@ function RailCard({
           >
             {children}
           </div>
-          <div className="border-t border-slate-100 bg-white/80 px-4 py-2">
+          <div className="border-t border-slate-100 bg-white/80 px-4 py-2 print:hidden">
             <button
               type="button"
               onMouseDown={(e) => onResizeStart(e.clientY, height)}
@@ -913,14 +950,14 @@ function DayColumn({
   onDrop?: React.DragEventHandler<HTMLDivElement> | (() => void)
 }) {
   return (
-    <div className="border-r border-slate-200 last:border-r-0 min-h-[72vh]">
-      <div className="px-3 py-3 border-b border-slate-200 bg-slate-50/80 sticky top-0 z-10">
+    <div className="border-r border-slate-200 last:border-r-0 min-h-[72vh] print:min-h-0">
+      <div className="px-3 py-3 border-b border-slate-200 bg-slate-50/80 sticky top-0 z-10 print:static print:bg-white">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[13px] font-black text-slate-900 leading-tight">{title}</div>
           <span className="text-[10px] font-black px-2 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-900">{count}</span>
         </div>
       </div>
-      <div className="p-2.5 h-[calc(72vh-57px)] overflow-y-auto" onDragOver={onDragOver} onDrop={onDrop as any}>
+      <div className="p-2.5 h-[calc(72vh-57px)] overflow-y-auto print:h-auto print:overflow-visible" onDragOver={onDragOver} onDrop={onDrop as any}>
         {children}
       </div>
     </div>
@@ -953,7 +990,7 @@ function MonthCell({
   return (
     <div
       className={[
-        'border-r border-b border-slate-200 p-2 overflow-hidden',
+        'border-r border-b border-slate-200 p-2 overflow-hidden print:break-inside-avoid',
         isCurrentMonth ? 'bg-white' : 'bg-slate-50/70',
       ].join(' ')}
       onDragOver={onDragOver}
@@ -973,7 +1010,7 @@ function MonthCell({
           <div className="h-8 rounded-xl bg-slate-100 animate-pulse" />
         </div>
       ) : orders.length === 0 ? null : (
-        <div className="space-y-1.5 overflow-y-auto max-h-[128px] pr-1">
+        <div className="space-y-1.5 overflow-y-auto max-h-[128px] pr-1 print:max-h-none print:overflow-visible">
           {orders.map((order) => (
             <MiniOrderCard
               key={order.id}
@@ -1054,7 +1091,7 @@ function MiniOrderCard({
       onDragStart={() => onDragStart(order.id)}
       onClick={() => onOpen(order)}
       className={[
-        'group rounded-2xl border border-slate-200/90 bg-white/96 px-3 py-2.5 shadow-sm cursor-pointer transition',
+        'group rounded-2xl border border-slate-200/90 bg-white/96 px-3 py-2.5 shadow-sm cursor-pointer transition print:break-inside-avoid print:shadow-none print:border-slate-300',
         'hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(2,132,199,0.12)]',
         draggingId === order.id ? 'opacity-60' : '',
         savingId === order.id ? 'ring-2 ring-sky-200' : '',
