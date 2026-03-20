@@ -741,16 +741,12 @@ export default function ShippingSchedulePage() {
           <PrintWeekView
             days={weekDays}
             grouped={grouped}
-            unscheduled={grouped[UNSCHEDULED_KEY] || []}
-            outside={grouped[OUTSIDE_VIEW_KEY] || []}
           />
         ) : (
           <PrintMonthView
             monthHeaders={monthHeaders}
             monthCells={monthCells}
             grouped={grouped}
-            unscheduled={grouped[UNSCHEDULED_KEY] || []}
-            outside={grouped[OUTSIDE_VIEW_KEY] || []}
             monthAnchorKey={monthAnchorKey}
           />
         )}
@@ -1187,16 +1183,12 @@ function PrintOrderLine({ order }: { order: Order }) {
 function PrintWeekView({
   days,
   grouped,
-  unscheduled,
-  outside,
 }: {
   days: Date[]
   grouped: Record<string, Order[]>
-  unscheduled: Order[]
-  outside: Order[]
 }) {
   return (
-    <div className="space-y-4">
+    <div>
       <div className="grid grid-cols-7 gap-2">
         {days.map((day) => {
           const key = dayKeyUTC(day)
@@ -1216,23 +1208,6 @@ function PrintWeekView({
           )
         })}
       </div>
-
-      {(unscheduled.length > 0 || outside.length > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-slate-300 bg-white p-3">
-            <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-300 bg-white p-3">
-            <div className="text-[11px] font-black text-slate-900">Outside Period</div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1241,19 +1216,15 @@ function PrintMonthView({
   monthHeaders,
   monthCells,
   grouped,
-  unscheduled,
-  outside,
   monthAnchorKey,
 }: {
   monthHeaders: string[]
   monthCells: Date[]
   grouped: Record<string, Order[]>
-  unscheduled: Order[]
-  outside: Order[]
   monthAnchorKey: string
 }) {
   return (
-    <div className="space-y-4">
+    <div>
       <div className="grid grid-cols-7 border border-slate-300">
         {monthHeaders.map((label) => (
           <div key={label} className="border-b border-r border-slate-300 bg-slate-50 px-2 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
@@ -1280,23 +1251,6 @@ function PrintMonthView({
           )
         })}
       </div>
-
-      {(unscheduled.length > 0 || outside.length > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-slate-300 bg-white p-3">
-            <div className="text-[11px] font-black text-slate-900">Unscheduled</div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {unscheduled.length ? unscheduled.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-300 bg-white p-3">
-            <div className="text-[11px] font-black text-slate-900">Outside Period</div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {outside.length ? outside.map((order) => <PrintOrderLine key={order.id} order={order} />) : <div className="text-[9px] text-slate-400">None</div>}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
