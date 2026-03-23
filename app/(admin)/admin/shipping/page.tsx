@@ -370,6 +370,7 @@ export default function ShippingSchedulePage() {
     if (!draggingId) return
     const orderId = draggingId
     setDraggingId(null)
+    setFocusedDate(cloneUTC(new Date(`${dayKey}T12:00:00.000Z`)))
     await saveScheduledShipDate(orderId, `${dayKey}T12:00:00.000Z`)
   }
 
