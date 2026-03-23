@@ -146,6 +146,20 @@ function buildMonthCells(focusedDate: Date) {
   return Array.from({ length: 42 }, (_, i) => addDaysUTC(gridStart, i))
 }
 
+function resolveWeekAnchorFromMonthView(orders: Order[], focusedDate: Date) {
+  const visibleMonthKeys = new Set(buildMonthCells(focusedDate).map((day) => dayKeyUTC(day)))
+  const candidates = orders
+    .filter((order) => order.scheduledShipDate)
+    .map((order) => new Date(order.scheduledShipDate as string))
+    .filter((date) => !Number.isNaN(+date) && visibleMonthKeys.has(dayKeyUTC(date)))
+
+  if (!candidates.length) return focusedDate
+
+  const focusTs = +focusedDate
+  candidates.sort((a, b) => Math.abs(+a - focusTs) - Math.abs(+b - focusTs))
+  return cloneUTC(candidates[0])
+}
+
 export default function ShippingSchedulePage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -443,7 +457,12 @@ export default function ShippingSchedulePage() {
               <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setViewMode('WEEK')}
+                  onClick={() => {
+                    if (viewMode === 'MONTH') {
+                      setFocusedDate(resolveWeekAnchorFromMonthView(filteredOrders, focusedDate))
+                    }
+                    setViewMode('WEEK')
+                  }}
                   className={[
                     'h-9 px-4 rounded-xl text-[13px] font-bold transition',
                     viewMode === 'WEEK' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
