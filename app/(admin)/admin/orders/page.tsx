@@ -29,6 +29,7 @@ import MissingRequirementsModal from '@/components/admin/MissingRequirementsModa
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import { STATUS_LABELS, labelOrderStatus, type FlowStatus } from '@/lib/orderFlow'
 import { formatDateOnlyForDisplay } from '@/lib/dateOnly'
+import { displayInvoiceRef } from '@/lib/invoiceRef'
 
 type Maybe<T> = T | null | undefined
 
@@ -1159,7 +1160,7 @@ function AdminOrdersInner() {
                                   tone="strong"
                                 />
                                 <DataField label="Shipping Method" value={shippingMethodLabel(order.shippingMethod)} />
-                                <DataField label="Invoice #" value={order.invoiceNumber || 'Not set'} />
+                                <DataField label="Invoice #" value={displayInvoiceRef(order.invoiceNumber, order.id, order.createdAt)} />
                                 <DataField
                                   label="Deposit File"
                                   value={

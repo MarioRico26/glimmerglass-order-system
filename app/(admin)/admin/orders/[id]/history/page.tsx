@@ -11,6 +11,7 @@ import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/
 import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 import { formatDateOnlyForDisplay, formatDateOnlyForInput } from '@/lib/dateOnly'
+import { displayInvoiceRef } from '@/lib/invoiceRef'
 
 interface OrderHistory {
   id: string
@@ -465,7 +466,7 @@ export default function OrderHistoryPage() {
                 </p>
                 <p>
                   <span className="font-semibold">Invoice #:</span>{' '}
-                  {summary.invoiceNumber || <span className="italic text-slate-500">Not set</span>}
+                  {displayInvoiceRef(summary.invoiceNumber, summary.id)}
                 </p>
 
                 <button
