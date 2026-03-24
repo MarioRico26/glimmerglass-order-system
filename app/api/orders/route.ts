@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
 import { AuditAction, PenetrationMode, Role } from '@prisma/client'
 import { auditLog } from '@/lib/audit'
+import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
       formData.get('penetrationMode')?.toString().trim() || 'PENETRATIONS_WITHOUT_INSTALL'
     const penetrationNotes = formData.get('penetrationNotes')?.toString().trim() || ''
     const requestedShipDateRaw = formData.get('requestedShipDate')?.toString().trim() || ''
+    const requestedShipAsap = ['true', '1', 'yes', 'on'].includes((formData.get('requestedShipAsap')?.toString().trim() || '').toLowerCase())
     const blueprintMarkersRaw = formData.get('blueprintMarkers')?.toString().trim() || ''
     const poolStockId = formData.get('poolStockId')?.toString().trim() || ''
 
@@ -162,8 +164,8 @@ export async function POST(req: NextRequest) {
     // Validar requestedShipDate (mínimo 4 semanas en el futuro)
     let requestedShipDate: Date | null = null
     if (requestedShipDateRaw) {
-      const parsed = new Date(requestedShipDateRaw + 'T00:00:00Z')
-      if (Number.isNaN(parsed.getTime())) {
+      const parsed = parseDateOnlyToUtcNoon(requestedShipDateRaw)
+      if (!parsed) {
         return jsonError('Invalid requested ship date format', 400)
       }
 
@@ -323,6 +325,7 @@ export async function POST(req: NextRequest) {
           paymentProofUrl,
           shippingMethod,
           requestedShipDate,
+          requestedShipAsap,
           factoryLocationId,
           hardwareSkimmer,
           hardwareAutocover,

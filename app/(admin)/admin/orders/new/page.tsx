@@ -109,6 +109,8 @@ export default function AdminNewOrderPage() {
     notes: '',
     shippingMethod: '' as '' | 'PICK_UP' | 'QUOTE',
     requestedShipDate: '',
+    requestedShipAsap: false,
+    invoiceNumber: '',
     penetrationMode: '' as '' | PenetrationMode,
     penetrationNotes: '',
     hardwareAutocover: false,
@@ -279,6 +281,8 @@ export default function AdminNewOrderPage() {
               : null,
         shippingMethod: form.shippingMethod || null,
         requestedShipDate: form.requestedShipDate || null,
+        requestedShipAsap: form.requestedShipAsap,
+        invoiceNumber: form.invoiceNumber.trim() || null,
         hardwareAutocover: form.hardwareAutocover,
       }
 
@@ -300,6 +304,8 @@ export default function AdminNewOrderPage() {
         notes: '',
         shippingMethod: '',
         requestedShipDate: '',
+        requestedShipAsap: false,
+        invoiceNumber: '',
         penetrationMode: '',
         penetrationNotes: '',
         hardwareAutocover: false,
@@ -596,7 +602,28 @@ export default function AdminNewOrderPage() {
                     className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                    Invoice #
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invoiceNumber}
+                    onChange={(e) => setForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
+                    placeholder="Optional invoice number"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  />
+                </div>
               </div>
+
+              <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={form.requestedShipAsap}
+                  onChange={(e) => setForm((prev) => ({ ...prev, requestedShipAsap: e.target.checked }))}
+                />
+                ASAP requested ship date
+              </label>
             </section>
 
             <section className="space-y-3">

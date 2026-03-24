@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
+import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
 
 function toSummaryDTO(o: any) {
   return {
@@ -43,7 +44,9 @@ function toSummaryDTO(o: any) {
     hardwareAutocover: o.hardwareAutocover,
     hardwareMainDrains: o.hardwareMainDrains,
     requestedShipDate: o.requestedShipDate,
+    requestedShipAsap: !!o.requestedShipAsap,
     serialNumber: o.serialNumber,
+    invoiceNumber: o.invoiceNumber ?? null,
     productionPriority: o.productionPriority,
   }
 }
@@ -64,7 +67,9 @@ export async function PATCH(
       deliveryAddress,
       notes,
       requestedShipDate,
+      requestedShipAsap,
       serialNumber,
+      invoiceNumber,
       productionPriority,
       penetrationMode,
       penetrationNotes,
@@ -75,7 +80,9 @@ export async function PATCH(
       deliveryAddress?: string | null
       notes?: string | null
       requestedShipDate?: string | null
+      requestedShipAsap?: boolean | null
       serialNumber?: string | null
+      invoiceNumber?: string | null
       productionPriority?: number | null
       penetrationMode?: string | null
       penetrationNotes?: string | null
@@ -108,16 +115,27 @@ export async function PATCH(
     }
 
     if (requestedShipDate) {
-      const d = new Date(requestedShipDate)
-      if (!isNaN(d.getTime())) {
-        data.requestedShipDate = d
+      const d = parseDateOnlyToUtcNoon(requestedShipDate)
+      if (!d) {
+        return NextResponse.json({ message: 'Invalid requested ship date' }, { status: 400 })
       }
+      data.requestedShipDate = d
     } else if (requestedShipDate === null) {
       data.requestedShipDate = null
     }
 
+    if (typeof requestedShipAsap === 'boolean') {
+      data.requestedShipAsap = requestedShipAsap
+    } else if (requestedShipAsap === null) {
+      data.requestedShipAsap = false
+    }
+
     if (typeof serialNumber === 'string' || serialNumber === null) {
       data.serialNumber = serialNumber || null
+    }
+
+    if (typeof invoiceNumber === 'string' || invoiceNumber === null) {
+      data.invoiceNumber = typeof invoiceNumber === 'string' ? invoiceNumber.trim() || null : null
     }
 
     if (typeof productionPriority === 'number') {

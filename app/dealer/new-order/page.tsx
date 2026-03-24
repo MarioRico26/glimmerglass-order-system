@@ -65,6 +65,7 @@ export default function NewOrderPage() {
   // nuevos campos
   const [shippingMethod, setShippingMethod] = useState<'PICK_UP' | 'QUOTE' | ''>('')
   const [requestedShipDate, setRequestedShipDate] = useState('')
+  const [requestedShipAsap, setRequestedShipAsap] = useState(false)
 
   // hardware
   const [hardwareSkimmer, setHardwareSkimmer] = useState(false)
@@ -471,6 +472,7 @@ export default function NewOrderPage() {
 
       // nuevo campo (como string ISO de date sin hora)
       formData.append('requestedShipDate', requestedShipDate)
+      formData.append('requestedShipAsap', String(requestedShipAsap))
 
       // hardware flags
       formData.append('hardwareSkimmer', String(hardwareSkimmer))
@@ -505,6 +507,7 @@ export default function NewOrderPage() {
       setNotes('')
       setShippingMethod('')
       setRequestedShipDate('')
+      setRequestedShipAsap(false)
       setHardwareSkimmer(false)
       setHardwareReturns(false)
       setHardwareMainDrains(false)
@@ -1201,6 +1204,14 @@ export default function NewOrderPage() {
               <p className="text-xs text-slate-500 mt-1">
                 Must be at least 4 weeks from today.
               </p>
+              <label className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={requestedShipAsap}
+                  onChange={(e) => setRequestedShipAsap(e.target.checked)}
+                />
+                ASAP requested ship date
+              </label>
             </div>
           </div>
 

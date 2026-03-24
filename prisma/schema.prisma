@@ -95,8 +95,10 @@ model Order {
 
   shippingMethod     String?
   requestedShipDate  DateTime?
+  requestedShipAsap  Boolean     @default(false)
   scheduledShipDate  DateTime?
   serialNumber       String?
+  invoiceNumber      String?
   productionPriority Int?
   scheduledProductionDate DateTime?
 

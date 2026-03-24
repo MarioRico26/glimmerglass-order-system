@@ -10,6 +10,7 @@ import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
+import { formatDateOnlyForDisplay, formatDateOnlyForInput } from '@/lib/dateOnly'
 
 interface OrderHistory {
   id: string
@@ -60,8 +61,11 @@ interface OrderSummary {
   hardwareMainDrains: boolean
 
   requestedShipDate?: string | null
+  requestedShipDateInput?: string | null
+  requestedShipAsap?: boolean
   scheduledShipDate?: string | null
   serialNumber?: string | null
+  invoiceNumber?: string | null
   productionPriority?: number | null
 }
 
@@ -131,7 +135,9 @@ export default function OrderHistoryPage() {
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<string>('')
 
   const [editRequestedDate, setEditRequestedDate] = useState<string>('') // yyyy-mm-dd
+  const [editRequestedShipAsap, setEditRequestedShipAsap] = useState(false)
   const [editSerialNumber, setEditSerialNumber] = useState<string>('')
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState<string>('')
   const [editPriority, setEditPriority] = useState<string>('')
   const [editDeliveryAddress, setEditDeliveryAddress] = useState<string>('')
   const [editNotes, setEditNotes] = useState<string>('')
@@ -176,14 +182,10 @@ export default function OrderHistoryPage() {
         setEditPenetrationNotes(orderData.penetrationNotes || '')
         setEditAutocover(!!orderData.hardwareAutocover)
 
-        if (orderData.requestedShipDate) {
-          const d = new Date(orderData.requestedShipDate)
-          setEditRequestedDate(!isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '')
-        } else {
-          setEditRequestedDate('')
-        }
-
+        setEditRequestedDate(orderData.requestedShipDateInput || formatDateOnlyForInput(orderData.requestedShipDate))
+        setEditRequestedShipAsap(!!orderData.requestedShipAsap)
         setEditSerialNumber(orderData.serialNumber || '')
+        setEditInvoiceNumber(orderData.invoiceNumber || '')
         setEditPriority(typeof orderData.productionPriority === 'number' ? String(orderData.productionPriority) : '')
       } else {
         setMessage('❌ Failed to load order data')
@@ -221,7 +223,9 @@ export default function OrderHistoryPage() {
         deliveryAddress: editDeliveryAddress,
         notes: editNotes || null,
         requestedShipDate: editRequestedDate || null,
+        requestedShipAsap: editRequestedShipAsap,
         serialNumber: editSerialNumber || null,
+        invoiceNumber: editInvoiceNumber || null,
         productionPriority: editPriority ? Number(editPriority) : null,
         penetrationMode: editPenetrationMode || null,
         penetrationNotes: editPenetrationNotes || null,
@@ -246,15 +250,11 @@ export default function OrderHistoryPage() {
         setEditPenetrationNotes(updated.penetrationNotes || '')
         setEditAutocover(!!updated.hardwareAutocover)
 
+        setEditRequestedDate(updated.requestedShipDateInput || formatDateOnlyForInput(updated.requestedShipDate))
+        setEditRequestedShipAsap(!!updated.requestedShipAsap)
         setEditSerialNumber(updated.serialNumber || '')
+        setEditInvoiceNumber(updated.invoiceNumber || '')
         setEditPriority(typeof updated.productionPriority === 'number' ? String(updated.productionPriority) : '')
-
-        if (updated.requestedShipDate) {
-          const d = new Date(updated.requestedShipDate)
-          setEditRequestedDate(!isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '')
-        } else {
-          setEditRequestedDate('')
-        }
 
         setEditing(false)
         setMessage('✅ Changes saved successfully!')
@@ -311,14 +311,12 @@ export default function OrderHistoryPage() {
     )
   }
 
-  const requestedShipText =
-    summary?.requestedShipDate && !isNaN(new Date(summary.requestedShipDate).getTime())
-      ? new Date(summary.requestedShipDate).toLocaleDateString()
-      : 'Not set'
-  const scheduledShipText =
-    summary?.scheduledShipDate && !isNaN(new Date(summary.scheduledShipDate).getTime())
-      ? new Date(summary.scheduledShipDate).toLocaleDateString()
-      : 'Not scheduled'
+  const requestedShipText = summary?.requestedShipDate
+    ? formatDateOnlyForDisplay(summary.requestedShipDate)
+    : 'Not set'
+  const scheduledShipText = summary?.scheduledShipDate
+    ? formatDateOnlyForDisplay(summary.scheduledShipDate)
+    : 'Not scheduled'
 
   return (
     <div className="w-full p-6 xl:p-8">
@@ -433,6 +431,10 @@ export default function OrderHistoryPage() {
                   <span className="font-semibold">Requested Ship Date:</span> {requestedShipText}
                 </p>
                 <p>
+                  <span className="font-semibold">ASAP:</span>{' '}
+                  {summary.requestedShipAsap ? 'Yes' : 'No'}
+                </p>
+                <p>
                   <span className="font-semibold">Scheduled Ship Date:</span> {scheduledShipText}
                 </p>
                 <p>
@@ -460,6 +462,10 @@ export default function OrderHistoryPage() {
                   {summary.shippingMethod
                     ? (SHIPPING_LABELS[summary.shippingMethod] || summary.shippingMethod)
                     : <span className="italic text-slate-500">Not set</span>}
+                </p>
+                <p>
+                  <span className="font-semibold">Invoice #:</span>{' '}
+                  {summary.invoiceNumber || <span className="italic text-slate-500">Not set</span>}
                 </p>
 
                 <button
@@ -722,6 +728,29 @@ export default function OrderHistoryPage() {
                       type="date"
                       value={editRequestedDate}
                       onChange={(e) => setEditRequestedDate(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={editRequestedShipAsap}
+                      onChange={(e) => setEditRequestedShipAsap(e.target.checked)}
+                      disabled={saving}
+                    />
+                    ASAP requested ship date
+                  </label>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-slate-700">
+                      Invoice #
+                    </label>
+                    <input
+                      type="text"
+                      value={editInvoiceNumber}
+                      onChange={(e) => setEditInvoiceNumber(e.target.value)}
                       className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                       disabled={saving}
                     />

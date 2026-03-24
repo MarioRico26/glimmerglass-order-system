@@ -20,6 +20,7 @@ import {
   Search,
   X,
 } from 'lucide-react'
+import { formatDateOnlyForDisplay, formatDateOnlyForInput } from '@/lib/dateOnly'
 
 type Maybe<T> = T | null | undefined
 
@@ -70,10 +71,7 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
 }
 
 function fmtDate(d?: string | null) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (Number.isNaN(+dt)) return '—'
-  return dt.toLocaleDateString()
+  return formatDateOnlyForDisplay(d)
 }
 
 function fmtDateTime(d?: string | null) {
@@ -855,11 +853,11 @@ export default function ProductionSchedulePage() {
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-slate-600">Requested ship date</label>
-                    <input type="date" defaultValue={active.requestedShipDate ? new Date(active.requestedShipDate).toISOString().slice(0, 10) : ''} className="mt-1 w-full h-10 rounded-xl border border-slate-200 bg-white px-3" id="shipDateInput" />
+                    <input type="date" defaultValue={formatDateOnlyForInput(active.requestedShipDate)} className="mt-1 w-full h-10 rounded-xl border border-slate-200 bg-white px-3" id="shipDateInput" />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-slate-600">Scheduled production date</label>
-                    <input type="date" defaultValue={active.scheduledProductionDate ? new Date(active.scheduledProductionDate).toISOString().slice(0, 10) : ''} className="mt-1 w-full h-10 rounded-xl border border-slate-200 bg-white px-3" id="productionDateInput" />
+                    <input type="date" defaultValue={formatDateOnlyForInput(active.scheduledProductionDate)} className="mt-1 w-full h-10 rounded-xl border border-slate-200 bg-white px-3" id="productionDateInput" />
                   </div>
                 </div>
 

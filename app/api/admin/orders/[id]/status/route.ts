@@ -17,6 +17,7 @@ import {
   type OrderDocTypeKey,
   type RequirementFieldKey,
 } from '@/lib/orderFlow'
+import { formatDateOnlyForInput } from '@/lib/dateOnly'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 type SessionUser = { email?: string | null; role?: unknown }
@@ -103,8 +104,10 @@ async function getOrderSummary(orderId: string) {
 
       shippingMethod: true,
       requestedShipDate: true,
+      requestedShipAsap: true,
       scheduledShipDate: true,
       serialNumber: true,
+      invoiceNumber: true,
       productionPriority: true,
 
       hardwareSkimmer: true,
@@ -143,8 +146,11 @@ async function getOrderSummary(orderId: string) {
 
     shippingMethod: order.shippingMethod ?? null,
     requestedShipDate: order.requestedShipDate ? order.requestedShipDate.toISOString() : null,
+    requestedShipDateInput: formatDateOnlyForInput(order.requestedShipDate),
+    requestedShipAsap: !!order.requestedShipAsap,
     scheduledShipDate: order.scheduledShipDate ? order.scheduledShipDate.toISOString() : null,
     serialNumber: order.serialNumber ?? null,
+    invoiceNumber: order.invoiceNumber ?? null,
     productionPriority:
       typeof order.productionPriority === 'number' ? order.productionPriority : null,
 

@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { PenetrationMode } from '@prisma/client'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
+import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
 
 type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
 
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
     const statusFilter = searchParams.get('status') || 'ALL'
     const dealerFilter = searchParams.get('dealer') || 'ALL'
     const factoryFilter = searchParams.get('factory') || 'ALL'
+    const finalPaymentFilter = searchParams.get('finalPayment') || 'ALL'
 
     // ✅ Subimos el límite a 200 porque el board pide 200.
     // Si luego quieres 500, lo hablamos, pero 200 ya es decente y evita traer “el universo”.
@@ -91,10 +93,19 @@ export async function GET(req: NextRequest) {
       where.factoryLocation = { name: factoryFilter }
     }
 
+    if (finalPaymentFilter === 'NEEDED') {
+      where.status = 'PRE_SHIPPING'
+      where.media = { none: { docType: 'PROOF_OF_FINAL_PAYMENT' } }
+    } else if (finalPaymentFilter === 'RECEIVED') {
+      where.status = 'PRE_SHIPPING'
+      where.media = { some: { docType: 'PROOF_OF_FINAL_PAYMENT' } }
+    }
+
     if (q) {
       where.OR = [
         { deliveryAddress: { contains: q, mode: 'insensitive' } },
         { serialNumber: { contains: q, mode: 'insensitive' } },
+        { invoiceNumber: { contains: q, mode: 'insensitive' } },
         { dealer: { name: { contains: q, mode: 'insensitive' } } },
         { poolModel: { name: { contains: q, mode: 'insensitive' } } },
         { color: { name: { contains: q, mode: 'insensitive' } } },
@@ -129,6 +140,8 @@ export async function GET(req: NextRequest) {
         paymentProofUrl: true,
         notes: true,
         shippingMethod: true,
+        requestedShipAsap: true,
+        invoiceNumber: true,
 
         // ✅ LO QUE NECESITA EL BOARD
         requestedShipDate: true,
@@ -200,6 +213,11 @@ export async function GET(req: NextRequest) {
             createdAt: true,
           },
         },
+        media: {
+          where: { docType: 'PROOF_OF_FINAL_PAYMENT' },
+          take: 1,
+          select: { id: true },
+        },
       },
     })
 
@@ -210,6 +228,7 @@ export async function GET(req: NextRequest) {
       status: normalizeOrderStatus(order.status)?.toString() ?? order.status,
       lastCancellationReason: order.histories[0]?.comment ?? null,
       lastCanceledAt: order.histories[0]?.createdAt?.toISOString() ?? null,
+      finalPaymentNeeded: (normalizeOrderStatus(order.status)?.toString() ?? order.status) === 'PRE_SHIPPING' && order.media.length === 0,
     }))
 
     return NextResponse.json({ items, page, pageSize, total })
@@ -335,11 +354,13 @@ export async function POST(req: NextRequest) {
           hardwareReturns: body.hardwareReturns || false,
           hardwareMainDrains: body.hardwareMainDrains || false,
 
-          requestedShipDate: body.requestedShipDate ? new Date(body.requestedShipDate) : null,
+          requestedShipDate: parseDateOnlyToUtcNoon(body.requestedShipDate),
+          requestedShipAsap: !!body.requestedShipAsap,
           scheduledShipDate: body.scheduledShipDate ? new Date(body.scheduledShipDate) : null,
           scheduledProductionDate: body.scheduledProductionDate
             ? new Date(body.scheduledProductionDate)
             : null,
+          invoiceNumber: typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() || null : null,
           productionPriority:
             typeof body.productionPriority === 'number' ? body.productionPriority : null,
         },

@@ -17,6 +17,7 @@ import {
   Truck,
   X,
 } from 'lucide-react'
+import { formatDateOnlyForDisplay, formatDateOnlyForInput } from '@/lib/dateOnly'
 
 type Maybe<T> = T | null | undefined
 
@@ -98,17 +99,11 @@ function dayKeyUTC(value: Date | string | null | undefined) {
 }
 
 function formatCompactDate(value?: string | null) {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(+d)) return '—'
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return formatDateOnlyForDisplay(value, { month: 'short', day: 'numeric' })
 }
 
 function formatLongDate(value?: string | null) {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(+d)) return '—'
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+  return formatDateOnlyForDisplay(value, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 function resolveFactoryName(order: Order) {
@@ -817,7 +812,7 @@ export default function ShippingSchedulePage() {
                     <label className="text-xs font-semibold text-slate-600">Scheduled ship date</label>
                     <input
                       type="date"
-                      defaultValue={active.scheduledShipDate ? dayKeyUTC(active.scheduledShipDate) : ''}
+                      defaultValue={formatDateOnlyForInput(active.scheduledShipDate)}
                       className="mt-1 w-full h-10 rounded-xl border border-slate-200 bg-white px-3"
                       id="scheduledShipDateInput"
                     />

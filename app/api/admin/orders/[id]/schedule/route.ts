@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 
@@ -41,14 +42,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const requestedShipDate =
       shipRaw === null || shipRaw === '' || shipRaw === undefined
         ? null
-        : new Date(String(shipRaw))
+        : parseDateOnlyToUtcNoon(String(shipRaw))
 
     const scheduledProductionDate =
       productionDateRaw === null || productionDateRaw === '' || productionDateRaw === undefined
         ? null
         : new Date(String(productionDateRaw))
 
-    if (requestedShipDate && Number.isNaN(+requestedShipDate)) {
+    if (shipRaw !== null && shipRaw !== '' && shipRaw !== undefined && !requestedShipDate) {
       return NextResponse.json({ message: 'Invalid requestedShipDate' }, { status: 400 })
     }
     if (scheduledProductionDate && Number.isNaN(+scheduledProductionDate)) {
@@ -64,6 +65,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         productionPriority: true,
         requestedShipDate: true,
         scheduledProductionDate: true,
+        serialNumber: true,
         createdAt: true,
         deliveryAddress: true,
         paymentProofUrl: true,

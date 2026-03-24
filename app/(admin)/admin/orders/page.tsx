@@ -28,6 +28,7 @@ import {
 import MissingRequirementsModal from '@/components/admin/MissingRequirementsModal'
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import { STATUS_LABELS, labelOrderStatus, type FlowStatus } from '@/lib/orderFlow'
+import { formatDateOnlyForDisplay } from '@/lib/dateOnly'
 
 type Maybe<T> = T | null | undefined
 
@@ -39,6 +40,8 @@ interface Order {
   serialNumber?: string | null
   notes?: string | null
   shippingMethod?: string | null
+  requestedShipAsap?: boolean
+  invoiceNumber?: string | null
   scheduledProductionDate?: string | null
   productionPriority?: number | null
   poolModel: Maybe<{ name: string }>
@@ -48,6 +51,7 @@ interface Order {
   createdAt?: string
   requestedShipDate?: string | null
   scheduledShipDate?: string | null
+  finalPaymentNeeded?: boolean
   lastCancellationReason?: string | null
   lastCanceledAt?: string | null
 }
@@ -108,10 +112,7 @@ function labelStatus(status: string) {
 }
 
 function formatShortDate(value?: string | null) {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(+parsed)) return '—'
-  return parsed.toLocaleDateString()
+  return formatDateOnlyForDisplay(value)
 }
 
 function shippingMethodLabel(value?: string | null) {
@@ -503,6 +504,7 @@ function AdminOrdersInner() {
   const statusFilter = (sp.get('status') as StatusKey | 'ALL') || 'ALL'
   const dealerFilter = sp.get('dealer') || 'ALL'
   const factoryFilter = sp.get('factory') || 'ALL'
+  const finalPaymentFilter = sp.get('finalPayment') || 'ALL'
   const sort = sp.get('sort') || 'createdAt'
   const dir = sp.get('dir') || 'desc'
   const page = Math.max(1, Number(sp.get('page') || 1))
@@ -525,6 +527,7 @@ function AdminOrdersInner() {
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
+      if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
       params.set('sort', sort)
       params.set('dir', dir)
       params.set('page', String(page))
@@ -545,7 +548,7 @@ function AdminOrdersInner() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, statusFilter, dealerFilter, factoryFilter, sort, dir, page, pageSize])
+  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, sort, dir, page, pageSize])
 
   const [refreshing, setRefreshing] = useState(false)
   const handleRefresh = async () => {
@@ -749,6 +752,7 @@ function AdminOrdersInner() {
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
+      if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
       params.set('sort', sort)
       params.set('dir', dir)
       params.set('page', String(page))
@@ -759,7 +763,7 @@ function AdminOrdersInner() {
       setTotalCount(data.total || 0)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, statusFilter, dealerFilter, factoryFilter, sort, dir, page, pageSize])
+  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, sort, dir, page, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
@@ -774,6 +778,7 @@ function AdminOrdersInner() {
     if (statusFilter !== 'ALL') params.set('status', statusFilter)
     if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
     if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
+    if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
     params.set('sort', sort)
     params.set('dir', dir)
     return `/api/admin/orders/export?${params.toString()}`
@@ -877,7 +882,7 @@ function AdminOrdersInner() {
             <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
               Filters
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
                 <Filter size={16} className="shrink-0 text-slate-500" />
                 <select
@@ -935,6 +940,19 @@ function AdminOrdersInner() {
                 >
                   <option value="DEALER">Group by dealer</option>
                   <option value="FACTORY">Group by factory</option>
+                </select>
+              </div>
+
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                <Truck size={16} className="shrink-0 text-slate-500" />
+                <select
+                  value={finalPaymentFilter}
+                  onChange={(e) => setParams({ finalPayment: e.target.value, page: 1 })}
+                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                >
+                  <option value="ALL">All final payment states</option>
+                  <option value="NEEDED">Final payment needed</option>
+                  <option value="RECEIVED">Final payment received</option>
                 </select>
               </div>
             </div>
@@ -1087,6 +1105,8 @@ function AdminOrdersInner() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <SignalPill label="Factory" value={order.factoryLocation?.name || 'Not set'} tone="sky" />
                                   <SignalPill label="Color" value={order.color?.name || '—'} tone="slate" />
+                                  {order.requestedShipAsap ? <SignalPill label="ASAP" value="Yes" tone="amber" /> : null}
+                                  {order.finalPaymentNeeded ? <SignalPill label="Final Payment" value="Needed" tone="rose" /> : null}
                                 </div>
 
                                 <Link
@@ -1139,6 +1159,7 @@ function AdminOrdersInner() {
                                   tone="strong"
                                 />
                                 <DataField label="Shipping Method" value={shippingMethodLabel(order.shippingMethod)} />
+                                <DataField label="Invoice #" value={order.invoiceNumber || 'Not set'} />
                                 <DataField
                                   label="Deposit File"
                                   value={
@@ -1169,11 +1190,11 @@ function AdminOrdersInner() {
                           {/* RIGHT: ops */}
                           <div className="xl:col-span-4 min-w-0">
                             <div className="flex flex-col gap-3 xl:items-end">
-                              <div className="w-full xl:w-[320px] rounded-[1.5rem] border border-slate-200 bg-white/90 p-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div>
-                                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Current Status</div>
-                                    <div className="mt-2">
+                                <div className="w-full xl:w-[320px] rounded-[1.5rem] border border-slate-200 bg-white/90 p-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Current Status</div>
+                                      <div className="mt-2">
                                       <StatusBadge status={order.status} />
                                     </div>
                                   </div>
@@ -1186,6 +1207,9 @@ function AdminOrdersInner() {
                                       ) : null}
                                       {order.status === 'PRE_SHIPPING' && !order.scheduledShipDate ? (
                                         <SignalPill label="Ship Date" value="Missing" tone="violet" />
+                                      ) : null}
+                                      {order.finalPaymentNeeded ? (
+                                        <SignalPill label="Final Payment" value="Needed" tone="rose" />
                                       ) : null}
                                     </div>
                                   </div>
