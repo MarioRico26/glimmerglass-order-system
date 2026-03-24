@@ -38,6 +38,7 @@ interface Order {
   deliveryAddress: string
   status: OrderStatus
   paymentProofUrl?: string | null
+  serialNumber?: string | null
   poolModel: Maybe<{
     name: string
     defaultFactoryLocation?: { id: string; name: string } | null
@@ -49,6 +50,7 @@ interface Order {
   requestedShipDate?: string | null
   productionPriority?: number | null
   scheduledProductionDate?: string | null
+  scheduledShipDate?: string | null
 }
 
 type ApiOrders = { items: Order[]; total?: number } | Order[]
@@ -120,6 +122,20 @@ function buildMonthCells(focusedDate: Date) {
   return Array.from({ length: 42 }, (_, i) => addDaysUTC(gridStart, i))
 }
 
+function resolveWeekAnchorFromMonthView(orders: Order[], focusedDate: Date) {
+  const visibleMonthKeys = new Set(buildMonthCells(focusedDate).map((day) => dayKeyUTC(day)))
+  const candidates = orders
+    .filter((order) => order.scheduledProductionDate)
+    .map((order) => new Date(order.scheduledProductionDate as string))
+    .filter((date) => !Number.isNaN(+date) && visibleMonthKeys.has(dayKeyUTC(date)))
+
+  if (!candidates.length) return focusedDate
+
+  const focusTs = +focusedDate
+  candidates.sort((a, b) => Math.abs(+a - focusTs) - Math.abs(+b - focusTs))
+  return cloneUTC(candidates[0])
+}
+
 function periodLabel(viewMode: CalendarMode, focusedDate: Date) {
   if (viewMode === 'WEEK') {
     const start = startOfWeekUTC(focusedDate)
@@ -145,6 +161,32 @@ function statusPill(status: OrderStatus) {
     default:
       return <span className={`${base} bg-slate-50 text-slate-700 border-slate-200`}>{status}</span>
   }
+}
+
+function signalPill({
+  label,
+  value,
+  tone = 'slate',
+}: {
+  label: string
+  value: string
+  tone?: 'slate' | 'sky' | 'indigo' | 'violet' | 'emerald' | 'amber' | 'rose'
+}) {
+  const tones = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    sky: 'border-sky-200 bg-sky-50 text-sky-800',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+    violet: 'border-violet-200 bg-violet-50 text-violet-800',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    rose: 'border-rose-200 bg-rose-50 text-rose-800',
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${tones[tone]}`}>
+      <span className="opacity-70">{label}:</span> {value}
+    </span>
+  )
 }
 
 function resolveFactoryName(order: Order) {
@@ -275,7 +317,9 @@ export default function ProductionSchedulePage() {
     const noPriority = filteredOrders.filter((o) => typeof o.productionPriority !== 'number').length
     const scheduled = filteredOrders.filter((o) => !!o.scheduledProductionDate).length
     const unscheduled = total - scheduled
-    return { total, noPriority, prioritized: total - noPriority, scheduled, unscheduled }
+    const missingSerial = filteredOrders.filter((o) => !o.serialNumber).length
+    const missingShipDate = filteredOrders.filter((o) => !o.requestedShipDate).length
+    return { total, noPriority, prioritized: total - noPriority, scheduled, unscheduled, missingSerial, missingShipDate }
   }, [filteredOrders])
 
   const factories = useMemo(() => {
@@ -454,6 +498,7 @@ export default function ProductionSchedulePage() {
     if (!draggingCalendarId) return
     const orderId = draggingCalendarId
     setDraggingCalendarId(null)
+    setFocusedDate(cloneUTC(new Date(`${dayKey}T12:00:00.000Z`)))
     await saveSchedule(orderId, null, null, `${dayKey}T12:00:00.000Z`)
   }
 
@@ -524,13 +569,18 @@ export default function ProductionSchedulePage() {
 
               {displayMode === 'CALENDAR' && (
                 <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setCalendarMode('WEEK')}
-                    className={[
-                      'h-9 px-4 rounded-xl text-[13px] font-bold transition',
-                      calendarMode === 'WEEK' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
-                    ].join(' ')}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calendarMode === 'MONTH') {
+                      setFocusedDate(resolveWeekAnchorFromMonthView(filteredOrders, focusedDate))
+                    }
+                    setCalendarMode('WEEK')
+                  }}
+                  className={[
+                    'h-9 px-4 rounded-xl text-[13px] font-bold transition',
+                    calendarMode === 'WEEK' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
                   >
                     Week
                   </button>
@@ -606,7 +656,7 @@ export default function ProductionSchedulePage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
           <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 shadow-sm">
             Total Queue: {stats.total}
           </span>
@@ -618,6 +668,12 @@ export default function ProductionSchedulePage() {
           </span>
           <span className="inline-flex items-center rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-semibold text-sky-700 shadow-sm">
             Production Dates Set: {stats.scheduled}
+          </span>
+          <span className="inline-flex items-center rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-700 shadow-sm">
+            Missing Serial: {stats.missingSerial}
+          </span>
+          <span className="inline-flex items-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700 shadow-sm">
+            Missing Requested Ship: {stats.missingShipDate}
           </span>
         </div>
       </div>
@@ -884,42 +940,52 @@ function BoardCard({
         compact ? 'p-3' : 'p-4',
       ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-3">
-        <button onClick={() => onOpen(order)} className="text-left min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-extrabold text-slate-900 truncate">
-                {order.poolModel?.name || 'Model'} <span className="text-slate-400">•</span> {order.color?.name || '-'}
-              </div>
-              <div className="mt-0.5 text-[13px] text-slate-600 truncate">
-                {order.dealer?.name || 'Dealer'} <span className="text-slate-400">•</span> {order.deliveryAddress || '—'}
-              </div>
-            </div>
-            <div className="shrink-0 flex items-center gap-2">{statusPill(order.status)}</div>
-          </div>
-
-          <div className={`mt-3 flex flex-wrap gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <Hash size={14} /> {typeof order.productionPriority === 'number' ? order.productionPriority : '—'}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <CalendarDays size={14} /> {fmtDate(order.scheduledProductionDate || null)}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <Calendar size={14} /> {fmtDate(order.requestedShipDate || null)}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200">
-              <Clock size={14} /> {fmtDate(order.createdAt || null)}
-            </span>
-          </div>
-        </button>
-
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-2xl border border-slate-200 bg-white text-slate-500 cursor-grab active:cursor-grabbing">
-            <GripVertical size={18} />
-          </div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-800">
+            {resolveFactoryName(order)}
+          </span>
+          {statusPill(order.status)}
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-2 text-slate-500 cursor-grab active:cursor-grabbing">
+          <GripVertical size={18} />
         </div>
       </div>
+
+      <button onClick={() => onOpen(order)} className="w-full min-w-0 text-left">
+        <div className="truncate font-extrabold text-slate-900">
+          {order.poolModel?.name || 'Model'} <span className="text-slate-400">•</span> {order.color?.name || '-'}
+        </div>
+        <div className="mt-1 truncate text-[13px] font-medium text-slate-700">
+          {order.dealer?.name || 'Dealer'}
+        </div>
+        <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-[13px] leading-relaxed text-slate-600">
+          <div className="truncate">{order.deliveryAddress || 'No delivery address'}</div>
+        </div>
+
+        <div className={`mt-3 flex flex-wrap gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
+          {signalPill({
+            label: 'Priority',
+            value: typeof order.productionPriority === 'number' ? `P${order.productionPriority}` : 'Missing',
+            tone: typeof order.productionPriority === 'number' ? 'indigo' : 'amber',
+          })}
+          {signalPill({
+            label: 'Build Date',
+            value: fmtDate(order.scheduledProductionDate || null),
+            tone: order.scheduledProductionDate ? 'sky' : 'amber',
+          })}
+          {signalPill({
+            label: 'Req Ship',
+            value: fmtDate(order.requestedShipDate || null),
+            tone: order.requestedShipDate ? 'violet' : 'rose',
+          })}
+          {signalPill({
+            label: 'Serial',
+            value: order.serialNumber || 'Missing',
+            tone: order.serialNumber ? 'emerald' : 'amber',
+          })}
+        </div>
+      </button>
 
       <div className={`mt-3 flex flex-wrap gap-3 text-[13px] ${compact ? 'mt-2' : 'mt-3'} opacity-0 group-hover:opacity-100 transition`}>
         <Link href={`/admin/orders/${order.id}/history`} className="inline-flex items-center gap-1 text-blue-700 hover:underline">
@@ -1047,7 +1113,7 @@ function CalendarMonthCell({
       ) : orders.length === 0 ? null : (
         <div className="space-y-1.5 overflow-y-auto max-h-[132px] pr-1">
           {orders.map((order) => (
-            <MiniCalendarOrderCard key={order.id} order={order} draggingId={draggingId} busy={busy} onDragStart={onDragStart} onOpen={onOpen} />
+            <MiniCalendarOrderCard key={order.id} order={order} variant="dense" draggingId={draggingId} busy={busy} onDragStart={onDragStart} onOpen={onOpen} />
           ))}
         </div>
       )}
@@ -1062,6 +1128,7 @@ function CalendarOrderList({
   busy,
   onDragStart,
   onOpen,
+  variant = 'full',
 }: {
   orders: Order[]
   loading: boolean
@@ -1069,6 +1136,7 @@ function CalendarOrderList({
   busy: boolean
   onDragStart: (id: string) => void
   onOpen: (order: Order) => void
+  variant?: 'full' | 'dense'
 }) {
   if (loading) {
     return (
@@ -1085,7 +1153,7 @@ function CalendarOrderList({
   return (
     <div className="space-y-3">
       {orders.map((order) => (
-        <MiniCalendarOrderCard key={order.id} order={order} draggingId={draggingId} busy={busy} onDragStart={onDragStart} onOpen={onOpen} />
+        <MiniCalendarOrderCard key={order.id} order={order} variant={variant} draggingId={draggingId} busy={busy} onDragStart={onDragStart} onOpen={onOpen} />
       ))}
     </div>
   )
@@ -1093,49 +1161,63 @@ function CalendarOrderList({
 
 function MiniCalendarOrderCard({
   order,
+  variant = 'full',
   draggingId,
   busy,
   onDragStart,
   onOpen,
 }: {
   order: Order
+  variant?: 'full' | 'dense'
   draggingId: string | null
   busy: boolean
   onDragStart: (id: string) => void
   onOpen: (order: Order) => void
 }) {
+  const dense = variant === 'dense'
   return (
     <div
       draggable
       onDragStart={() => onDragStart(order.id)}
       onClick={() => onOpen(order)}
       className={[
-        'group rounded-2xl border border-slate-200/90 bg-white/96 px-3 py-2.5 shadow-sm cursor-pointer transition',
-        'hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(2,132,199,0.12)]',
+        'group cursor-pointer overflow-hidden border border-slate-200/90 bg-white/96 transition',
+        dense
+          ? 'rounded-[1.1rem] px-2.5 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_22px_rgba(2,132,199,0.10)]'
+          : 'rounded-[1.25rem] px-3.5 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.07)] hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(2,132,199,0.12)]',
         draggingId === order.id ? 'opacity-60' : '',
         busy ? 'pointer-events-none' : '',
       ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-extrabold text-slate-900">{order.poolModel?.name || 'Order'}</div>
-          <div className="truncate text-[11px] text-slate-600">{order.dealer?.name || 'Dealer'}</div>
-        </div>
-        <div className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 cursor-grab active:cursor-grabbing shrink-0">
-          <GripVertical size={14} />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="inline-flex min-w-0 max-w-full items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-sky-800">
+          <span className="truncate">{resolveFactoryName(order)}</span>
+        </span>
+        <div className="rounded-xl border border-slate-200 bg-white p-1.5 text-slate-500 cursor-grab active:cursor-grabbing shrink-0">
+          <GripVertical size={dense ? 12 : 14} />
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
-          <Hash size={12} /> {typeof order.productionPriority === 'number' ? order.productionPriority : '—'}
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
-          <Calendar size={12} /> {fmtDate(order.requestedShipDate)}
-        </span>
+      <div className="min-w-0">
+        <div className={dense ? 'truncate text-[12px] font-extrabold text-slate-900' : 'truncate text-[13px] font-extrabold text-slate-900'}>
+          {order.poolModel?.name || 'Order'}
+        </div>
+        <div className={dense ? 'mt-0.5 truncate text-[10px] font-medium text-slate-600' : 'mt-0.5 truncate text-[11px] font-medium text-slate-600'}>
+          {order.dealer?.name || 'Dealer'}
+        </div>
       </div>
 
-      <div className="mt-2 text-[10px] text-slate-500 truncate">{resolveFactoryName(order)}</div>
+      <div className={dense ? 'mt-2 flex flex-wrap gap-1.5 text-[9px]' : 'mt-2.5 flex flex-wrap gap-1.5 text-[10px]'}>
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+          <Hash size={dense ? 10 : 12} /> {typeof order.productionPriority === 'number' ? `P${order.productionPriority}` : 'Pending'}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+          <Calendar size={dense ? 10 : 12} /> Req {fmtDate(order.requestedShipDate)}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+          SN {order.serialNumber || 'Pending'}
+        </span>
+      </div>
     </div>
   )
 }
