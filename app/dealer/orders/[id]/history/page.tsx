@@ -75,6 +75,10 @@ const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
     icon: CheckCircle2,
     badge: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
+  SERVICE_WARRANTY: {
+    icon: CircleCheckBig,
+    badge: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+  },
   CANCELED: {
     icon: CircleX,
     badge: 'bg-rose-50 text-rose-800 border-rose-200',

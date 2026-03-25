@@ -46,6 +46,7 @@ const STATUSES: FlowStatus[] = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
   'CANCELED',
 ]
 

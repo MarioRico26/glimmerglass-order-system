@@ -5,6 +5,7 @@ export type FlowStatus =
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
+  | 'SERVICE_WARRANTY'
   | 'CANCELED'
 
 export type LegacyFlowStatus = FlowStatus | 'APPROVED'
@@ -15,6 +16,7 @@ export const FLOW_ORDER: Exclude<FlowStatus, 'CANCELED'>[] = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
 ]
 
 // Si tu Prisma enum OrderDocType es el source of truth, usamos ese tipo directo
@@ -31,6 +33,7 @@ export const STATUS_LABELS: Record<FlowStatus, string> = {
   IN_PRODUCTION: 'In Production',
   PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
+  SERVICE_WARRANTY: 'Service/Warranty',
   CANCELED: 'Canceled',
 }
 
@@ -132,9 +135,11 @@ export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
     'PROOF_OF_FINAL_PAYMENT',
     'PAID_INVOICE',
   ],
+  SERVICE_WARRANTY: [],
 }
 
 export const REQUIRED_FIELDS_FOR: Partial<Record<FlowStatus, RequirementFieldKey[]>> = {
   PRE_SHIPPING: ['serialNumber'],
   COMPLETED: ['serialNumber'],
+  SERVICE_WARRANTY: [],
 }

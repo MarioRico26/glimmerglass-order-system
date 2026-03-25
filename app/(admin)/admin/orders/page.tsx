@@ -88,6 +88,7 @@ const ALL_STATUS = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
   'CANCELED',
 ] as const
 type StatusKey = (typeof ALL_STATUS)[number]
@@ -96,6 +97,7 @@ const RESTORE_TARGETS: FlowStatus[] = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
 ]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
@@ -153,6 +155,13 @@ function StatusBadge({ status }: { status: string }) {
         <span className={`${base} bg-emerald-50 text-emerald-900 border-emerald-200`}>
           <span className={`${dot} bg-emerald-500`} />
           Completed
+        </span>
+      )
+    case 'SERVICE_WARRANTY':
+      return (
+        <span className={`${base} bg-cyan-50 text-cyan-900 border-cyan-200`}>
+          <span className={`${dot} bg-cyan-500`} />
+          Service/Warranty
         </span>
       )
     case 'CANCELED':
@@ -232,7 +241,7 @@ function DataField({
 
 /**
  * Botón “siguiente paso” según flow:
- * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED
+ * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED -> SERVICE_WARRANTY
  */
 function NextStep({
   order,
@@ -249,7 +258,7 @@ function NextStep({
 }) {
   const s = order.status as FlowStatus
 
-  if (s === 'COMPLETED') {
+  if (s === 'SERVICE_WARRANTY') {
     return (
       <div className="flex items-center justify-between gap-2 w-full xl:w-auto">
         <div className="text-xs text-slate-500">No actions</div>
@@ -295,12 +304,20 @@ function NextStep({
           className:
             'bg-violet-600 hover:bg-violet-700 text-white shadow-[0_10px_30px_rgba(124,58,237,0.25)]',
         }
-      : {
+      : s === 'PRE_SHIPPING'
+      ? {
           label: 'Complete',
           icon: <CircleCheckBig size={16} />,
           next: 'COMPLETED' as FlowStatus,
           className:
             'bg-emerald-600 hover:bg-emerald-700 text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]',
+        }
+      : {
+          label: 'Service/Warranty',
+          icon: <CircleCheckBig size={16} />,
+          next: 'SERVICE_WARRANTY' as FlowStatus,
+          className:
+            'bg-cyan-600 hover:bg-cyan-700 text-white shadow-[0_10px_30px_rgba(8,145,178,0.25)]',
         }
 
   return (

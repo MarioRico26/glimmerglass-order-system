@@ -10,6 +10,7 @@ type Status =
   | 'IN_PRODUCTION'
   | 'PRE_SHIPPING'
   | 'COMPLETED'
+  | 'SERVICE_WARRANTY'
   | 'CANCELED'
 
 const STATUSES: Status[] = [
@@ -17,6 +18,7 @@ const STATUSES: Status[] = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
   'CANCELED',
 ]
 

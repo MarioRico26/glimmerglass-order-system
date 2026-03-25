@@ -12,6 +12,7 @@ const STATUSES = [
     { value: 'IN_PRODUCTION', label: 'In production' },
     { value: 'PRE_SHIPPING', label: 'Pre-shipping' },
     { value: 'COMPLETED', label: 'Completed' },
+    { value: 'SERVICE_WARRANTY', label: 'Service/Warranty' },
     { value: 'CANCELED', label: 'Canceled' },
 ]
 

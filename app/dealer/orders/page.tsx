@@ -62,6 +62,7 @@ function StatusBadge({ status }: { status: string }) {
     IN_PRODUCTION: 'bg-indigo-50 text-indigo-800 border-indigo-200',
     PRE_SHIPPING: 'bg-violet-50 text-violet-800 border-violet-200',
     COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    SERVICE_WARRANTY: 'bg-cyan-50 text-cyan-800 border-cyan-200',
     CANCELED: 'bg-rose-50 text-rose-800 border-rose-200',
   }
 

@@ -4,7 +4,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { PackageSearch, CheckCircle2, Clock, CircleCheckBig, CircleX } from 'lucide-react'
+import { PackageSearch, CheckCircle2, Clock, CircleCheckBig, CircleX, Wrench } from 'lucide-react'
 import {
     ResponsiveContainer,
     AreaChart,
@@ -29,7 +29,7 @@ type Metrics = {
 }
 
 const emptyMetrics: Metrics = {
-    totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, CANCELED: 0 },
+    totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, SERVICE_WARRANTY: 0, CANCELED: 0 },
     monthly: [],
     recent: [],
     byFactory: [],
@@ -89,12 +89,13 @@ export default function AdminDashboard() {
             </div>
 
             {/* Stats */}
-            <div className="grid sm:grid-cols-5 gap-4 mb-6">
+            <div className="grid sm:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
                 <Stat label="Total Orders" value={t.total || 0} Icon={PackageSearch} />
                 <Stat label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock} />
                 <Stat label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} />
                 <Stat label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={CheckCircle2} />
                 <Stat label="Completed" value={t.COMPLETED || 0} Icon={CircleX} />
+                <Stat label="Service/Warranty" value={t.SERVICE_WARRANTY || 0} Icon={Wrench} />
             </div>
 
             {/* Chart + Recent */}
@@ -159,6 +160,7 @@ export default function AdminDashboard() {
                             <th className="text-right py-2 px-3">In Prod.</th>
                             <th className="text-right py-2 px-3">Pre-Ship</th>
                             <th className="text-right py-2 px-3">Completed</th>
+                            <th className="text-right py-2 px-3">Service/Warranty</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -170,10 +172,11 @@ export default function AdminDashboard() {
                                 <td className="py-2 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
                                 <td className="py-2 px-3 text-right">{f.totals.PRE_SHIPPING}</td>
                                 <td className="py-2 px-3 text-right">{f.totals.COMPLETED}</td>
+                                <td className="py-2 px-3 text-right">{f.totals.SERVICE_WARRANTY || 0}</td>
                             </tr>
                         ))}
                         {metrics.byFactory.length === 0 && (
-                            <tr><td colSpan={6} className="py-3 text-slate-500">No data.</td></tr>
+                            <tr><td colSpan={7} className="py-3 text-slate-500">No data.</td></tr>
                         )}
                         </tbody>
                     </table>

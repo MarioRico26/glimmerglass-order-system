@@ -12,6 +12,7 @@ type OrderStatus =
     | 'IN_PRODUCTION'
     | 'PRE_SHIPPING'
     | 'COMPLETED'
+    | 'SERVICE_WARRANTY'
     | 'CANCELED'
 
 export async function GET(req: NextRequest) {

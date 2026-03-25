@@ -11,7 +11,9 @@ type Maybe<T> = T | null | undefined
 type OrderStatus =
   | 'PENDING_PAYMENT_APPROVAL'
   | 'IN_PRODUCTION'
+  | 'PRE_SHIPPING'
   | 'COMPLETED'
+  | 'SERVICE_WARRANTY'
   | 'CANCELED'
 
 interface Order {
@@ -34,21 +36,27 @@ const deep = '#007A99'
 const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING_PAYMENT_APPROVAL: 'Needs Deposit',
   IN_PRODUCTION: 'In Production',
+  PRE_SHIPPING: 'Pre-Shipping',
   COMPLETED: 'Completed',
+  SERVICE_WARRANTY: 'Service/Warranty',
   CANCELED: 'Canceled',
 }
 
 const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
   PENDING_PAYMENT_APPROVAL: ['IN_PRODUCTION', 'CANCELED'],
-  IN_PRODUCTION: ['COMPLETED', 'CANCELED'],
-  COMPLETED: [],
+  IN_PRODUCTION: ['PRE_SHIPPING', 'CANCELED'],
+  PRE_SHIPPING: ['COMPLETED', 'CANCELED'],
+  COMPLETED: ['SERVICE_WARRANTY', 'CANCELED'],
+  SERVICE_WARRANTY: [],
   CANCELED: [],
 }
 
 const STATUS_COLORS = {
   PENDING_PAYMENT_APPROVAL: { bg: 'bg-amber-50',   text: 'text-amber-800',   head: 'bg-amber-100/70',   rail: 'bg-amber-200'   },
   IN_PRODUCTION:            { bg: 'bg-indigo-50',  text: 'text-indigo-800',  head: 'bg-indigo-100/70',  rail: 'bg-indigo-200'  },
+  PRE_SHIPPING:             { bg: 'bg-violet-50',  text: 'text-violet-800',  head: 'bg-violet-100/70',  rail: 'bg-violet-200'  },
   COMPLETED:                { bg: 'bg-emerald-50', text: 'text-emerald-800', head: 'bg-emerald-100/70', rail: 'bg-emerald-200' },
+  SERVICE_WARRANTY:         { bg: 'bg-cyan-50',    text: 'text-cyan-800',    head: 'bg-cyan-100/70',    rail: 'bg-cyan-200'    },
   CANCELED:                 { bg: 'bg-rose-50',    text: 'text-rose-800',    head: 'bg-rose-100/70',    rail: 'bg-rose-200'    },
 } as const
 
@@ -122,7 +130,9 @@ export default function AdminStatusBoard() {
     const map: Record<OrderStatus, Order[]> = {
       PENDING_PAYMENT_APPROVAL: [],
       IN_PRODUCTION: [],
+      PRE_SHIPPING: [],
       COMPLETED: [],
+      SERVICE_WARRANTY: [],
       CANCELED: [],
     }
     orders.forEach(o => map[o.status]?.push(o))
@@ -413,7 +423,9 @@ export default function AdminStatusBoard() {
                   {(NEXT_STATUSES[detail?.status || active.status] || []).map(next => {
                     const [Icon, cls] =
                       next === 'IN_PRODUCTION' ? [Clock, 'bg-indigo-600 hover:bg-indigo-700'] :
+                      next === 'PRE_SHIPPING' ? [Clock, 'bg-violet-600 hover:bg-violet-700'] :
                       next === 'COMPLETED' ? [CircleCheckBig, 'bg-emerald-600 hover:bg-emerald-700'] :
+                      next === 'SERVICE_WARRANTY' ? [CheckCircle2, 'bg-cyan-600 hover:bg-cyan-700'] :
                       next === 'CANCELED' ? [CircleX, 'bg-rose-600 hover:bg-rose-700'] :
                       [CheckCircle2, 'bg-sky-600 hover:bg-sky-700']
 
@@ -472,8 +484,12 @@ function StatusBadge({ status }: { status: OrderStatus | string }) {
       return <span className={`${base} bg-yellow-100 text-yellow-800`}>Needs Deposit</span>
     case 'IN_PRODUCTION':
       return <span className={`${base} bg-indigo-100 text-indigo-800`}>In Production</span>
+    case 'PRE_SHIPPING':
+      return <span className={`${base} bg-violet-100 text-violet-800`}>Pre-Shipping</span>
     case 'COMPLETED':
       return <span className={`${base} bg-green-100 text-green-800`}>Completed</span>
+    case 'SERVICE_WARRANTY':
+      return <span className={`${base} bg-cyan-100 text-cyan-800`}>Service/Warranty</span>
     case 'CANCELED':
       return <span className={`${base} bg-red-100 text-red-800`}>Canceled</span>
     default:

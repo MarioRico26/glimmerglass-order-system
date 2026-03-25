@@ -25,6 +25,7 @@ export const TEMPLATE_STATUSES: FlowStatus[] = [
   'IN_PRODUCTION',
   'PRE_SHIPPING',
   'COMPLETED',
+  'SERVICE_WARRANTY',
 ]
 
 const templateStatusSet = new Set<FlowStatus>(TEMPLATE_STATUSES)

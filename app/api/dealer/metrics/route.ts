@@ -51,6 +51,7 @@ export async function GET() {
     IN_PRODUCTION: 0,
     PRE_SHIPPING: 0,
     COMPLETED: 0,
+    SERVICE_WARRANTY: 0,
     CANCELED: 0,
   }
   orders.forEach(o => {

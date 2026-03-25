@@ -56,7 +56,7 @@ type PoolStockSummary = {
 }
 
 const emptyMetrics: Metrics = {
-  totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, CANCELED: 0 },
+  totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, SERVICE_WARRANTY: 0, CANCELED: 0 },
   monthly: [],
   recent: [],
   byFactory: [],
@@ -72,6 +72,8 @@ function statusLabel(status: string) {
       return 'Pre-Shipping'
     case 'COMPLETED':
       return 'Completed'
+    case 'SERVICE_WARRANTY':
+      return 'Service/Warranty'
     case 'CANCELED':
       return 'Canceled'
     default:
@@ -90,6 +92,8 @@ function statusPill(status: string) {
       return <span className={`${base} border-violet-200 bg-violet-50 text-violet-800`}>Pre-Shipping</span>
     case 'COMPLETED':
       return <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-800`}>Completed</span>
+    case 'SERVICE_WARRANTY':
+      return <span className={`${base} border-cyan-200 bg-cyan-50 text-cyan-800`}>Service/Warranty</span>
     case 'CANCELED':
       return <span className={`${base} border-rose-200 bg-rose-50 text-rose-800`}>Canceled</span>
     default:
@@ -200,18 +204,20 @@ export default function AdminDashboard() {
               <PulseRow label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} tone="amber" />
               <PulseRow label="In Production" value={t.IN_PRODUCTION || 0} tone="indigo" />
               <PulseRow label="Pre-Shipping" value={t.PRE_SHIPPING || 0} tone="violet" />
+              <PulseRow label="Service/Warranty" value={t.SERVICE_WARRANTY || 0} tone="sky" />
               <PulseRow label="Ready Pool Stock" value={poolStockTotals.READY || 0} tone="emerald" />
             </div>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-5">
+      <section className="grid gap-4 xl:grid-cols-6">
         <StatCard label="Total Orders" value={t.total || 0} Icon={PackageSearch} tone="slate" />
         <StatCard label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock3} tone="amber" />
         <StatCard label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} tone="indigo" />
         <StatCard label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={Truck} tone="violet" />
         <StatCard label="Completed" value={t.COMPLETED || 0} Icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Service/Warranty" value={t.SERVICE_WARRANTY || 0} Icon={CircleAlert} tone="sky" />
       </section>
 
       <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -343,6 +349,7 @@ export default function AdminDashboard() {
                 <th className="text-right py-2 px-3">In Production</th>
                 <th className="text-right py-2 px-3">Pre-Shipping</th>
                 <th className="text-right py-2 px-3">Completed</th>
+                <th className="text-right py-2 px-3">Service/Warranty</th>
                 <th className="text-right py-2 pl-3">Canceled</th>
               </tr>
             </thead>
@@ -355,6 +362,7 @@ export default function AdminDashboard() {
                   <td className="py-3 px-3 text-right">{f.totals.IN_PRODUCTION}</td>
                   <td className="py-3 px-3 text-right">{f.totals.PRE_SHIPPING}</td>
                   <td className="py-3 px-3 text-right">{f.totals.COMPLETED}</td>
+                  <td className="py-3 px-3 text-right">{f.totals.SERVICE_WARRANTY || 0}</td>
                   <td className="py-3 pl-3 text-right">{f.totals.CANCELED}</td>
                 </tr>
               ))}

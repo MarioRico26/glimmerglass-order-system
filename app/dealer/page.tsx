@@ -121,12 +121,13 @@ const Stat = ({
             <OnboardingChecklist />
 
             {/* Stats */}
-            <div className="grid sm:grid-cols-6 gap-4 mb-6">
+            <div className="grid sm:grid-cols-2 xl:grid-cols-7 gap-4 mb-6">
                 <Stat label="Total Orders" value={t.total ?? 0} Icon={PackageSearch} />
                 <Stat label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL ?? 0} Icon={Clock} />
                 <Stat label="In Production" value={t.IN_PRODUCTION ?? 0} Icon={CircleCheckBig} />
                 <Stat label="Pre-Shipping" value={t.PRE_SHIPPING ?? 0} Icon={CheckCircle2} />
                 <Stat label="Completed" value={t.COMPLETED ?? 0} Icon={CheckCircle2} />
+                <Stat label="Service/Warranty" value={t.SERVICE_WARRANTY ?? 0} Icon={CheckCircle2} />
                 <Stat label="Canceled" value={t.CANCELED ?? 0} Icon={XCircle} />
             </div>
 
