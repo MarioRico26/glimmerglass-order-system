@@ -28,6 +28,7 @@ type PenetrationMode =
   | 'PENETRATIONS_WITHOUT_INSTALL'
   | 'NO_PENETRATIONS'
   | 'OTHER'
+type AdminOrderType = 'POOL_ONLY' | 'SPA_ONLY' | 'POOL_AND_SPA'
 
 type BlueprintMarker = {
   type: 'skimmer' | 'return' | 'drain'
@@ -102,6 +103,7 @@ export default function AdminNewOrderPage() {
   const blueprintRef = useRef<HTMLDivElement | null>(null)
 
   const [form, setForm] = useState({
+    orderType: 'POOL_ONLY' as AdminOrderType,
     dealerId: '',
     poolModelId: '',
     colorId: '',
@@ -132,9 +134,13 @@ export default function AdminNewOrderPage() {
     if (!form.factoryLocationId) return []
     return models.filter((m) => {
       const modelFactoryId = m.defaultFactoryLocationId || m.defaultFactoryLocation?.id || ''
-      return modelFactoryId === form.factoryLocationId && (m.productType || 'POOL') === 'POOL'
+      const productType = m.productType || 'POOL'
+      if (form.orderType === 'SPA_ONLY') {
+        return modelFactoryId === form.factoryLocationId && productType === 'SPA'
+      }
+      return modelFactoryId === form.factoryLocationId && productType === 'POOL'
     })
-  }, [models, form.factoryLocationId])
+  }, [models, form.factoryLocationId, form.orderType])
   const visibleSpaModels = useMemo(() => {
     if (!form.factoryLocationId) return []
     return models.filter((m) => {
@@ -209,12 +215,18 @@ export default function AdminNewOrderPage() {
     if (!form.factoryLocationId || !form.poolModelId) return
     const selectedModel = models.find((m) => m.id === form.poolModelId)
     if (!selectedModel) return
-    if (selectedModel.defaultFactoryLocationId !== form.factoryLocationId) {
+    const selectedModelFactoryId =
+      selectedModel.defaultFactoryLocationId || selectedModel.defaultFactoryLocation?.id || ''
+    const expectedProductType = form.orderType === 'SPA_ONLY' ? 'SPA' : 'POOL'
+    if (
+      selectedModelFactoryId !== form.factoryLocationId ||
+      (selectedModel.productType || 'POOL') !== expectedProductType
+    ) {
       setForm((prev) => ({ ...prev, poolModelId: '' }))
       setMarkers([])
       setMarkerError('')
     }
-  }, [form.factoryLocationId, form.poolModelId, models])
+  }, [form.factoryLocationId, form.poolModelId, form.orderType, models])
 
   useEffect(() => {
     if (!form.factoryLocationId || !form.spaPoolModelId) return
@@ -228,10 +240,10 @@ export default function AdminNewOrderPage() {
   }, [form.factoryLocationId, form.spaPoolModelId, models])
 
   useEffect(() => {
-    if (!form.linkSpaToJob) {
+    if (form.orderType !== 'POOL_AND_SPA' || !form.linkSpaToJob) {
       setForm((prev) => ({ ...prev, spaPoolModelId: '', spaColorId: '' }))
     }
-  }, [form.linkSpaToJob])
+  }, [form.linkSpaToJob, form.orderType])
 
   useEffect(() => {
     if (form.penetrationMode === 'NO_PENETRATIONS') {
@@ -287,7 +299,7 @@ export default function AdminNewOrderPage() {
       setError('Please add notes when "Other" is selected.')
       return
     }
-    if (form.linkSpaToJob && (!form.spaPoolModelId || !form.spaColorId)) {
+    if (form.orderType === 'POOL_AND_SPA' && form.linkSpaToJob && (!form.spaPoolModelId || !form.spaColorId)) {
       setError('Select spa model and spa color to link a spa to this job.')
       return
     }
@@ -298,6 +310,7 @@ export default function AdminNewOrderPage() {
     try {
       const payload = {
         dealerId: form.dealerId,
+        orderType: form.orderType,
         poolModelId: form.poolModelId,
         colorId: form.colorId,
         factoryLocationId: form.factoryLocationId,
@@ -317,7 +330,7 @@ export default function AdminNewOrderPage() {
         invoiceNumber: form.invoiceNumber.trim() || null,
         hardwareAutocover: form.hardwareAutocover,
         linkedSpa:
-          form.linkSpaToJob && form.spaPoolModelId && form.spaColorId
+          form.orderType === 'POOL_AND_SPA' && form.linkSpaToJob && form.spaPoolModelId && form.spaColorId
             ? {
                 poolModelId: form.spaPoolModelId,
                 colorId: form.spaColorId,
@@ -335,6 +348,7 @@ export default function AdminNewOrderPage() {
 
       setOkMsg(`Order created successfully: ${json?.order?.id || 'new order'}`)
       setForm({
+        orderType: 'POOL_ONLY',
         dealerId: '',
         poolModelId: '',
         colorId: '',
@@ -465,6 +479,31 @@ export default function AdminNewOrderPage() {
               <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                    Order Type
+                  </label>
+                  <select
+                    value={form.orderType}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        orderType: e.target.value as AdminOrderType,
+                        poolModelId: '',
+                        colorId: '',
+                        linkSpaToJob: e.target.value === 'POOL_AND_SPA' ? prev.linkSpaToJob : false,
+                        spaPoolModelId: '',
+                        spaColorId: '',
+                      }))
+                    }
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  >
+                    <option value="POOL_ONLY">Pool only</option>
+                    <option value="SPA_ONLY">Spa only</option>
+                    <option value="POOL_AND_SPA">Pool + Spa linked</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
                     Dealer
                   </label>
                   <div className="flex items-center gap-2">
@@ -524,7 +563,7 @@ export default function AdminNewOrderPage() {
               <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                    Pool Model
+                    {form.orderType === 'SPA_ONLY' ? 'Spa Model' : 'Pool Model'}
                   </label>
                   <div className="rounded-xl border border-slate-200 bg-slate-50">
                     <button
@@ -536,7 +575,9 @@ export default function AdminNewOrderPage() {
                         <div className="text-sm font-semibold text-slate-900">
                           {form.poolModelId
                             ? visibleModels.find((m) => m.id === form.poolModelId)?.name || 'Selected model'
-                            : 'Select model'}
+                            : form.orderType === 'SPA_ONLY'
+                              ? 'Select spa model'
+                              : 'Select pool model'}
                         </div>
                         <div className="text-xs text-slate-500">
                           {form.factoryLocationId
@@ -558,7 +599,13 @@ export default function AdminNewOrderPage() {
                           required
                           disabled={!form.factoryLocationId}
                         >
-                          <option value="">{form.factoryLocationId ? 'Select model' : 'Select factory first'}</option>
+                          <option value="">
+                            {form.factoryLocationId
+                              ? form.orderType === 'SPA_ONLY'
+                                ? 'Select spa model'
+                                : 'Select pool model'
+                              : 'Select factory first'}
+                          </option>
                           {visibleModels.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name}
@@ -567,8 +614,10 @@ export default function AdminNewOrderPage() {
                         </select>
                         <p className="mt-2 text-xs text-slate-500">
                           {form.factoryLocationId
-                            ? 'Only models assigned to the selected factory are shown.'
-                            : 'Choose the production facility before selecting a pool model.'}
+                            ? form.orderType === 'SPA_ONLY'
+                              ? 'Only spa models assigned to the selected factory are shown.'
+                              : 'Only pool models assigned to the selected factory are shown.'
+                            : 'Choose the production facility before selecting a model.'}
                         </p>
                       </div>
                     ) : null}
@@ -621,23 +670,25 @@ export default function AdminNewOrderPage() {
                       Use this when the spa should be scheduled with the pool for production and shipping.
                     </div>
                   </div>
-                  <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={form.linkSpaToJob}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          linkSpaToJob: e.target.checked,
-                          ...(e.target.checked ? {} : { spaPoolModelId: '', spaColorId: '' }),
-                        }))
-                      }
-                    />
-                    Link spa
-                  </label>
+                  {form.orderType === 'POOL_AND_SPA' ? (
+                    <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={form.linkSpaToJob}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            linkSpaToJob: e.target.checked,
+                            ...(e.target.checked ? {} : { spaPoolModelId: '', spaColorId: '' }),
+                          }))
+                        }
+                      />
+                      Link spa
+                    </label>
+                  ) : null}
                 </div>
 
-                {form.linkSpaToJob ? (
+                {form.orderType === 'POOL_AND_SPA' && form.linkSpaToJob ? (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -675,6 +726,14 @@ export default function AdminNewOrderPage() {
                         ))}
                       </select>
                     </div>
+                  </div>
+                ) : form.orderType === 'SPA_ONLY' ? (
+                  <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                    This will create a standalone spa order. It will not be linked to a pool job.
+                  </div>
+                ) : form.orderType === 'POOL_AND_SPA' ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                    Turn on <strong>Link spa</strong> to create a pool + spa linked order. Scheduling can be shared, while status and serial remain separate per order.
                   </div>
                 ) : null}
               </div>

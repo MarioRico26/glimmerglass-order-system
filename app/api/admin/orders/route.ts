@@ -272,6 +272,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const linkedSpaRaw = body?.linkedSpa && typeof body.linkedSpa === 'object' ? body.linkedSpa : null
+    const orderType =
+      body?.orderType === 'SPA_ONLY' || body?.orderType === 'POOL_AND_SPA'
+        ? body.orderType
+        : 'POOL_ONLY'
     const penetrationModeRaw = body?.penetrationMode
     const penetrationMode: PenetrationMode =
       penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
@@ -310,8 +314,11 @@ export async function POST(req: NextRequest) {
     if (!selectedPoolModel) {
       return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
     }
-    if (selectedPoolModel.productType === 'SPA') {
+    if (orderType !== 'SPA_ONLY' && selectedPoolModel.productType === 'SPA') {
       return NextResponse.json({ message: 'Primary order model must be a pool model' }, { status: 400 })
+    }
+    if (orderType === 'SPA_ONLY' && selectedPoolModel.productType !== 'SPA') {
+      return NextResponse.json({ message: 'Primary order model must be a spa model' }, { status: 400 })
     }
 
     const linkedSpaModelId =
@@ -320,6 +327,9 @@ export async function POST(req: NextRequest) {
       typeof linkedSpaRaw?.colorId === 'string' ? linkedSpaRaw.colorId.trim() : ''
     let linkedSpaModel: { id: string; productType: string } | null = null
     if (linkedSpaRaw) {
+      if (orderType !== 'POOL_AND_SPA') {
+        return NextResponse.json({ message: 'linkedSpa is only allowed for Pool + Spa linked orders' }, { status: 400 })
+      }
       if (!linkedSpaModelId || !linkedSpaColorId) {
         return NextResponse.json(
           { message: 'linkedSpa.poolModelId and linkedSpa.colorId are required' },
@@ -434,6 +444,10 @@ export async function POST(req: NextRequest) {
             ? body.notes
               ? `Order created by admin as linked pool job. Initial notes: ${body.notes}`
               : 'Order created by admin as linked pool job'
+            : orderType === 'SPA_ONLY'
+            ? body.notes
+              ? `Spa order created by admin. Initial notes: ${body.notes}`
+              : 'Spa order created by admin'
             : body.notes
             ? `Order created by admin. Initial notes: ${body.notes}`
             : 'Order created by admin',
