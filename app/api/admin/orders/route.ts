@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
     const dealerFilter = searchParams.get('dealer') || 'ALL'
     const factoryFilter = searchParams.get('factory') || 'ALL'
     const finalPaymentFilter = searchParams.get('finalPayment') || 'ALL'
+    const signalFilter = searchParams.get('signal') || 'ALL'
 
     // ✅ Subimos el límite a 200 porque el board pide 200.
     // Si luego quieres 500, lo hablamos, pero 200 ya es decente y evita traer “el universo”.
@@ -100,6 +101,26 @@ export async function GET(req: NextRequest) {
     } else if (finalPaymentFilter === 'RECEIVED') {
       where.status = 'PRE_SHIPPING'
       where.media = { some: { docType: 'PROOF_OF_FINAL_PAYMENT' } }
+    }
+
+    if (signalFilter === 'MISSING_SERIAL') {
+      where.AND = [...(where.AND || []), { OR: [{ serialNumber: null }, { serialNumber: '' }] }]
+    } else if (signalFilter === 'UNSCHEDULED_PRODUCTION') {
+      where.AND = [
+        ...(where.AND || []),
+        { status: { in: ['IN_PRODUCTION', 'APPROVED'] } },
+        { scheduledProductionDate: null },
+      ]
+    } else if (signalFilter === 'UNSCHEDULED_SHIPPING') {
+      where.AND = [...(where.AND || []), { status: 'PRE_SHIPPING' }, { scheduledShipDate: null }]
+    } else if (signalFilter === 'NEEDS_DEPOSIT_FILE') {
+      where.AND = [
+        ...(where.AND || []),
+        { status: 'PENDING_PAYMENT_APPROVAL' },
+        { OR: [{ paymentProofUrl: null }, { paymentProofUrl: '' }] },
+      ]
+    } else if (signalFilter === 'ALLOCATED_STOCK') {
+      where.AND = [...(where.AND || []), { allocatedPoolStockId: { not: null } }]
     }
 
     if (q) {

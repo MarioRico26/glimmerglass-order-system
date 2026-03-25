@@ -7,7 +7,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { signOut } from 'next-auth/react'
 
-import NotificationsBell from '../dealer/notifications/bell'
+import AdminAlertsBell from './notifications/bell'
 
 import {
   LayoutDashboard,
@@ -310,7 +310,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <NotificationsBell />
+              <AdminAlertsBell />
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="hidden sm:inline-flex items-center gap-2 text-[13px] font-semibold rounded-xl px-3 py-2 border bg-white hover:bg-slate-50 [border-color:var(--gg-border)]"

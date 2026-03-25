@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     const dealer = searchParams.get('dealer') || ''
     const factory = searchParams.get('factory') || ''
     const finalPaymentFilter = searchParams.get('finalPayment') || ''
+    const signalFilter = searchParams.get('signal') || ''
     const sort = SAFE_SORT.has(searchParams.get('sort') || '')
       ? (searchParams.get('sort') as
           | 'createdAt'
@@ -86,6 +87,25 @@ export async function GET(req: NextRequest) {
     } else if (finalPaymentFilter === 'RECEIVED') {
       where.status = 'PRE_SHIPPING'
       where.media = { some: { docType: 'PROOF_OF_FINAL_PAYMENT' } }
+    }
+    if (signalFilter === 'MISSING_SERIAL') {
+      where.AND = [...((where.AND as unknown[]) || []), { OR: [{ serialNumber: null }, { serialNumber: '' }] }]
+    } else if (signalFilter === 'UNSCHEDULED_PRODUCTION') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { status: { in: ['IN_PRODUCTION', 'APPROVED'] } },
+        { scheduledProductionDate: null },
+      ]
+    } else if (signalFilter === 'UNSCHEDULED_SHIPPING') {
+      where.AND = [...((where.AND as unknown[]) || []), { status: 'PRE_SHIPPING' }, { scheduledShipDate: null }]
+    } else if (signalFilter === 'NEEDS_DEPOSIT_FILE') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { status: 'PENDING_PAYMENT_APPROVAL' },
+        { OR: [{ paymentProofUrl: null }, { paymentProofUrl: '' }] },
+      ]
+    } else if (signalFilter === 'ALLOCATED_STOCK') {
+      where.AND = [...((where.AND as unknown[]) || []), { allocatedPoolStockId: { not: null } }]
     }
     if (q) {
       where.OR = [

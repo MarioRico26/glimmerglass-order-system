@@ -74,6 +74,14 @@ type ApiResp = {
   total: number
 }
 
+type SignalFilter =
+  | 'ALL'
+  | 'MISSING_SERIAL'
+  | 'UNSCHEDULED_PRODUCTION'
+  | 'UNSCHEDULED_SHIPPING'
+  | 'NEEDS_DEPOSIT_FILE'
+  | 'ALLOCATED_STOCK'
+
 type AccessSummary = {
   allModules: boolean
   effectiveModules: string[]
@@ -551,6 +559,7 @@ function AdminOrdersInner() {
   const dealerFilter = sp.get('dealer') || 'ALL'
   const factoryFilter = sp.get('factory') || 'ALL'
   const finalPaymentFilter = sp.get('finalPayment') || 'ALL'
+  const signalFilter = (sp.get('signal') as SignalFilter | null) || 'ALL'
   const sort = sp.get('sort') || 'createdAt'
   const dir = sp.get('dir') || 'desc'
   const page = Math.max(1, Number(sp.get('page') || 1))
@@ -595,6 +604,7 @@ function AdminOrdersInner() {
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
       if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
+      if (signalFilter !== 'ALL') params.set('signal', signalFilter)
       params.set('scopeModule', 'ORDER_LIST')
       params.set('sort', sort)
       params.set('dir', dir)
@@ -621,7 +631,7 @@ function AdminOrdersInner() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, sort, dir, page, pageSize])
+  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, signalFilter, sort, dir, page, pageSize])
 
   const [refreshing, setRefreshing] = useState(false)
   const handleRefresh = async () => {
@@ -826,6 +836,7 @@ function AdminOrdersInner() {
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
       if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
+      if (signalFilter !== 'ALL') params.set('signal', signalFilter)
       params.set('scopeModule', 'ORDER_LIST')
       params.set('sort', sort)
       params.set('dir', dir)
@@ -842,7 +853,7 @@ function AdminOrdersInner() {
       setTotalCount(data.total || 0)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, sort, dir, page, pageSize])
+  }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, signalFilter, sort, dir, page, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const canCreateOrder = access?.allModules || access?.effectiveModules.includes('NEW_ORDER')
@@ -868,9 +879,25 @@ function AdminOrdersInner() {
     if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
     if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
     if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
+    if (signalFilter !== 'ALL') params.set('signal', signalFilter)
     params.set('sort', sort)
     params.set('dir', dir)
     return `/api/admin/orders/export?${params.toString()}`
+  }
+
+  const applyQuickView = (
+    patch: Partial<{
+      status: string
+      finalPayment: string
+      signal: SignalFilter
+    }>
+  ) => {
+    setParams({
+      status: patch.status ?? null,
+      finalPayment: patch.finalPayment ?? null,
+      signal: patch.signal && patch.signal !== 'ALL' ? patch.signal : null,
+      page: 1,
+    })
   }
 
   return (
@@ -1101,25 +1128,108 @@ function AdminOrdersInner() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-5">
-        <div className="rounded-[1.6rem] border border-slate-200 bg-white/85 px-4 py-4 shadow-sm">
+        <button
+          type="button"
+          onClick={() => applyQuickView({ status: 'ALL', finalPayment: 'ALL', signal: 'ALL' })}
+          className={[
+            'rounded-[1.6rem] border px-4 py-4 shadow-sm text-left transition',
+            statusFilter === 'ALL' && finalPaymentFilter === 'ALL' && signalFilter === 'ALL'
+              ? 'border-slate-300 bg-slate-100/90'
+              : 'border-slate-200 bg-white/85 hover:bg-slate-50',
+          ].join(' ')}
+        >
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Loaded Orders</div>
           <div className="mt-2 text-[1.9rem] leading-none font-black text-slate-900">{pageSignals.total}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-4 py-4 shadow-sm">
+          <div className="mt-2 text-xs font-semibold text-slate-500">Clear operational filters</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => applyQuickView({ signal: 'MISSING_SERIAL' })}
+          className={[
+            'rounded-[1.6rem] border px-4 py-4 shadow-sm text-left transition',
+            signalFilter === 'MISSING_SERIAL'
+              ? 'border-amber-300 bg-amber-100/90'
+              : 'border-amber-200 bg-amber-50/90 hover:bg-amber-100/80',
+          ].join(' ')}
+        >
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">Missing Serial</div>
           <div className="mt-2 text-[1.9rem] leading-none font-black text-amber-900">{pageSignals.missingSerial}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-indigo-200 bg-indigo-50/90 px-4 py-4 shadow-sm">
+          <div className="mt-2 text-xs font-semibold text-amber-800">Focus this issue</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => applyQuickView({ signal: 'UNSCHEDULED_PRODUCTION' })}
+          className={[
+            'rounded-[1.6rem] border px-4 py-4 shadow-sm text-left transition',
+            signalFilter === 'UNSCHEDULED_PRODUCTION'
+              ? 'border-indigo-300 bg-indigo-100/90'
+              : 'border-indigo-200 bg-indigo-50/90 hover:bg-indigo-100/80',
+          ].join(' ')}
+        >
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-700">Unscheduled Production</div>
           <div className="mt-2 text-[1.9rem] leading-none font-black text-indigo-900">{pageSignals.unscheduledProduction}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-violet-200 bg-violet-50/90 px-4 py-4 shadow-sm">
+          <div className="mt-2 text-xs font-semibold text-indigo-800">Focus this issue</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => applyQuickView({ signal: 'UNSCHEDULED_SHIPPING' })}
+          className={[
+            'rounded-[1.6rem] border px-4 py-4 shadow-sm text-left transition',
+            signalFilter === 'UNSCHEDULED_SHIPPING'
+              ? 'border-violet-300 bg-violet-100/90'
+              : 'border-violet-200 bg-violet-50/90 hover:bg-violet-100/80',
+          ].join(' ')}
+        >
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Unscheduled Shipping</div>
           <div className="mt-2 text-[1.9rem] leading-none font-black text-violet-900">{pageSignals.unscheduledShipping}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-sky-200 bg-sky-50/90 px-4 py-4 shadow-sm">
+          <div className="mt-2 text-xs font-semibold text-violet-800">Focus this issue</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => applyQuickView({ signal: 'NEEDS_DEPOSIT_FILE' })}
+          className={[
+            'rounded-[1.6rem] border px-4 py-4 shadow-sm text-left transition',
+            signalFilter === 'NEEDS_DEPOSIT_FILE'
+              ? 'border-sky-300 bg-sky-100/90'
+              : 'border-sky-200 bg-sky-50/90 hover:bg-sky-100/80',
+          ].join(' ')}
+        >
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700">Deposit File Pending</div>
           <div className="mt-2 text-[1.9rem] leading-none font-black text-sky-900">{pageSignals.needsDepositFile}</div>
+          <div className="mt-2 text-xs font-semibold text-sky-800">Focus this issue</div>
+        </button>
+      </div>
+
+      <div className="rounded-3xl border border-white bg-white/75 backdrop-blur-xl shadow-[0_18px_42px_rgba(0,122,153,0.10)] px-5 py-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Operational Views</div>
+            <div className="mt-1 text-sm text-slate-600">One click views for the issues ops usually chases first.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'All Orders', active: statusFilter === 'ALL' && finalPaymentFilter === 'ALL' && signalFilter === 'ALL', onClick: () => applyQuickView({ status: 'ALL', finalPayment: 'ALL', signal: 'ALL' }) },
+              { label: 'Needs Deposit', active: signalFilter === 'NEEDS_DEPOSIT_FILE', onClick: () => applyQuickView({ signal: 'NEEDS_DEPOSIT_FILE' }) },
+              { label: 'In Production', active: statusFilter === 'IN_PRODUCTION' && signalFilter === 'ALL', onClick: () => applyQuickView({ status: 'IN_PRODUCTION', finalPayment: 'ALL', signal: 'ALL' }) },
+              { label: 'Ready to Ship', active: statusFilter === 'PRE_SHIPPING' && finalPaymentFilter === 'ALL' && signalFilter === 'ALL', onClick: () => applyQuickView({ status: 'PRE_SHIPPING', finalPayment: 'ALL', signal: 'ALL' }) },
+              { label: 'Final Payment Needed', active: finalPaymentFilter === 'NEEDED', onClick: () => applyQuickView({ status: 'PRE_SHIPPING', finalPayment: 'NEEDED', signal: 'ALL' }) },
+              { label: 'Stock Allocated', active: signalFilter === 'ALLOCATED_STOCK', onClick: () => applyQuickView({ signal: 'ALLOCATED_STOCK' }) },
+            ].map((view) => (
+              <button
+                key={view.label}
+                type="button"
+                onClick={view.onClick}
+                className={[
+                  'inline-flex items-center rounded-full border px-4 py-2 text-sm font-bold transition',
+                  view.active
+                    ? 'border-slate-300 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
