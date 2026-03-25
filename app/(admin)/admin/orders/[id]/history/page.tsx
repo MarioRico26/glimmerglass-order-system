@@ -206,6 +206,7 @@ export default function OrderHistoryPage() {
   const [saving, setSaving] = useState(false)
   const [allocating, setAllocating] = useState(false)
   const { labelForDocType } = useWorkflowDocLabels()
+  const hasAllocatedStock = !!summary?.allocatedPoolStock
 
   const loadAll = async () => {
     try {
@@ -923,6 +924,11 @@ export default function OrderHistoryPage() {
                 <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
                   Logistics
                 </h3>
+                {hasAllocatedStock ? (
+                  <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    This order has stock allocated. Release the stock allocation before changing the factory location.
+                  </div>
+                ) : null}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="block text-sm font-semibold mb-1 text-slate-700">
@@ -932,7 +938,7 @@ export default function OrderHistoryPage() {
                       value={selectedFactoryId}
                       onChange={(e) => setSelectedFactoryId(e.target.value)}
                       className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      disabled={saving}
+                      disabled={saving || hasAllocatedStock}
                     >
                       <option value="">Not assigned</option>
                       {factoryList.map((f) => (
@@ -1002,6 +1008,11 @@ export default function OrderHistoryPage() {
                 <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 mb-3">
                   Production
                 </h3>
+                {hasAllocatedStock ? (
+                  <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                    Serial number is being driven by the allocated stock unit.
+                  </div>
+                ) : null}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="block text-sm font-semibold mb-1 text-slate-700">
@@ -1012,7 +1023,7 @@ export default function OrderHistoryPage() {
                       value={editSerialNumber}
                       onChange={(e) => setEditSerialNumber(e.target.value)}
                       className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      disabled={saving}
+                      disabled={saving || hasAllocatedStock}
                     />
                   </div>
 

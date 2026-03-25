@@ -200,9 +200,42 @@ export async function PATCH(
     const updated = await prisma.$transaction(async (tx) => {
       const base = await tx.order.findUnique({
         where: { id },
-        select: { id: true, jobId: true },
+        select: {
+          id: true,
+          jobId: true,
+          factoryLocationId: true,
+          serialNumber: true,
+          allocatedPoolStockId: true,
+          allocatedPoolStock: {
+            select: {
+              id: true,
+              serialNumber: true,
+              factoryId: true,
+            },
+          },
+        },
       })
       if (!base) throw new Error('Order not found')
+
+      if (
+        base.allocatedPoolStockId &&
+        typeof data.factoryLocationId !== 'undefined' &&
+        data.factoryLocationId !== base.factoryLocationId
+      ) {
+        throw Object.assign(new Error('Release the allocated stock before changing the factory location'), {
+          status: 409,
+        })
+      }
+
+      if (
+        base.allocatedPoolStockId &&
+        typeof data.serialNumber !== 'undefined' &&
+        data.serialNumber !== (base.allocatedPoolStock?.serialNumber ?? base.serialNumber ?? null)
+      ) {
+        throw Object.assign(new Error('Release the allocated stock before editing the serial number'), {
+          status: 409,
+        })
+      }
 
       const sharedJobData: Record<string, unknown> = {}
       if ('factoryLocationId' in data) sharedJobData.factoryLocationId = data.factoryLocationId
@@ -281,11 +314,19 @@ export async function PATCH(
     })
 
     return NextResponse.json(toSummaryDTO(updated))
-  } catch (e) {
+  } catch (e: unknown) {
     console.error('PATCH /api/admin/orders/[id]/factory error:', e)
+    const status =
+      typeof e === 'object' && e !== null && 'status' in e && typeof (e as any).status === 'number'
+        ? (e as any).status
+        : 500
+    const message =
+      typeof e === 'object' && e !== null && 'message' in e && typeof (e as any).message === 'string'
+        ? (e as any).message
+        : 'Internal Server Error'
     return NextResponse.json(
-      { message: 'Internal Server Error' },
-      { status: 500 },
+      { message },
+      { status },
     )
   }
 }
