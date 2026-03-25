@@ -8,6 +8,7 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        productType: true,
         lengthFt: true,
         widthFt: true,
         depthFt: true,
@@ -30,6 +31,7 @@ export async function GET() {
         select: {
           id: true,
           name: true,
+          productType: true,
           lengthFt: true,
           widthFt: true,
           depthFt: true,
@@ -39,8 +41,9 @@ export async function GET() {
         },
       })
       const items = legacyItems.map((row) => ({
-        ...row,
-        hasIntegratedSpa: false,
+          ...row,
+          productType: 'POOL',
+          hasIntegratedSpa: false,
         maxSkimmers: null,
         maxReturns: null,
         maxMainDrains: null,
@@ -55,6 +58,7 @@ export async function GET() {
         })
         const items = minimal.map((row) => ({
           ...row,
+          productType: 'POOL',
           lengthFt: null,
           widthFt: null,
           depthFt: null,

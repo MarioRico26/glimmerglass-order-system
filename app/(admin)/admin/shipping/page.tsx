@@ -37,6 +37,11 @@ interface Order {
   scheduledShipDate?: string | null
   shippingMethod?: string | null
   serialNumber?: string | null
+  jobId?: string | null
+  jobRole?: 'PRIMARY' | 'LINKED' | null
+  jobItemType?: 'POOL' | 'SPA' | null
+  linkedJob?: boolean
+  jobOrderCount?: number
 }
 
 type ApiOrders = { items: Order[]; total?: number } | Order[]
@@ -108,6 +113,19 @@ function formatLongDate(value?: string | null) {
 
 function resolveFactoryName(order: Order) {
   return order.factoryLocation?.name || 'Unassigned Factory'
+}
+
+function linkedJobTone(order: Order) {
+  return order.jobItemType === 'SPA'
+    ? 'border-violet-200 bg-violet-50 text-violet-800'
+    : 'border-sky-200 bg-sky-50 text-sky-800'
+}
+
+function linkedJobLabel(order: Order) {
+  if (!order.linkedJob && !order.jobId) return null
+  if (order.jobItemType === 'SPA') return 'Linked Spa'
+  if (order.jobItemType === 'POOL') return 'Linked Pool'
+  return 'Linked Job'
 }
 
 function compareOrders(a: Order, b: Order) {
@@ -1176,6 +1194,11 @@ function MiniOrderCard({
       </div>
 
       <div className={dense ? 'mt-2 flex flex-wrap gap-1.5 text-[9px]' : 'mt-2.5 flex flex-wrap gap-1.5 text-[10px]'}>
+        {linkedJobLabel(order) ? (
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${linkedJobTone(order)}`}>
+            {linkedJobLabel(order)}
+          </span>
+        ) : null}
         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
           <ShipWheel size={dense ? 10 : 12} /> {shippingMethodLabel(order.shippingMethod)}
         </span>

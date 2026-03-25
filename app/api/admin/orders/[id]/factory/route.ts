@@ -37,6 +37,25 @@ function toSummaryDTO(o: any) {
           name: o.factoryLocation.name,
         }
       : null,
+    job: o.job
+      ? {
+          id: o.job.id,
+          role: o.jobRole ?? null,
+          itemType: o.jobItemType ?? null,
+          linkedOrders: Array.isArray(o.job.orders)
+            ? o.job.orders
+                .filter((linked: any) => linked.id !== o.id)
+                .map((linked: any) => ({
+                  id: linked.id,
+                  status: linked.status,
+                  role: linked.jobRole ?? null,
+                  itemType: linked.jobItemType ?? null,
+                  poolModel: linked.poolModel ? { name: linked.poolModel.name } : null,
+                  color: linked.color ? { name: linked.color.name } : null,
+                }))
+            : [],
+        }
+      : null,
     shippingMethod: o.shippingMethod ?? null,
     notes: o.notes ?? null,
     hardwareSkimmer: o.hardwareSkimmer,
@@ -179,9 +198,33 @@ export async function PATCH(
         : null
 
     const updated = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.update({
+      const base = await tx.order.findUnique({
+        where: { id },
+        select: { id: true, jobId: true },
+      })
+      if (!base) throw new Error('Order not found')
+
+      const sharedJobData: Record<string, unknown> = {}
+      if ('factoryLocationId' in data) sharedJobData.factoryLocationId = data.factoryLocationId
+      if ('shippingMethod' in data) sharedJobData.shippingMethod = data.shippingMethod
+      if ('deliveryAddress' in data) sharedJobData.deliveryAddress = data.deliveryAddress
+      if ('requestedShipDate' in data) sharedJobData.requestedShipDate = data.requestedShipDate
+      if ('requestedShipAsap' in data) sharedJobData.requestedShipAsap = data.requestedShipAsap
+
+      if (base.jobId && Object.keys(sharedJobData).length > 0) {
+        await tx.order.updateMany({
+          where: { jobId: base.jobId },
+          data: sharedJobData,
+        })
+      }
+
+      await tx.order.update({
         where: { id },
         data,
+      })
+
+      const order = await tx.order.findUnique({
+        where: { id },
         include: {
           dealer: {
             select: {
@@ -196,8 +239,25 @@ export async function PATCH(
           poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
           color: { select: { name: true } },
           factoryLocation: { select: { id: true, name: true } },
+          job: {
+            select: {
+              id: true,
+              orders: {
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  status: true,
+                  jobRole: true,
+                  jobItemType: true,
+                  poolModel: { select: { name: true } },
+                  color: { select: { name: true } },
+                },
+              },
+            },
+          },
         },
       })
+      if (!order) throw new Error('Order not found')
 
       if (userEmail) {
         const user = await tx.user.findUnique({

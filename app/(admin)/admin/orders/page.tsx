@@ -55,6 +55,11 @@ interface Order {
   finalPaymentNeeded?: boolean
   lastCancellationReason?: string | null
   lastCanceledAt?: string | null
+  jobId?: string | null
+  jobRole?: 'PRIMARY' | 'LINKED' | null
+  jobItemType?: 'POOL' | 'SPA' | null
+  linkedJob?: boolean
+  jobOrderCount?: number
 }
 
 type ApiResp = {
@@ -122,6 +127,17 @@ function shippingMethodLabel(value?: string | null) {
   if (value === 'PICK_UP') return 'Pick Up'
   if (value === 'QUOTE') return 'Glimmerglass Freight'
   return 'Not set'
+}
+
+function linkedJobTone(order: Order): 'sky' | 'violet' {
+  return order.jobItemType === 'SPA' ? 'violet' : 'sky'
+}
+
+function linkedJobLabel(order: Order) {
+  if (!order.linkedJob && !order.jobId) return null
+  if (order.jobItemType === 'SPA') return 'Linked Spa'
+  if (order.jobItemType === 'POOL') return 'Linked Pool'
+  return 'Linked Job'
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -1123,6 +1139,16 @@ function AdminOrdersInner() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <SignalPill label="Factory" value={order.factoryLocation?.name || 'Not set'} tone="sky" />
                                   <SignalPill label="Color" value={order.color?.name || '—'} tone="slate" />
+                                  {linkedJobLabel(order) ? (
+                                    <SignalPill
+                                      label="Job"
+                                      value={linkedJobLabel(order) as string}
+                                      tone={linkedJobTone(order)}
+                                    />
+                                  ) : null}
+                                  {order.jobOrderCount && order.jobOrderCount > 1 ? (
+                                    <SignalPill label="Pieces" value={String(order.jobOrderCount)} tone="slate" />
+                                  ) : null}
                                   {order.requestedShipAsap ? <SignalPill label="ASAP" value="Yes" tone="amber" /> : null}
                                   {order.finalPaymentNeeded ? <SignalPill label="Final Payment" value="Needed" tone="rose" /> : null}
                                 </div>

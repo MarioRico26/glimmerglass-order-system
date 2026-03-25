@@ -142,6 +142,9 @@ export async function GET(req: NextRequest) {
         shippingMethod: true,
         requestedShipAsap: true,
         invoiceNumber: true,
+        jobId: true,
+        jobRole: true,
+        jobItemType: true,
 
         // ✅ LO QUE NECESITA EL BOARD
         requestedShipDate: true,
@@ -218,6 +221,13 @@ export async function GET(req: NextRequest) {
           take: 1,
           select: { id: true },
         },
+        job: {
+          select: {
+            orders: {
+              select: { id: true },
+            },
+          },
+        },
       },
     })
 
@@ -229,6 +239,8 @@ export async function GET(req: NextRequest) {
       lastCancellationReason: order.histories[0]?.comment ?? null,
       lastCanceledAt: order.histories[0]?.createdAt?.toISOString() ?? null,
       finalPaymentNeeded: (normalizeOrderStatus(order.status)?.toString() ?? order.status) === 'PRE_SHIPPING' && order.media.length === 0,
+      linkedJob: !!order.jobId,
+      jobOrderCount: order.job?.orders.length ?? 0,
     }))
 
     return NextResponse.json({ items, page, pageSize, total })
@@ -259,6 +271,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+    const linkedSpaRaw = body?.linkedSpa && typeof body.linkedSpa === 'object' ? body.linkedSpa : null
     const penetrationModeRaw = body?.penetrationMode
     const penetrationMode: PenetrationMode =
       penetrationModeRaw === 'PENETRATIONS_WITH_INSTALL' ||
@@ -288,6 +301,7 @@ export async function POST(req: NextRequest) {
       where: { id: body.poolModelId },
       select: {
         id: true,
+        productType: true,
         maxSkimmers: true,
         maxReturns: true,
         maxMainDrains: true,
@@ -295,6 +309,32 @@ export async function POST(req: NextRequest) {
     })
     if (!selectedPoolModel) {
       return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+    }
+    if (selectedPoolModel.productType === 'SPA') {
+      return NextResponse.json({ message: 'Primary order model must be a pool model' }, { status: 400 })
+    }
+
+    const linkedSpaModelId =
+      typeof linkedSpaRaw?.poolModelId === 'string' ? linkedSpaRaw.poolModelId.trim() : ''
+    const linkedSpaColorId =
+      typeof linkedSpaRaw?.colorId === 'string' ? linkedSpaRaw.colorId.trim() : ''
+    let linkedSpaModel: { id: string; productType: string } | null = null
+    if (linkedSpaRaw) {
+      if (!linkedSpaModelId || !linkedSpaColorId) {
+        return NextResponse.json(
+          { message: 'linkedSpa.poolModelId and linkedSpa.colorId are required' },
+          { status: 400 }
+        )
+      }
+
+      linkedSpaModel = await prisma.poolModel.findUnique({
+        where: { id: linkedSpaModelId },
+        select: { id: true, productType: true },
+      })
+
+      if (!linkedSpaModel || linkedSpaModel.productType !== 'SPA') {
+        return NextResponse.json({ message: 'Linked spa model must be a spa model' }, { status: 400 })
+      }
     }
 
     let blueprintMarkers = markerResult.markers
@@ -335,34 +375,48 @@ export async function POST(req: NextRequest) {
     }
 
     const newOrder = await prisma.$transaction(async (tx) => {
+      const orderJob = linkedSpaModel
+        ? await tx.orderJob.create({
+            data: {
+              notes: 'Pool + spa linked job created by admin',
+            },
+          })
+        : null
+
+      const sharedData = {
+        factoryLocationId: body.factoryLocationId,
+        deliveryAddress: body.deliveryAddress,
+        shippingMethod: body.shippingMethod || null,
+        requestedShipDate: parseDateOnlyToUtcNoon(body.requestedShipDate),
+        requestedShipAsap: !!body.requestedShipAsap,
+        scheduledShipDate: body.scheduledShipDate ? new Date(body.scheduledShipDate) : null,
+        scheduledProductionDate: body.scheduledProductionDate
+          ? new Date(body.scheduledProductionDate)
+          : null,
+        productionPriority:
+          typeof body.productionPriority === 'number' ? body.productionPriority : null,
+      }
+
       const created = await tx.order.create({
         data: {
-          deliveryAddress: body.deliveryAddress,
           status: 'PENDING_PAYMENT_APPROVAL',
           dealerId: body.dealerId,
           poolModelId: body.poolModelId,
           colorId: body.colorId,
-          factoryLocationId: body.factoryLocationId,
+          ...sharedData,
           notes: body.notes || null,
           paymentProofUrl: body.paymentProofUrl || null,
           blueprintMarkers,
-          shippingMethod: body.shippingMethod || null,
           penetrationMode,
           penetrationNotes: penetrationNotes || null,
           hardwareSkimmer: body.hardwareSkimmer || false,
           hardwareAutocover: body.hardwareAutocover || false,
           hardwareReturns: body.hardwareReturns || false,
           hardwareMainDrains: body.hardwareMainDrains || false,
-
-          requestedShipDate: parseDateOnlyToUtcNoon(body.requestedShipDate),
-          requestedShipAsap: !!body.requestedShipAsap,
-          scheduledShipDate: body.scheduledShipDate ? new Date(body.scheduledShipDate) : null,
-          scheduledProductionDate: body.scheduledProductionDate
-            ? new Date(body.scheduledProductionDate)
-            : null,
           invoiceNumber: typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() || null : null,
-          productionPriority:
-            typeof body.productionPriority === 'number' ? body.productionPriority : null,
+          jobId: orderJob?.id ?? null,
+          jobRole: orderJob ? 'PRIMARY' : null,
+          jobItemType: orderJob ? 'POOL' : null,
         },
         include: {
           poolModel: { select: { name: true } },
@@ -376,12 +430,44 @@ export async function POST(req: NextRequest) {
         data: {
           orderId: created.id,
           status: created.status,
-          comment: body.notes
+          comment: linkedSpaModel
+            ? body.notes
+              ? `Order created by admin as linked pool job. Initial notes: ${body.notes}`
+              : 'Order created by admin as linked pool job'
+            : body.notes
             ? `Order created by admin. Initial notes: ${body.notes}`
             : 'Order created by admin',
           userId: dbUser.id,
         },
       })
+
+      if (linkedSpaModel && orderJob) {
+        const linkedSpaOrder = await tx.order.create({
+          data: {
+            status: 'PENDING_PAYMENT_APPROVAL',
+            dealerId: body.dealerId,
+            poolModelId: linkedSpaModelId,
+            colorId: linkedSpaColorId,
+            ...sharedData,
+            notes: body.notes || null,
+            penetrationMode: 'NO_PENETRATIONS',
+            hardwareAutocover: false,
+            invoiceNumber: typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() || null : null,
+            jobId: orderJob.id,
+            jobRole: 'LINKED',
+            jobItemType: 'SPA',
+          },
+        })
+
+        await tx.orderHistory.create({
+          data: {
+            orderId: linkedSpaOrder.id,
+            status: linkedSpaOrder.status,
+            comment: `Spa linked to job ${created.id.slice(0, 8)} and created by admin`,
+            userId: dbUser.id,
+          },
+        })
+      }
 
       return created
     })

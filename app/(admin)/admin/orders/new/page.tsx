@@ -8,6 +8,7 @@ type Dealer = { id: string; name: string; email?: string | null }
 type PoolModel = {
   id: string
   name: string
+  productType?: 'POOL' | 'SPA'
   lengthFt?: number | null
   widthFt?: number | null
   depthFt?: number | null
@@ -114,6 +115,9 @@ export default function AdminNewOrderPage() {
     penetrationMode: '' as '' | PenetrationMode,
     penetrationNotes: '',
     hardwareAutocover: false,
+    linkSpaToJob: false,
+    spaPoolModelId: '',
+    spaColorId: '',
   })
 
   const activeModel = useMemo(
@@ -128,7 +132,14 @@ export default function AdminNewOrderPage() {
     if (!form.factoryLocationId) return []
     return models.filter((m) => {
       const modelFactoryId = m.defaultFactoryLocationId || m.defaultFactoryLocation?.id || ''
-      return modelFactoryId === form.factoryLocationId
+      return modelFactoryId === form.factoryLocationId && (m.productType || 'POOL') === 'POOL'
+    })
+  }, [models, form.factoryLocationId])
+  const visibleSpaModels = useMemo(() => {
+    if (!form.factoryLocationId) return []
+    return models.filter((m) => {
+      const modelFactoryId = m.defaultFactoryLocationId || m.defaultFactoryLocation?.id || ''
+      return modelFactoryId === form.factoryLocationId && m.productType === 'SPA'
     })
   }, [models, form.factoryLocationId])
 
@@ -206,6 +217,23 @@ export default function AdminNewOrderPage() {
   }, [form.factoryLocationId, form.poolModelId, models])
 
   useEffect(() => {
+    if (!form.factoryLocationId || !form.spaPoolModelId) return
+    const selectedSpaModel = models.find((m) => m.id === form.spaPoolModelId)
+    if (!selectedSpaModel) return
+    const modelFactoryId =
+      selectedSpaModel.defaultFactoryLocationId || selectedSpaModel.defaultFactoryLocation?.id || ''
+    if (modelFactoryId !== form.factoryLocationId || selectedSpaModel.productType !== 'SPA') {
+      setForm((prev) => ({ ...prev, spaPoolModelId: '', spaColorId: '' }))
+    }
+  }, [form.factoryLocationId, form.spaPoolModelId, models])
+
+  useEffect(() => {
+    if (!form.linkSpaToJob) {
+      setForm((prev) => ({ ...prev, spaPoolModelId: '', spaColorId: '' }))
+    }
+  }, [form.linkSpaToJob])
+
+  useEffect(() => {
     if (form.penetrationMode === 'NO_PENETRATIONS') {
       setMarkers([])
       setMarkerError('')
@@ -259,6 +287,10 @@ export default function AdminNewOrderPage() {
       setError('Please add notes when "Other" is selected.')
       return
     }
+    if (form.linkSpaToJob && (!form.spaPoolModelId || !form.spaColorId)) {
+      setError('Select spa model and spa color to link a spa to this job.')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -284,6 +316,13 @@ export default function AdminNewOrderPage() {
         requestedShipAsap: form.requestedShipAsap,
         invoiceNumber: form.invoiceNumber.trim() || null,
         hardwareAutocover: form.hardwareAutocover,
+        linkedSpa:
+          form.linkSpaToJob && form.spaPoolModelId && form.spaColorId
+            ? {
+                poolModelId: form.spaPoolModelId,
+                colorId: form.spaColorId,
+              }
+            : null,
       }
 
       const res = await fetch('/api/admin/orders', {
@@ -309,6 +348,9 @@ export default function AdminNewOrderPage() {
         penetrationMode: '',
         penetrationNotes: '',
         hardwareAutocover: false,
+        linkSpaToJob: false,
+        spaPoolModelId: '',
+        spaColorId: '',
       })
       setMarkers([])
       setMarkerError('')
@@ -462,6 +504,7 @@ export default function AdminNewOrderPage() {
                         ...prev,
                         factoryLocationId: e.target.value,
                         poolModelId: '',
+                        spaPoolModelId: '',
                       }))
                     }
                     className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
@@ -567,6 +610,73 @@ export default function AdminNewOrderPage() {
                     </div>
                   ) : null}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Linked Job</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">Build pool and spa under the same job</div>
+                    <div className="text-xs text-slate-500">
+                      Use this when the spa should be scheduled with the pool for production and shipping.
+                    </div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.linkSpaToJob}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          linkSpaToJob: e.target.checked,
+                          ...(e.target.checked ? {} : { spaPoolModelId: '', spaColorId: '' }),
+                        }))
+                      }
+                    />
+                    Link spa
+                  </label>
+                </div>
+
+                {form.linkSpaToJob ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Spa Model
+                      </label>
+                      <select
+                        value={form.spaPoolModelId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, spaPoolModelId: e.target.value }))}
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        disabled={!form.factoryLocationId}
+                      >
+                        <option value="">{form.factoryLocationId ? 'Select spa model' : 'Select factory first'}</option>
+                        {visibleSpaModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Spa Color
+                      </label>
+                      <select
+                        value={form.spaColorId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, spaColorId: e.target.value }))}
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      >
+                        <option value="">Select spa color</option>
+                        {colors.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid gap-3 grid-cols-1 md:grid-cols-2">

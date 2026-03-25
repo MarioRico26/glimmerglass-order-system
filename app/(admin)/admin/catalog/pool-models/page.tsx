@@ -12,6 +12,7 @@ type Factory = {
 type PoolModel = {
   id: string
   name: string
+  productType?: 'POOL' | 'SPA'
   lengthFt: number | null
   widthFt: number | null
   depthFt: number | null
@@ -27,6 +28,7 @@ type PoolModel = {
 
 type ModelDraft = {
   name: string
+  productType: 'POOL' | 'SPA'
   lengthFt: string
   widthFt: string
   depthFt: string
@@ -39,6 +41,7 @@ type ModelDraft = {
 
 type CreateForm = {
   name: string
+  productType: 'POOL' | 'SPA'
   lengthFt: string
   widthFt: string
   depthFt: string
@@ -51,6 +54,7 @@ type CreateForm = {
 
 const EMPTY_FORM: CreateForm = {
   name: '',
+  productType: 'POOL',
   lengthFt: '',
   widthFt: '',
   depthFt: '',
@@ -64,6 +68,7 @@ const EMPTY_FORM: CreateForm = {
 function toDraft(model: PoolModel): ModelDraft {
   return {
     name: model.name ?? '',
+    productType: model.productType === 'SPA' ? 'SPA' : 'POOL',
     lengthFt: model.lengthFt == null ? '' : String(model.lengthFt),
     widthFt: model.widthFt == null ? '' : String(model.widthFt),
     depthFt: model.depthFt == null ? '' : String(model.depthFt),
@@ -164,8 +169,9 @@ export default function PoolModelsPage() {
     return items.filter((m) => {
       const factoryName = m.defaultFactoryLocation?.name || ''
       return (
-        m.name.toLowerCase().includes(q) ||
-        factoryName.toLowerCase().includes(q)
+       m.name.toLowerCase().includes(q) ||
+        factoryName.toLowerCase().includes(q) ||
+        (m.productType || 'POOL').toLowerCase().includes(q)
       )
     })
   }, [items, search])
@@ -178,6 +184,7 @@ export default function PoolModelsPage() {
     try {
       const payload = {
         name: form.name.trim(),
+        productType: form.productType,
         lengthFt: parseDecimal(form.lengthFt),
         widthFt: parseDecimal(form.widthFt),
         depthFt: parseDecimal(form.depthFt),
@@ -218,6 +225,7 @@ export default function PoolModelsPage() {
             ? toDraft(source)
             : {
                 name: '',
+                productType: 'POOL',
                 lengthFt: '',
                 widthFt: '',
                 depthFt: '',
@@ -243,6 +251,7 @@ export default function PoolModelsPage() {
       const payload = {
         id,
         name: draft.name.trim(),
+        productType: draft.productType,
         lengthFt: parseDecimalForPatch(draft.lengthFt),
         widthFt: parseDecimalForPatch(draft.widthFt),
         depthFt: parseDecimalForPatch(draft.depthFt),
@@ -383,6 +392,16 @@ export default function PoolModelsPage() {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select
+            value={form.productType}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, productType: e.target.value === 'SPA' ? 'SPA' : 'POOL' }))
+            }
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="POOL">Pool model</option>
+            <option value="SPA">Spa model</option>
+          </select>
+          <select
             value={form.defaultFactoryLocationId}
             onChange={(e) => setForm((prev) => ({ ...prev, defaultFactoryLocationId: e.target.value }))}
             className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
@@ -450,7 +469,7 @@ export default function PoolModelsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full md:w-80 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-            placeholder="Search by model or factory"
+            placeholder="Search by model, factory, or type"
           />
         </div>
 
@@ -592,6 +611,22 @@ export default function PoolModelsPage() {
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Factory & Configuration</div>
                       <select
+                        value={draft.productType}
+                        onChange={(e) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [m.id]: {
+                              ...draft,
+                              productType: e.target.value === 'SPA' ? 'SPA' : 'POOL',
+                            },
+                          }))
+                        }
+                        className="mt-3 h-10 w-full rounded-lg border border-slate-200 bg-white px-3"
+                      >
+                        <option value="POOL">Pool model</option>
+                        <option value="SPA">Spa model</option>
+                      </select>
+                      <select
                         value={draft.defaultFactoryLocationId}
                         onChange={(e) => setDraftField(m.id, 'defaultFactoryLocationId', e.target.value)}
                         className="mt-3 h-10 w-full rounded-lg border border-slate-200 bg-white px-3"
@@ -674,8 +709,12 @@ export default function PoolModelsPage() {
                           <div className="mt-1 text-sm font-semibold text-slate-900">{m.defaultFactoryLocation?.name || 'Not assigned'}</div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Product</div>
+                          <div className="mt-1 text-sm font-semibold text-slate-900">{draft.productType === 'SPA' ? 'Spa model' : 'Pool model'}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Configuration</div>
-                          <div className="mt-1 text-sm font-semibold text-slate-900">{draft.hasIntegratedSpa ? 'Integrated spa' : 'Pool only'}</div>
+                          <div className="mt-1 text-sm font-semibold text-slate-900">{draft.hasIntegratedSpa ? 'Integrated spa' : 'Standard shell'}</div>
                         </div>
                       </div>
                     </section>

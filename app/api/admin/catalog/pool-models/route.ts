@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     await requireRole(['ADMIN','SUPERADMIN'])
     const {
       name,
+      productType,
       lengthFt,
       widthFt,
       depthFt,
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
 
     const data: any = {
       name,
+      productType: productType === 'SPA' ? 'SPA' : 'POOL',
       lengthFt: parsedLength,
       widthFt: parsedWidth,
       depthFt: parsedDepth,
@@ -128,6 +130,9 @@ export async function PATCH(req: NextRequest) {
     if (typeof data.imageUrl === 'string') data.imageUrl = data.imageUrl.trim()
     if (typeof data.blueprintUrl === 'string') data.blueprintUrl = data.blueprintUrl.trim()
     if (typeof data.name === 'string') data.name = data.name.trim()
+    if (data.productType !== undefined) {
+      data.productType = data.productType === 'SPA' ? 'SPA' : 'POOL'
+    }
 
     const decimalKeys = ['lengthFt', 'widthFt', 'depthFt'] as const
     for (const key of decimalKeys) {

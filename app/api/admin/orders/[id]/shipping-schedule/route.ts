@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const existing = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, jobId: true },
     })
 
     if (!existing) return NextResponse.json({ message: 'Order not found' }, { status: 404 })
@@ -55,24 +55,38 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       )
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { scheduledShipDate: parsedDate },
-      select: {
-        id: true,
-        status: true,
-        requestedShipDate: true,
-        scheduledShipDate: true,
-        shippingMethod: true,
-        serialNumber: true,
-        createdAt: true,
-        deliveryAddress: true,
-        poolModel: { select: { name: true } },
-        color: { select: { name: true } },
-        dealer: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (existing.jobId) {
+        await tx.order.updateMany({
+          where: { jobId: existing.jobId },
+          data: { scheduledShipDate: parsedDate },
+        })
+      } else {
+        await tx.order.update({
+          where: { id },
+          data: { scheduledShipDate: parsedDate },
+        })
+      }
+
+      return tx.order.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          requestedShipDate: true,
+          scheduledShipDate: true,
+          shippingMethod: true,
+          serialNumber: true,
+          createdAt: true,
+          deliveryAddress: true,
+          poolModel: { select: { name: true } },
+          color: { select: { name: true } },
+          dealer: { select: { name: true } },
+          factoryLocation: { select: { name: true } },
+        },
+      })
     })
+    if (!updated) return NextResponse.json({ message: 'Order not found' }, { status: 404 })
 
     return NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {

@@ -68,6 +68,19 @@ interface OrderSummary {
   serialNumber?: string | null
   invoiceNumber?: string | null
   productionPriority?: number | null
+  job?: {
+    id: string
+    role?: string | null
+    itemType?: string | null
+    linkedOrders: Array<{
+      id: string
+      status: string
+      role?: string | null
+      itemType?: string | null
+      poolModel?: { name: string } | null
+      color?: { name: string } | null
+    }>
+  } | null
 }
 
 interface FactoryLocation {
@@ -479,7 +492,7 @@ export default function OrderHistoryPage() {
               </div>
             </div>
 
-            <div className="px-6 pb-6 grid gap-4 md:grid-cols-3">
+            <div className="px-6 pb-6 grid gap-4 md:grid-cols-4">
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
                   Delivery Address
@@ -516,6 +529,39 @@ export default function OrderHistoryPage() {
                     </div>
                   ) : null}
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Linked Job
+                </div>
+                {summary.job?.linkedOrders?.length ? (
+                  <div className="space-y-2 text-slate-800">
+                    <div>
+                      <span className="font-semibold">Job role:</span>{' '}
+                      {summary.job.itemType === 'SPA' ? 'Linked spa' : 'Primary pool'}
+                    </div>
+                    {summary.job.linkedOrders.map((linked) => (
+                      <div key={linked.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="font-semibold text-slate-900">
+                          {linked.poolModel?.name || 'Linked order'}
+                          {linked.color?.name ? ` • ${linked.color.name}` : ''}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-600">
+                          {linked.itemType === 'SPA' ? 'Spa item' : 'Pool item'} • {labelOrderStatus(linked.status)}
+                        </div>
+                        <Link
+                          href={`/admin/orders/${linked.id}/history`}
+                          className="mt-2 inline-flex text-xs font-semibold text-sky-700 hover:underline"
+                        >
+                          Open linked order
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-slate-500 italic">No linked job</div>
+                )}
               </div>
             </div>
 

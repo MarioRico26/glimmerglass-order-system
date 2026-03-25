@@ -93,6 +93,11 @@ model Order {
   media         OrderMedia[]
   notifications Notification[]
 
+  jobId       String?
+  job         OrderJob?      @relation(fields: [jobId], references: [id])
+  jobRole     OrderJobRole?
+  jobItemType OrderJobItemType?
+
   shippingMethod     String?
   requestedShipDate  DateTime?
   requestedShipAsap  Boolean     @default(false)
@@ -107,6 +112,8 @@ model Order {
 
   // Pool stock movements (finished pools)
   poolStockTxns PoolStockTxn[]
+
+  @@index([jobId])
 }
 
 model OrderHistory {
@@ -162,6 +169,7 @@ model WorkflowDocConfig {
 model PoolModel {
   id       String  @id @default(uuid())
   name     String
+  productType PoolModelProductType @default(POOL)
   lengthFt Float
   widthFt  Float
   depthFt  Float
@@ -179,6 +187,15 @@ model PoolModel {
   poolStocks PoolStock[]
 
   @@index([defaultFactoryLocationId])
+}
+
+model OrderJob {
+  id        String  @id @default(uuid())
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
 }
 
 model Color {
@@ -503,6 +520,21 @@ enum OrderStatus {
   COMPLETED
   SERVICE_WARRANTY
   CANCELED
+}
+
+enum PoolModelProductType {
+  POOL
+  SPA
+}
+
+enum OrderJobRole {
+  PRIMARY
+  LINKED
+}
+
+enum OrderJobItemType {
+  POOL
+  SPA
 }
 
 enum PenetrationMode {

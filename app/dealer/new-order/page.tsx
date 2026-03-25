@@ -17,6 +17,7 @@ import ShippingNotice from '@/components/ShippingNotice'
 type PoolModel = {
   id: string
   name: string
+  productType?: 'POOL' | 'SPA'
   lengthFt: number | null
   widthFt: number | null
   depthFt: number | null
@@ -141,7 +142,8 @@ export default function NewOrderPage() {
     const byFactory = !selectedFactoryId
       ? models
       : models.filter((m) => m.defaultFactoryLocationId === selectedFactoryId)
-    const searched = !q ? byFactory : byFactory.filter((m) => m.name.toLowerCase().includes(q))
+    const poolsOnly = byFactory.filter((m) => (m.productType || 'POOL') === 'POOL')
+    const searched = !q ? poolsOnly : poolsOnly.filter((m) => m.name.toLowerCase().includes(q))
     if (!onlyReadyModels) return searched
     return searched.filter((m) => (readyQtyByModel.get(m.id) || 0) > 0)
   }, [models, modelSearch, onlyReadyModels, readyQtyByModel, selectedFactoryId])

@@ -121,6 +121,25 @@ async function getOrderSummary(orderId: string) {
       poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
       color: { select: { name: true } },
       factoryLocation: { select: { id: true, name: true } },
+      jobId: true,
+      jobRole: true,
+      jobItemType: true,
+      job: {
+        select: {
+          id: true,
+          orders: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              status: true,
+              jobRole: true,
+              jobItemType: true,
+              poolModel: { select: { name: true } },
+              color: { select: { name: true } },
+            },
+          },
+        },
+      },
     },
   })
 
@@ -142,6 +161,23 @@ async function getOrderSummary(orderId: string) {
 
     factory: order.factoryLocation
       ? { id: order.factoryLocation.id, name: order.factoryLocation.name }
+      : null,
+    job: order.job
+      ? {
+          id: order.job.id,
+          role: order.jobRole,
+          itemType: order.jobItemType,
+          linkedOrders: order.job.orders
+            .filter((linked) => linked.id !== order.id)
+            .map((linked) => ({
+              id: linked.id,
+              status: normalizeOrderStatus(linked.status)?.toString() ?? linked.status,
+              role: linked.jobRole,
+              itemType: linked.jobItemType,
+              poolModel: linked.poolModel ? { name: linked.poolModel.name } : null,
+              color: linked.color ? { name: linked.color.name } : null,
+            })),
+        }
       : null,
 
     shippingMethod: order.shippingMethod ?? null,

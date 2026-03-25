@@ -56,25 +56,49 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ message: 'Invalid scheduledProductionDate' }, { status: 400 })
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { productionPriority, requestedShipDate, scheduledProductionDate },
-      select: {
-        id: true,
-        status: true,
-        productionPriority: true,
-        requestedShipDate: true,
-        scheduledProductionDate: true,
-        serialNumber: true,
-        createdAt: true,
-        deliveryAddress: true,
-        paymentProofUrl: true,
-        poolModel: { select: { name: true } },
-        color: { select: { name: true } },
-        dealer: { select: { name: true } },
-        factoryLocation: { select: { name: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({
+        where: { id },
+        select: { id: true, jobId: true },
+      })
+      if (!existing) throw new Error('Order not found')
+
+      const sharedSchedule = { productionPriority, requestedShipDate, scheduledProductionDate }
+
+      if (existing.jobId) {
+        await tx.order.updateMany({
+          where: { jobId: existing.jobId },
+          data: sharedSchedule,
+        })
+      } else {
+        await tx.order.update({
+          where: { id },
+          data: sharedSchedule,
+        })
+      }
+
+      return tx.order.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          productionPriority: true,
+          requestedShipDate: true,
+          scheduledProductionDate: true,
+          serialNumber: true,
+          createdAt: true,
+          deliveryAddress: true,
+          paymentProofUrl: true,
+          poolModel: { select: { name: true } },
+          color: { select: { name: true } },
+          dealer: { select: { name: true } },
+          factoryLocation: { select: { name: true } },
+        },
+      })
     })
+    if (!updated) {
+      return NextResponse.json({ message: 'Order not found' }, { status: 404 })
+    }
 
     return NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
