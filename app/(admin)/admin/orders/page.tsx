@@ -256,7 +256,7 @@ function DataField({
   tone?: 'default' | 'strong'
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-3">
+    <div className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5">
       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <div className={`mt-1 text-sm ${tone === 'strong' ? 'font-black text-slate-900' : 'font-semibold text-slate-800'}`}>
         {value}
@@ -1248,8 +1248,21 @@ function AdminOrdersInner() {
                               <div className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-4">
                                 <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Order Overview</div>
 
-                                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-sm leading-relaxed text-slate-700">
-                                  {order.deliveryAddress || 'No delivery address'}
+                                <div className="mt-3 space-y-3">
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-sm leading-relaxed text-slate-700">
+                                    {order.deliveryAddress || 'No delivery address'}
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <DataField
+                                      label="Factory"
+                                      value={order.factoryLocation?.name || 'Not set'}
+                                    />
+                                    <DataField
+                                      label="Color"
+                                      value={order.color?.name || 'Not set'}
+                                    />
+                                  </div>
                                 </div>
 
                                 {order.notes ? (
@@ -1262,72 +1275,76 @@ function AdminOrdersInner() {
 
                               <div className="grid gap-3">
                                 <div className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Dates & Scheduling</div>
-                                <DataField
-                                  label="Order Date"
-                                  value={order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
-                                />
-                                <DataField label="Requested Ship" value={formatShortDate(order.requestedShipDate)} />
-                                <DataField label="Scheduled Production" value={formatShortDate(order.scheduledProductionDate)} />
-                                <DataField label="Scheduled Shipping" value={formatShortDate(order.scheduledShipDate)} />
+                                <div className="grid gap-2">
+                                  <DataField
+                                    label="Order Date"
+                                    value={order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}
+                                  />
+                                  <DataField label="Requested Ship" value={formatShortDate(order.requestedShipDate)} />
+                                  <DataField label="Scheduled Production" value={formatShortDate(order.scheduledProductionDate)} />
+                                  <DataField label="Scheduled Shipping" value={formatShortDate(order.scheduledShipDate)} />
+                                </div>
                               </div>
 
                               <div className="grid gap-3">
                                 <div className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Logistics & Tracking</div>
-                                <DataField
-                                  label="Serial Number"
-                                  value={
-                                    order.serialNumber ? (
-                                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs text-slate-800">
-                                        {order.serialNumber}
-                                      </span>
-                                    ) : (
-                                      <span className="text-amber-700">Not assigned</span>
-                                    )
-                                  }
-                                  tone="strong"
-                                />
-                                <DataField label="Shipping Method" value={shippingMethodLabel(order.shippingMethod)} />
-                                <DataField
-                                  label="Stock Allocation"
-                                  value={
-                                    order.allocatedPoolStock ? (
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
-                                          Allocated
+                                <div className="grid gap-2">
+                                  <DataField
+                                    label="Serial Number"
+                                    value={
+                                      order.serialNumber ? (
+                                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs text-slate-800">
+                                          {order.serialNumber}
                                         </span>
-                                        <span className="font-mono text-xs text-slate-700">
-                                          {order.allocatedPoolStock.serialNumber || order.allocatedPoolStock.id}
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-slate-500">Not allocated</span>
-                                    )
-                                  }
-                                />
-                                <DataField label="Invoice #" value={displayInvoiceRef(order.invoiceNumber, order.id, order.createdAt)} />
-                                <DataField
-                                  label="Deposit File"
-                                  value={
-                                    order.paymentProofUrl ? (
-                                      <a
-                                        href={order.paymentProofUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 font-bold text-sky-700 hover:underline"
-                                        title="View deposit proof"
-                                      >
-                                        <ExternalLink size={14} />
-                                        View file
-                                      </a>
-                                    ) : (
-                                      <span className="text-amber-700">Not uploaded</span>
-                                    )
-                                  }
-                                />
-                                <DataField
-                                  label="Priority"
-                                  value={order.productionPriority ? `P${order.productionPriority}` : 'Not set'}
-                                />
+                                      ) : (
+                                        <span className="text-amber-700">Not assigned</span>
+                                      )
+                                    }
+                                    tone="strong"
+                                  />
+                                  <DataField label="Shipping Method" value={shippingMethodLabel(order.shippingMethod)} />
+                                  <DataField
+                                    label="Stock Allocation"
+                                    value={
+                                      order.allocatedPoolStock ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
+                                            Allocated
+                                          </span>
+                                          <span className="font-mono text-xs text-slate-700">
+                                            {order.allocatedPoolStock.serialNumber || order.allocatedPoolStock.id}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-500">Not allocated</span>
+                                      )
+                                    }
+                                  />
+                                  <DataField label="Invoice #" value={displayInvoiceRef(order.invoiceNumber, order.id, order.createdAt)} />
+                                  <DataField
+                                    label="Deposit File"
+                                    value={
+                                      order.paymentProofUrl ? (
+                                        <a
+                                          href={order.paymentProofUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 font-bold text-sky-700 hover:underline"
+                                          title="View deposit proof"
+                                        >
+                                          <ExternalLink size={14} />
+                                          View file
+                                        </a>
+                                      ) : (
+                                        <span className="text-amber-700">Not uploaded</span>
+                                      )
+                                    }
+                                  />
+                                  <DataField
+                                    label="Priority"
+                                    value={order.productionPriority ? `P${order.productionPriority}` : 'Not set'}
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1335,30 +1352,30 @@ function AdminOrdersInner() {
                           {/* RIGHT: ops */}
                           <div className="xl:col-span-4 min-w-0">
                             <div className="flex flex-col gap-3 xl:items-end">
-                                <div className="w-full xl:w-[320px] rounded-[1.5rem] border border-slate-200 bg-white/90 p-4">
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div>
-                                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Workflow Status</div>
-                                      <div className="mt-1 text-sm font-semibold text-slate-900">{labelStatus(order.status)}</div>
-                                    </div>
-                                    <div className="text-right text-[11px] font-semibold text-slate-500">
-                                      {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}
-                                    </div>
+                              <div className="w-full xl:w-[320px] rounded-[1.5rem] border border-slate-200 bg-white/90 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Workflow Status</div>
+                                    <div className="mt-1 text-sm font-semibold text-slate-900">{labelStatus(order.status)}</div>
                                   </div>
-                                  <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3">
-                                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Workflow Signals</div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      {!order.serialNumber ? <SignalPill label="Serial" value="Missing" tone="amber" /> : <SignalPill label="Serial" value="Ready" tone="emerald" />}
-                                      {order.status === 'IN_PRODUCTION' && !order.scheduledProductionDate ? (
-                                        <SignalPill label="Production Date" value="Missing" tone="indigo" />
-                                      ) : null}
-                                      {order.status === 'PRE_SHIPPING' && !order.scheduledShipDate ? (
-                                        <SignalPill label="Ship Date" value="Missing" tone="violet" />
-                                      ) : null}
-                                      {order.finalPaymentNeeded ? <SignalPill label="Final Payment" value="Needed" tone="rose" /> : null}
-                                    </div>
+                                  <div className="text-right text-[11px] font-semibold text-slate-500">
+                                    {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}
                                   </div>
                                 </div>
+                                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3">
+                                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Workflow Signals</div>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {!order.serialNumber ? <SignalPill label="Serial" value="Missing" tone="amber" /> : <SignalPill label="Serial" value="Ready" tone="emerald" />}
+                                    {order.status === 'IN_PRODUCTION' && !order.scheduledProductionDate ? (
+                                      <SignalPill label="Production Date" value="Missing" tone="indigo" />
+                                    ) : null}
+                                    {order.status === 'PRE_SHIPPING' && !order.scheduledShipDate ? (
+                                      <SignalPill label="Ship Date" value="Missing" tone="violet" />
+                                    ) : null}
+                                    {order.finalPaymentNeeded ? <SignalPill label="Final Payment" value="Needed" tone="rose" /> : null}
+                                  </div>
+                                </div>
+                              </div>
 
                               {order.lastCancellationReason ? (
                                 <div className="w-full xl:w-auto flex xl:justify-end">
