@@ -1,18 +1,14 @@
 // glimmerglass-order-system/app/api/admin/inventory/reorder-sheets/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 function json(message: string, status = 400, extra?: any) {
   return NextResponse.json(
     { message, ...(extra ?? {}) },
     { status, headers: { 'Cache-Control': 'no-store' } }
   )
-}
-
-function isAdmin(role: any) {
-  return role === 'ADMIN' || role === 'SUPERADMIN'
 }
 
 // Acepta "2026-01-12" o ISO completo, lo normaliza a 00:00:00Z.
@@ -25,10 +21,7 @@ function normalizeDateISO(dateStr: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as any
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const { searchParams } = new URL(req.url)
     const locationId = (searchParams.get('locationId') || '').trim()
@@ -60,10 +53,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as any
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const body = await req.json().catch(() => null)
     const locationId = (body?.locationId ?? '').toString().trim()

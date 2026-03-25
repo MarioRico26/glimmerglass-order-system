@@ -1,9 +1,10 @@
 // app/api/admin/metrics/route.ts
 import { NextResponse } from 'next/server'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
+import { requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
 type Status =
   | 'PENDING_PAYMENT_APPROVAL'
@@ -24,13 +25,16 @@ const STATUSES: Status[] = [
 
 export async function GET() {
   try {
-    // Solo ADMIN / SUPERADMIN
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.DASHBOARD)
+    const orderScope = scopedFactoryWhere(access)
+    const factoryScope =
+      access.allowedFactoryIds === null ? {} : { id: { in: access.allowedFactoryIds } }
 
     // --- Totales por estatus ---
     const groupByStatus = await prisma.order.groupBy({
       by: ['status'],
       _count: { _all: true },
+      where: orderScope,
     })
 
     const totals: Record<string, number> = { total: 0 }
@@ -53,7 +57,7 @@ export async function GET() {
       const label = start.toLocaleDateString(undefined, { month: 'short' })
 
       const count = await prisma.order.count({
-        where: { createdAt: { gte: start, lte: end } },
+        where: { ...orderScope, createdAt: { gte: start, lte: end } },
       })
 
       monthly.push({ key, label, count })
@@ -61,6 +65,7 @@ export async function GET() {
 
     // --- Órdenes recientes (incluye dealer/model/color/factoryLocation) ---
     const recentRaw = await prisma.order.findMany({
+      where: orderScope,
       orderBy: { createdAt: 'desc' },
       take: 6,
       include: {
@@ -85,6 +90,7 @@ export async function GET() {
 
     // --- Totales por fábrica (incluye fábricas sin órdenes) ---
     const factories = await prisma.factoryLocation.findMany({
+      where: factoryScope,
       select: { id: true, name: true },
     })
 
@@ -92,6 +98,7 @@ export async function GET() {
     const perFactory = await prisma.order.groupBy({
       by: ['factoryLocationId', 'status'],
       _count: { _all: true },
+      where: orderScope,
     })
 
     // Mapa base con todas las fábricas

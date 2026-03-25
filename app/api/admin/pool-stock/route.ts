@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
+import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
 const STATUSES = new Set(['READY', 'RESERVED', 'IN_PRODUCTION', 'DAMAGED'])
 
@@ -24,7 +25,7 @@ const baseInclude = {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_STOCK)
 
     const { searchParams } = new URL(req.url)
     const factoryId = searchParams.get('factoryId') || undefined
@@ -38,7 +39,11 @@ export async function GET(req: NextRequest) {
     }
 
     const where: any = {}
-    if (factoryId) where.factoryId = factoryId
+    Object.assign(where, scopedFactoryWhere(access, 'factoryId'))
+    if (factoryId) {
+      assertFactoryAccess(access, factoryId)
+      where.factoryId = factoryId
+    }
     if (poolModelId) where.poolModelId = poolModelId
     if (colorId) where.colorId = colorId
     if (status) where.status = status as Status
@@ -66,7 +71,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_STOCK)
 
     const body = await req.json().catch(() => null)
     const factoryId = body?.factoryId?.toString().trim()
@@ -90,6 +95,8 @@ export async function POST(req: NextRequest) {
     if (!factoryId || !poolModelId || !status) {
       return NextResponse.json({ message: 'factoryId, poolModelId, status are required' }, { status: 400 })
     }
+
+    assertFactoryAccess(access, factoryId)
 
     if (!STATUSES.has(status)) {
       return NextResponse.json({ message: 'Invalid status' }, { status: 400 })

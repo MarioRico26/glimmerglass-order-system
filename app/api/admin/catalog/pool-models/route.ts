@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
-import { Prisma } from '@prisma/client'
+import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
+import { AdminModule, Prisma } from '@prisma/client'
+
+function restrictedFactoryRequiredMessage() {
+  return 'Restricted catalog users must assign an allowed default factory'
+}
 
 function parseNonNegativeInteger(value: unknown) {
   if (value === null || value === '' || value === undefined) return null
@@ -41,8 +45,18 @@ function poolModelErrorResponse(e: unknown) {
 
 export async function GET() {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_CATALOG)
+    const where =
+      access.allowedFactoryIds === null
+        ? undefined
+        : {
+            OR: [
+              scopedFactoryWhere(access, 'defaultFactoryLocationId'),
+              { defaultFactoryLocationId: null },
+            ],
+          }
     const items = await prisma.poolModel.findMany({
+      where,
       orderBy: { name: 'asc' },
       include: { defaultFactoryLocation: { select: { id: true, name: true } } },
     })
@@ -54,7 +68,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_CATALOG)
     const {
       name,
       productType,
@@ -99,6 +113,12 @@ export async function POST(req: NextRequest) {
     if (typeof defaultFactoryLocationId === 'string' && defaultFactoryLocationId.trim() !== '') {
       data.defaultFactoryLocationId = defaultFactoryLocationId.trim()
     }
+    if (access.allowedFactoryIds !== null) {
+      if (!data.defaultFactoryLocationId) {
+        return NextResponse.json({ message: restrictedFactoryRequiredMessage() }, { status: 403 })
+      }
+      assertFactoryAccess(access, data.defaultFactoryLocationId)
+    }
     data.hasIntegratedSpa = Boolean(hasIntegratedSpa)
 
     const numericLimits = [
@@ -124,7 +144,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_CATALOG)
     const { id, ...data } = await req.json()
     if (!id) return NextResponse.json({ message: 'id requerido' }, { status: 400 })
     if (typeof data.imageUrl === 'string') data.imageUrl = data.imageUrl.trim()
@@ -149,11 +169,32 @@ export async function PATCH(req: NextRequest) {
       data[key] = n
     }
 
+    const existing = await prisma.poolModel.findUnique({
+      where: { id },
+      select: { id: true, defaultFactoryLocationId: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+    }
+    if (access.allowedFactoryIds !== null) {
+      assertFactoryAccess(access, existing.defaultFactoryLocationId)
+    }
+
     if (data.defaultFactoryLocationId === '' || data.defaultFactoryLocationId === null) {
       data.defaultFactoryLocationId = null
     }
     if (typeof data.defaultFactoryLocationId === 'string') {
       data.defaultFactoryLocationId = data.defaultFactoryLocationId.trim()
+    }
+    if (access.allowedFactoryIds !== null) {
+      const nextFactoryId =
+        data.defaultFactoryLocationId !== undefined
+          ? data.defaultFactoryLocationId
+          : existing.defaultFactoryLocationId
+      if (!nextFactoryId) {
+        return NextResponse.json({ message: restrictedFactoryRequiredMessage() }, { status: 403 })
+      }
+      assertFactoryAccess(access, nextFactoryId)
     }
     if (data.hasIntegratedSpa !== undefined) {
       data.hasIntegratedSpa = Boolean(data.hasIntegratedSpa)
@@ -182,9 +223,17 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_CATALOG)
     const { id } = await req.json()
     if (!id) return NextResponse.json({ message: 'id requerido' }, { status: 400 })
+    if (access.allowedFactoryIds !== null) {
+      const existing = await prisma.poolModel.findUnique({
+        where: { id },
+        select: { defaultFactoryLocationId: true },
+      })
+      if (!existing) return NextResponse.json({ message: 'Pool model not found' }, { status: 404 })
+      assertFactoryAccess(access, existing.defaultFactoryLocationId)
+    }
     await prisma.poolModel.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {

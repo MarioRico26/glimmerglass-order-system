@@ -5,8 +5,7 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
-import { InventoryTxnType } from '@prisma/client'
-
+import { AdminModule, InventoryTxnType } from '@prisma/client'
 function json(data: any, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
@@ -20,7 +19,7 @@ function normalizeQty(type: InventoryTxnType, qty: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const { searchParams } = new URL(req.url)
@@ -53,7 +52,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const actorUserId = (gate.session?.user as any)?.id || null

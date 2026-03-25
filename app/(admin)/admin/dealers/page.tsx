@@ -17,6 +17,14 @@ type Row = {
     agreementSignedAt: string | null
     agreementUrl: string | null
     onboardingStatus: 'PENDING_APPROVAL' | 'APPROVED_WAITING_SIGNATURE' | 'ACTIVE'
+    workflowProfileId?: string | null
+    workflowProfileName?: string | null
+}
+
+type WorkflowProfile = {
+    id: string
+    name: string
+    slug: string
 }
 
 type Overview = {
@@ -25,6 +33,7 @@ type Overview = {
         agreementSignedAt: Date | null
     })[],
     totals: { all: number; pendingApproval: number; waitingSignature: number; active: number }
+    workflowProfiles: WorkflowProfile[]
 }
 
 const aqua = '#00B2CA'
@@ -49,6 +58,7 @@ export default function AdminDealersPage() {
     const [q, setQ] = useState('')
     const [statusFilter, setStatusFilter] = useState<'ALL' | Row['onboardingStatus']>('ALL')
     const [busyId, setBusyId] = useState<string | null>(null)
+    const [profileBusyId, setProfileBusyId] = useState<string | null>(null)
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
     const [createOk, setCreateOk] = useState<string | null>(null)
@@ -62,6 +72,7 @@ export default function AdminDealersPage() {
         state: '',
         createLogin: true,
         approved: true,
+        workflowProfileId: '',
     })
     const [resetTarget, setResetTarget] = useState<Row | null>(null)
     const [resetBusy, setResetBusy] = useState(false)
@@ -78,11 +89,19 @@ export default function AdminDealersPage() {
         password: makeTemporaryPassword(),
         approved: true,
     })
+    const [accessDenied, setAccessDenied] = useState(false)
 
     const load = async () => {
         try {
             setLoading(true); setError(null)
-            const res = await fetch('/api/admin/dealers/overview', { cache: 'no-store' })
+            const [accessRes, res] = await Promise.all([
+                fetch('/api/admin/access?module=DEALERS', { cache: 'no-store' }),
+                fetch('/api/admin/dealers/overview', { cache: 'no-store' }),
+            ])
+            if (accessRes.status === 403) {
+                setAccessDenied(true)
+                throw new Error('Dealers access denied')
+            }
             if (!res.ok) throw new Error(await res.text())
             const json = await res.json()
             // parse fechas
@@ -91,7 +110,7 @@ export default function AdminDealersPage() {
                 createdAt: new Date(r.createdAt),
                 agreementSignedAt: r.agreementSignedAt ? new Date(r.agreementSignedAt) : null,
             }))
-            setData({ items, totals: json.totals })
+            setData({ items, totals: json.totals, workflowProfiles: Array.isArray(json.workflowProfiles) ? json.workflowProfiles : [] })
         } catch (e:any) {
             setError(e?.message || 'Failed to load')
         } finally {
@@ -100,6 +119,15 @@ export default function AdminDealersPage() {
     }
 
     useEffect(() => { load() }, [])
+
+    if (accessDenied) {
+        return (
+            <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+                <h1 className="text-2xl font-black">Dealers access denied</h1>
+                <p className="mt-2 text-sm">This user does not currently have access to the dealers module.</p>
+            </div>
+        )
+    }
 
     const filtered = useMemo(() => {
         if (!data) return []
@@ -160,12 +188,32 @@ export default function AdminDealersPage() {
                 state: '',
                 createLogin: true,
                 approved: true,
+                workflowProfileId: '',
             })
             await load()
         } catch (e: any) {
             setCreateError(e?.message || 'Failed to create dealer')
         } finally {
             setCreating(false)
+        }
+    }
+
+    const updateWorkflowProfile = async (row: Row, workflowProfileId: string) => {
+        try {
+            setProfileBusyId(row.id)
+            const res = await fetch(`/api/admin/dealers/${row.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflowProfileId: workflowProfileId || null }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok) throw new Error(json?.message || 'Failed to update workflow profile')
+            await load()
+        } catch (e) {
+            console.error(e)
+            alert('Failed to update workflow profile')
+        } finally {
+            setProfileBusyId(null)
         }
     }
 
@@ -388,6 +436,18 @@ export default function AdminDealersPage() {
                         />
                         Approved for login
                     </label>
+                    <select
+                        value={createForm.workflowProfileId}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, workflowProfileId: e.target.value }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    >
+                        <option value="">Default workflow</option>
+                        {data.workflowProfiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                                {profile.name}
+                            </option>
+                        ))}
+                    </select>
                     <div className="flex items-center justify-end lg:col-span-4">
                         <button
                             type="submit"
@@ -449,6 +509,7 @@ export default function AdminDealersPage() {
                         <th className="p-3">Dealer</th>
                         <th className="p-3">Location</th>
                         <th className="p-3">Status</th>
+                        <th className="p-3">Workflow Profile</th>
                         <th className="p-3">Agreement</th>
                         <th className="p-3">Created</th>
                         <th className="p-3">Actions</th>
@@ -457,7 +518,7 @@ export default function AdminDealersPage() {
                     <tbody>
                     {filtered.length === 0 && (
                         <tr>
-                            <td colSpan={6} className="p-6 text-slate-500 text-center">No results</td>
+                            <td colSpan={7} className="p-6 text-slate-500 text-center">No results</td>
                         </tr>
                     )}
                     {filtered.map(r => (
@@ -477,6 +538,21 @@ export default function AdminDealersPage() {
                                 {(r.city || '—') + (r.state ? `, ${r.state}` : '')}
                             </td>
                             <td className="p-3"><Badge s={r.onboardingStatus} /></td>
+                            <td className="p-3">
+                                <select
+                                    value={r.workflowProfileId || ''}
+                                    onChange={(e) => updateWorkflowProfile(r, e.target.value)}
+                                    disabled={profileBusyId === r.id}
+                                    className="h-9 min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 disabled:opacity-60"
+                                >
+                                    <option value="">Default workflow</option>
+                                    {data.workflowProfiles.map((profile) => (
+                                        <option key={profile.id} value={profile.id}>
+                                            {profile.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </td>
                             <td className="p-3">
                                 {r.agreementUrl ? (
                                     <Link

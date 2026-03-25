@@ -11,6 +11,7 @@ type PoolModel = {
   lengthFt: number | null
   widthFt: number | null
   depthFt: number | null
+  defaultFactoryLocationId?: string | null
 }
 
 type Color = { id: string; name: string; swatchUrl?: string | null }
@@ -38,6 +39,12 @@ type Txn = {
   referenceOrderId?: string | null
   createdAt: string
   order?: { id: string; status: string } | null
+}
+
+type AccessSummary = {
+  allFactories: boolean
+  factories: Factory[]
+  allowedFactoryIds: string[] | null
 }
 
 const STATUS_OPTIONS: PoolStockItem['status'][] = [
@@ -81,6 +88,7 @@ export default function AdminPoolStockPage() {
   const [factories, setFactories] = useState<Factory[]>([])
   const [models, setModels] = useState<PoolModel[]>([])
   const [colors, setColors] = useState<Color[]>([])
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -148,29 +156,49 @@ export default function AdminPoolStockPage() {
       if (filterStatus) params.set('status', filterStatus)
       if (includeZero) params.set('includeZero', 'true')
 
-      const [stockRes, factoryRes, modelRes, colorRes] = await Promise.all([
+      const [accessRes, stockRes, factoryRes, modelRes, colorRes] = await Promise.all([
+        fetch('/api/admin/access?module=POOL_STOCK', { cache: 'no-store' }),
         fetch(`/api/admin/pool-stock?${params.toString()}`, { cache: 'no-store' }),
         fetch('/api/catalog/factories', { cache: 'no-store' }),
         fetch('/api/catalog/pool-models', { cache: 'no-store' }),
         fetch('/api/catalog/colors', { cache: 'no-store' }),
       ])
 
+      const accessJson = await accessRes.json().catch(() => null)
       const stockJson = await stockRes.json().catch(() => null)
       const factoryJson = await factoryRes.json().catch(() => null)
       const modelJson = await modelRes.json().catch(() => null)
       const colorJson = await colorRes.json().catch(() => null)
 
+      if (accessRes.status === 403) throw new Error('Pool Stock access denied')
       if (!stockRes.ok) throw new Error(stockJson?.message || 'Failed to load pool stock')
 
+      const accessData = accessJson as AccessSummary | null
+      const allowedFactoryIds = accessData?.allowedFactoryIds ?? null
+      const nextFactories = Array.isArray(factoryJson?.items) ? factoryJson.items : Array.isArray(factoryJson) ? factoryJson : []
+      const scopedFactories =
+        allowedFactoryIds === null
+          ? nextFactories
+          : nextFactories.filter((factory: Factory) => allowedFactoryIds.includes(factory.id))
+      const nextModels = Array.isArray(modelJson?.items) ? modelJson.items : []
+      const scopedModels =
+        allowedFactoryIds === null
+          ? nextModels
+          : nextModels.filter((model: any) => {
+              const factoryId = model?.defaultFactoryLocationId
+              return !factoryId || allowedFactoryIds.includes(factoryId)
+            })
+
       setItems(Array.isArray(stockJson?.items) ? stockJson.items : [])
-      setFactories(Array.isArray(factoryJson?.items) ? factoryJson.items : Array.isArray(factoryJson) ? factoryJson : [])
-      setModels(Array.isArray(modelJson?.items) ? modelJson.items : [])
+      setFactories(scopedFactories)
+      setModels(scopedModels)
       setColors(Array.isArray(colorJson?.items) ? colorJson.items : [])
 
-      if (!createForm.factoryId && factoryJson?.items?.length) {
-        setCreateForm((prev) => ({ ...prev, factoryId: factoryJson.items[0].id }))
+      if (!createForm.factoryId && scopedFactories.length) {
+        setCreateForm((prev) => ({ ...prev, factoryId: scopedFactories[0].id }))
       }
     } catch (e: unknown) {
+      setAccessDenied(errorMessage(e, '').toLowerCase().includes('access denied'))
       setError(errorMessage(e, 'Failed to load data'))
       setItems([])
     } finally {
@@ -196,6 +224,15 @@ export default function AdminPoolStockPage() {
       )
     })
   }, [items, search])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Pool Stock access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the pool stock module.</p>
+      </div>
+    )
+  }
 
   const submitCreate = async (e: React.FormEvent) => {
     e.preventDefault()

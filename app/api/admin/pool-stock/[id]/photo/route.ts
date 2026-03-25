@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AdminModule } from '@prisma/client'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
+import { assertFactoryAccess, requireAdminAccess } from '@/lib/adminAccess'
 
 export const runtime = 'nodejs'
 
@@ -26,16 +27,17 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_STOCK)
 
     const exists = await prisma.poolStock.findUnique({
       where: { id: params.id },
-      select: { id: true },
+      select: { id: true, factoryId: true },
     })
 
     if (!exists) {
       return NextResponse.json({ message: 'Pool stock row not found' }, { status: 404 })
     }
+    assertFactoryAccess(access, exists.factoryId)
 
     const formData = await req.formData()
     const file = formData.get('file')

@@ -6,6 +6,20 @@ import { prisma } from '@/lib/prisma'
 
 type AdminRole = Role.ADMIN | Role.SUPERADMIN
 
+export const ADMIN_MODULE_VALUES: AdminModule[] = [
+  AdminModule.DASHBOARD,
+  AdminModule.ORDER_LIST,
+  AdminModule.NEW_ORDER,
+  AdminModule.PRODUCTION_SCHEDULE,
+  AdminModule.SHIP_SCHEDULE,
+  AdminModule.POOL_STOCK,
+  AdminModule.POOL_CATALOG,
+  AdminModule.WORKFLOW_REQUIREMENTS,
+  AdminModule.INVENTORY,
+  AdminModule.DEALERS,
+  AdminModule.USERS,
+]
+
 export type AdminAccessContext = {
   session: Awaited<ReturnType<typeof getServerSession>>
   userId: string

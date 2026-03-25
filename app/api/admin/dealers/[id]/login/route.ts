@@ -1,33 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { AdminModule } from '@prisma/client'
 import { hash } from 'bcryptjs'
-import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  const role = (session?.user as any)?.role
-  if (!session || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-  }
-
-  const dealerId = params?.id?.trim()
-  if (!dealerId) {
-    return NextResponse.json({ message: 'Invalid dealer id' }, { status: 400 })
-  }
-
-  const body = await req.json().catch(() => null) as { password?: string; approved?: boolean } | null
-  const password = String(body?.password || '')
-  const approved = body?.approved === undefined ? true : Boolean(body.approved)
-
-  if (password.length < 6) {
-    return NextResponse.json({ message: 'Password must be at least 6 characters.' }, { status: 400 })
-  }
-
   try {
+    await requireAdminAccess(AdminModule.DEALERS)
+
+    const dealerId = params?.id?.trim()
+    if (!dealerId) {
+      return NextResponse.json({ message: 'Invalid dealer id' }, { status: 400 })
+    }
+
+    const body = await req.json().catch(() => null) as { password?: string; approved?: boolean } | null
+    const password = String(body?.password || '')
+    const approved = body?.approved === undefined ? true : Boolean(body.approved)
+
+    if (password.length < 6) {
+      return NextResponse.json({ message: 'Password must be at least 6 characters.' }, { status: 400 })
+    }
+
     const dealer = await prisma.dealer.findUnique({
       where: { id: dealerId },
       select: { id: true, email: true },
@@ -70,7 +66,8 @@ export async function POST(
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (e) {
     console.error('POST /api/admin/dealers/[id]/login error:', e)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+    const status = typeof e === 'object' && e !== null && 'status' in e && typeof (e as any).status === 'number' ? (e as any).status : 500
+    const message = typeof e === 'object' && e !== null && 'message' in e && typeof (e as any).message === 'string' ? (e as any).message : 'Internal server error'
+    return NextResponse.json({ message }, { status })
   }
 }
-

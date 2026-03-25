@@ -1,20 +1,13 @@
 // app/api/admin/dealers/route.ts
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { hash } from 'bcryptjs'
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions)
-  if (!session || !['ADMIN', 'SUPERADMIN'].includes(session.user?.role as any)) {
-    throw Object.assign(new Error('Unauthorized'), { status: 401 })
-  }
-}
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function GET() {
   try {
-    await requireAdmin()
+    await requireAdminAccess(AdminModule.DEALERS)
 
     const dealers = await prisma.dealer.findMany({
       select: {
@@ -24,6 +17,10 @@ export async function GET() {
         phone: true,
         city: true,
         state: true,
+        workflowProfileId: true,
+        workflowProfile: {
+          select: { id: true, name: true, slug: true },
+        },
         agreementUrl: true,
         createdAt: true,
         User: {
@@ -40,6 +37,8 @@ export async function GET() {
       phone: d.phone ?? '',
       city: d.city ?? '',
       state: d.state ?? '',
+      workflowProfileId: d.workflowProfileId ?? null,
+      workflowProfileName: d.workflowProfile?.name ?? null,
       approved: d.User?.approved ?? false,
       agreementUrl: d.agreementUrl ?? null,
     }))
@@ -56,7 +55,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAdminAccess(AdminModule.DEALERS)
 
     const body = await req.json().catch(() => null) as {
       name?: string
@@ -66,6 +65,7 @@ export async function POST(req: NextRequest) {
       address?: string
       city?: string
       state?: string
+      workflowProfileId?: string | null
       approved?: boolean
       createLogin?: boolean
     } | null
@@ -77,6 +77,10 @@ export async function POST(req: NextRequest) {
     const address = String(body?.address || '').trim()
     const city = String(body?.city || '').trim()
     const state = String(body?.state || '').trim()
+    const workflowProfileId =
+      typeof body?.workflowProfileId === 'string' && body.workflowProfileId.trim()
+        ? body.workflowProfileId.trim()
+        : null
     const createLogin = body?.createLogin === undefined ? true : Boolean(body.createLogin)
     const approved = body?.approved === undefined ? true : Boolean(body.approved)
 
@@ -98,6 +102,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'This email is already registered as a user' }, { status: 409 })
     }
 
+    if (workflowProfileId) {
+      const profile = await prisma.workflowProfile.findUnique({
+        where: { id: workflowProfileId },
+        select: { id: true },
+      })
+      if (!profile) {
+        return NextResponse.json({ message: 'Invalid workflow profile' }, { status: 400 })
+      }
+    }
+
     const created = await prisma.$transaction(async (tx) => {
       const dealer = await tx.dealer.create({
         data: {
@@ -107,6 +121,7 @@ export async function POST(req: NextRequest) {
           address,
           city,
           state,
+          workflowProfileId,
         },
       })
 

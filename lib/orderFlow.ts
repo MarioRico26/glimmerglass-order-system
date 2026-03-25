@@ -44,6 +44,7 @@ export const LEGACY_STATUS_LABELS: Record<LegacyFlowStatus, string> = {
 
 // Labels bonitos para docs
 export const DOC_TYPE_LABELS: Partial<Record<OrderDocTypeKey, string>> = {
+  OTHER: 'Other',
   PROOF_OF_PAYMENT: 'Proof of Deposit',
   QUOTE: 'Order Form',
   INVOICE: 'Invoice with deposit applied',
@@ -56,9 +57,13 @@ export const DOC_TYPE_LABELS: Partial<Record<OrderDocTypeKey, string>> = {
   BILL_OF_LADING: 'Bill of Lading',
   PROOF_OF_FINAL_PAYMENT: 'Proof of Final Payment',
   PAID_INVOICE: 'Paid Invoice',
+
+  WARRANTY: 'Warranty',
+  MANUAL: 'Manual',
 }
 
 export const WORKFLOW_DOC_OPTIONS: OrderDocTypeKey[] = [
+  'OTHER',
   'PROOF_OF_PAYMENT',
   'QUOTE',
   'INVOICE',
@@ -69,6 +74,8 @@ export const WORKFLOW_DOC_OPTIONS: OrderDocTypeKey[] = [
   'BILL_OF_LADING',
   'PROOF_OF_FINAL_PAYMENT',
   'PAID_INVOICE',
+  'WARRANTY',
+  'MANUAL',
 ]
 
 export function labelDocType(docType?: string | null) {
@@ -124,6 +131,10 @@ export function labelOrderStatus(
  *  - Bill of Lading
  *  - Proof of Final Payment
  *  - Paid invoice
+ *
+ * Completed -> Service/Warranty:
+ *  - no enforced defaults for now
+ *  - but the stage can be configured to use Warranty / Manual / Other docs
  */
 export const REQUIRED_FOR: Partial<Record<FlowStatus, OrderDocTypeKey[]>> = {
   IN_PRODUCTION: ['PROOF_OF_PAYMENT', 'QUOTE', 'INVOICE'],

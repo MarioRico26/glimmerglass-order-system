@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
 import { hash } from 'bcryptjs'
 import { AdminModule, ModuleAccessLevel } from '@prisma/client'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 type Role = 'ADMIN' | 'SUPERADMIN'
 
@@ -15,6 +16,7 @@ function okRole(r: any): r is Role {
 
 export async function GET() {
   try {
+    await requireAdminAccess(AdminModule.USERS)
     await requireRole(['SUPERADMIN'])
     const users = await prisma.user.findMany({
       orderBy: { email: 'asc' },
@@ -49,6 +51,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdminAccess(AdminModule.USERS)
     await requireRole(['SUPERADMIN'])
 
     const body = await req.json().catch(() => ({}))
@@ -141,6 +144,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    await requireAdminAccess(AdminModule.USERS)
     await requireRole(['SUPERADMIN'])
     const body = await req.json().catch(() => ({}))
     const id = body?.id as string | undefined
@@ -239,6 +243,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    await requireAdminAccess(AdminModule.USERS)
     await requireRole(['SUPERADMIN'])
     const body = await req.json().catch(() => ({}))
     const id = body?.id as string | undefined

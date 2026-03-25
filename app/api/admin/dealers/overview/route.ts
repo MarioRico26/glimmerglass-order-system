@@ -1,20 +1,35 @@
 // app/api/admin/dealers/overview/route.ts
+import { AdminModule } from '@prisma/client'
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function GET() {
-    const session = await getServerSession(authOptions)
-    const role = (session?.user as any)?.role
-
-    if (!session || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
-        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
+    try {
+    await requireAdminAccess(AdminModule.DEALERS)
 
     // 1) Traemos dealers sin include
     const dealers = await prisma.dealer.findMany({
         orderBy: { createdAt: 'desc' },
+        include: {
+            workflowProfile: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                },
+            },
+        },
+    })
+
+    const workflowProfiles = await prisma.workflowProfile.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+        },
     })
 
     // 2) Traemos los usuarios "owner" (role DEALER) para esos dealers en un solo query
@@ -66,6 +81,8 @@ export async function GET() {
             agreementSignedAt: d.agreementSignedAt,
             agreementUrl: d.agreementUrl,
             onboardingStatus,
+            workflowProfileId: d.workflowProfile?.id ?? null,
+            workflowProfileName: d.workflowProfile?.name ?? null,
         }
     })
 
@@ -76,5 +93,8 @@ export async function GET() {
         active: rows.filter(r => r.onboardingStatus === 'ACTIVE').length,
     }
 
-    return NextResponse.json({ items: rows, totals })
+    return NextResponse.json({ items: rows, totals, workflowProfiles })
+    } catch (e: any) {
+        return NextResponse.json({ message: e?.message || 'Internal server error' }, { status: e?.status || 500 })
+    }
 }

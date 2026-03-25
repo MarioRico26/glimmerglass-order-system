@@ -52,6 +52,12 @@ type UserRow = {
   }>
 }
 
+type AccessSummary = {
+  role?: Role
+  allModules: boolean
+  effectiveModules: string[]
+}
+
 type SortKey = 'email' | 'role' | 'approved'
 type SortDir = 'asc' | 'desc'
 
@@ -112,6 +118,8 @@ export default function UsersAdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [accessDenied, setAccessDenied] = useState(false)
+  const [superadminOnly, setSuperadminOnly] = useState(false)
 
   // filters
   const [q, setQ] = useState('')
@@ -143,10 +151,20 @@ export default function UsersAdminPage() {
     setLoading(true)
     setError(null)
     try {
-      const [usersRes, factoriesRes] = await Promise.all([
+      const [accessRes, usersRes, factoriesRes] = await Promise.all([
+        fetch('/api/admin/access?module=USERS', { cache: 'no-store' }),
         fetch('/api/superadmin/users', { cache: 'no-store' }),
         fetch('/api/catalog/factories', { cache: 'no-store' }),
       ])
+      const accessData = await safeJson<AccessSummary>(accessRes)
+      if (accessRes.status === 403) {
+        setAccessDenied(true)
+        throw new Error('Users access denied')
+      }
+      if (accessData?.role !== 'SUPERADMIN') {
+        setSuperadminOnly(true)
+        throw new Error('Users administration is superadmin only')
+      }
       const data = await safeJson<{ users: UserRow[]; message?: string }>(usersRes)
       const factoriesData = await safeJson<{ items: FactoryOption[] }>(factoriesRes)
       if (!usersRes.ok) throw new Error(data?.message || `Failed (${usersRes.status})`)
@@ -163,6 +181,24 @@ export default function UsersAdminPage() {
   useEffect(() => {
     load()
   }, [])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Users access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the users module.</p>
+      </div>
+    )
+  }
+
+  if (superadminOnly) {
+    return (
+      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+        <h1 className="text-2xl font-black">Superadmin only</h1>
+        <p className="mt-2 text-sm">User administration is reserved for superadmin accounts.</p>
+      </div>
+    )
+  }
 
   const handleRefresh = async () => {
     setRefreshing(true)

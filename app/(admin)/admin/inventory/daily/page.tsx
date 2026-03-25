@@ -33,6 +33,7 @@ export default function DailyInventoryPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>('')
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [sheetId, setSheetId] = useState<string>('')
   const [categories, setCategories] = useState<CategoryBlock[]>([])
@@ -47,7 +48,14 @@ export default function DailyInventoryPage() {
     ;(async () => {
       try {
         setError('')
-        const res = await fetch('/api/admin/inventory', { cache: 'no-store' })
+        const [accessRes, res] = await Promise.all([
+          fetch('/api/admin/access?module=INVENTORY', { cache: 'no-store' }),
+          fetch('/api/admin/inventory', { cache: 'no-store' }),
+        ])
+        if (accessRes.status === 403) {
+          setAccessDenied(true)
+          throw new Error('Inventory access denied')
+        }
         const json = await res.json()
         const locs = (json?.locations ?? []) as Location[]
         setLocations(locs)
@@ -60,6 +68,15 @@ export default function DailyInventoryPage() {
       }
     })()
   }, [])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Inventory access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the inventory module.</p>
+      </div>
+    )
+  }
 
   async function loadDaily() {
     if (!locationId || !date) return

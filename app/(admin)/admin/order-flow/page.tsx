@@ -26,10 +26,12 @@ type FieldOption = { value: string }
 type ApiPayload = {
   items: RequirementItem[]
   options: {
+    profiles?: Array<{ id: string; slug: string; name: string }>
     statuses: StatusOption[]
     docs: DocOption[]
     fields: FieldOption[]
   }
+  selectedProfileId?: string | null
 }
 
 function prettyField(field: string) {
@@ -48,6 +50,8 @@ export default function AdminOrderFlowRequirementsPage() {
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([])
   const [docOptions, setDocOptions] = useState<DocOption[]>([])
   const [fieldOptions, setFieldOptions] = useState<FieldOption[]>([])
+  const [workflowProfiles, setWorkflowProfiles] = useState<Array<{ id: string; slug: string; name: string }>>([])
+  const [selectedProfileId, setSelectedProfileId] = useState('')
   const [loading, setLoading] = useState(true)
   const [busyStatus, setBusyStatus] = useState<FlowStatus | null>(null)
   const [savingLabels, setSavingLabels] = useState(false)
@@ -55,6 +59,7 @@ export default function AdminOrderFlowRequirementsPage() {
   const [docLabelsOpen, setDocLabelsOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const itemMap = useMemo(
     () => new Map(items.map((item) => [item.status, item] as const)),
@@ -65,7 +70,15 @@ export default function AdminOrderFlowRequirementsPage() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/admin/order-flow/requirements', { cache: 'no-store' })
+      const query = selectedProfileId ? `?profileId=${encodeURIComponent(selectedProfileId)}` : ''
+      const [accessRes, res] = await Promise.all([
+        fetch('/api/admin/access?module=WORKFLOW_REQUIREMENTS', { cache: 'no-store' }),
+        fetch(`/api/admin/order-flow/requirements${query}`, { cache: 'no-store' }),
+      ])
+      if (accessRes.status === 403) {
+        setAccessDenied(true)
+        throw new Error('Workflow Requirements access denied')
+      }
       const data = (await res.json().catch(() => null)) as ApiPayload | null
       if (!res.ok || !data) throw new Error('Failed to load workflow requirements')
 
@@ -73,6 +86,7 @@ export default function AdminOrderFlowRequirementsPage() {
       setStatusOptions(Array.isArray(data.options?.statuses) ? data.options.statuses : [])
       setDocOptions(Array.isArray(data.options?.docs) ? data.options.docs : [])
       setFieldOptions(Array.isArray(data.options?.fields) ? data.options.fields : [])
+      setWorkflowProfiles(Array.isArray(data.options?.profiles) ? data.options.profiles : [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load workflow requirements')
     } finally {
@@ -82,7 +96,16 @@ export default function AdminOrderFlowRequirementsPage() {
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [selectedProfileId])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Workflow Requirements access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the workflow requirements module.</p>
+      </div>
+    )
+  }
 
   function updateLocal(status: FlowStatus, patch: Partial<RequirementItem>) {
     setItems((prev) =>
@@ -146,6 +169,7 @@ export default function AdminOrderFlowRequirementsPage() {
           status,
           requiredDocs: current.requiredDocs,
           requiredFields: current.requiredFields,
+          profileId: selectedProfileId || null,
         }),
       })
       const payload = (await res.json().catch(() => null)) as RequirementItem | { message?: string } | null
@@ -172,10 +196,10 @@ export default function AdminOrderFlowRequirementsPage() {
       setBusyStatus(status)
       setError(null)
       setMessage(null)
-      const res = await fetch(
-        `/api/admin/order-flow/requirements?status=${encodeURIComponent(status)}`,
-        { method: 'DELETE' }
-      )
+      const url = selectedProfileId
+        ? `/api/admin/order-flow/requirements?status=${encodeURIComponent(status)}&profileId=${encodeURIComponent(selectedProfileId)}`
+        : `/api/admin/order-flow/requirements?status=${encodeURIComponent(status)}`
+      const res = await fetch(url, { method: 'DELETE' })
       const payload = (await res.json().catch(() => null)) as RequirementItem | { message?: string } | null
       if (!res.ok || !payload || !('status' in payload)) {
         const msg = payload && 'message' in payload ? payload.message : 'Failed to reset requirements'
@@ -253,14 +277,31 @@ export default function AdminOrderFlowRequirementsPage() {
             <p className="text-slate-600 mt-1">
               Configure required documents and fields before an order can move to the next workflow stage.
             </p>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              {selectedProfileId ? 'Dealer-specific workflow profile' : 'Global default workflow'}
+            </p>
           </div>
-          <button
-            onClick={() => void load()}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedProfileId}
+              onChange={(e) => setSelectedProfileId(e.target.value)}
+              className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900"
+            >
+              <option value="">Global default workflow</option>
+              {workflowProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => void load()}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -286,6 +327,16 @@ export default function AdminOrderFlowRequirementsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-slate-800">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              <span className="font-semibold">
+                {selectedProfileId
+                  ? 'You are editing a dealer-specific workflow override. Any unset stage falls back to the global default.'
+                  : 'You are editing the global default workflow used by dealers without a special profile.'}
+              </span>
+            </div>
+          </section>
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <button
               type="button"

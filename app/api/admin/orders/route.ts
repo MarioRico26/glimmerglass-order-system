@@ -52,7 +52,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const scopeModuleRaw = searchParams.get('scopeModule')
     const scopeModule =
-      scopeModuleRaw === 'PRODUCTION_SCHEDULE' || scopeModuleRaw === 'SHIP_SCHEDULE'
+      scopeModuleRaw === 'PRODUCTION_SCHEDULE' ||
+      scopeModuleRaw === 'SHIP_SCHEDULE' ||
+      scopeModuleRaw === 'ORDER_LIST'
         ? (scopeModuleRaw as AdminModule)
         : undefined
     const access = scopeModule ? await requireAdminAccess(scopeModule) : await requireAdminAccess()
@@ -144,6 +146,7 @@ export async function GET(req: NextRequest) {
         jobId: true,
         jobRole: true,
         jobItemType: true,
+        allocatedPoolStockId: true,
 
         // ✅ LO QUE NECESITA EL BOARD
         requestedShipDate: true,
@@ -220,6 +223,13 @@ export async function GET(req: NextRequest) {
           take: 1,
           select: { id: true },
         },
+        allocatedPoolStock: {
+          select: {
+            id: true,
+            serialNumber: true,
+            status: true,
+          },
+        },
         job: {
           select: {
             orders: {
@@ -240,6 +250,13 @@ export async function GET(req: NextRequest) {
       finalPaymentNeeded: (normalizeOrderStatus(order.status)?.toString() ?? order.status) === 'PRE_SHIPPING' && order.media.length === 0,
       linkedJob: !!order.jobId,
       jobOrderCount: order.job?.orders.length ?? 0,
+      allocatedPoolStock: order.allocatedPoolStock
+        ? {
+            id: order.allocatedPoolStock.id,
+            serialNumber: order.allocatedPoolStock.serialNumber ?? null,
+            status: order.allocatedPoolStock.status,
+          }
+        : null,
     }))
 
     return NextResponse.json({ items, page, pageSize, total })

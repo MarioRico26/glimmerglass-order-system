@@ -34,7 +34,7 @@ const DOC_GROUPS: Array<{ title: string; items: string[] }> = [
       'PAID_INVOICE',
     ],
   },
-  { title: 'Dealer Documents', items: ['WARRANTY', 'MANUAL'] },
+  { title: 'Service / Warranty Documents', items: ['WARRANTY', 'MANUAL'] },
   { title: 'Other', items: ['OTHER'] },
 ]
 

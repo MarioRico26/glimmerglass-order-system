@@ -5,15 +5,34 @@ export default function ColorsPage() {
   const [items, setItems] = useState<any[]>([])
   const [form, setForm] = useState({ name:'', swatchUrl:'' })
   const [loading, setLoading] = useState(false)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const load = async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/catalog/colors')
+    const [accessRes, res] = await Promise.all([
+      fetch('/api/admin/access?module=POOL_CATALOG', { cache: 'no-store' }),
+      fetch('/api/admin/catalog/colors'),
+    ])
+    if (accessRes.status === 403) {
+      setAccessDenied(true)
+      setItems([])
+      setLoading(false)
+      return
+    }
     const data = await res.json()
     setItems(data.items || [])
     setLoading(false)
   }
   useEffect(()=>{ load() }, [])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Pool Catalog access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the pool catalog module.</p>
+      </div>
+    )
+  }
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()

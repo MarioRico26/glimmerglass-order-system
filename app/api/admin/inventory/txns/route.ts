@@ -5,8 +5,7 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
-import { InventoryTxnType } from '@prisma/client'
-
+import { AdminModule, InventoryTxnType } from '@prisma/client'
 function json(message: string, status = 400, extra?: any) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
@@ -18,7 +17,7 @@ function asNumber(v: any) {
 
 // GET: list txns (with filters)
 export async function GET(req: NextRequest) {
-  const guard = await requireAdmin()
+  const guard = await requireAdmin(AdminModule.INVENTORY)
   if (!guard.ok) return json(guard.message, guard.status)
 
   const { searchParams } = new URL(req.url)
@@ -68,7 +67,7 @@ export async function GET(req: NextRequest) {
  * - ADJUST: qty can be +/- (delta), stock += qty (cannot go below 0)
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireAdmin()
+  const guard = await requireAdmin(AdminModule.INVENTORY)
   if (!guard.ok) return json(guard.message, guard.status)
 
   const body = await req.json().catch(() => null)

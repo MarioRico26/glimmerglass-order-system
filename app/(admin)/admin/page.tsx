@@ -55,6 +55,13 @@ type PoolStockSummary = {
   }
 }
 
+type AccessSummary = {
+  allModules: boolean
+  effectiveModules: string[]
+  allFactories: boolean
+  factories: { id: string; name: string }[]
+}
+
 const emptyMetrics: Metrics = {
   totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, SERVICE_WARRANTY: 0, CANCELED: 0 },
   monthly: [],
@@ -107,6 +114,8 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<Metrics>(emptyMetrics)
   const [loading, setLoading] = useState(true)
   const [poolStock, setPoolStock] = useState<PoolStockSummary[]>([])
+  const [access, setAccess] = useState<AccessSummary | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -116,13 +125,26 @@ export default function AdminDashboard() {
     }
     ;(async () => {
       try {
-        const [metricsRes, stockRes] = await Promise.all([
+        const [accessRes, metricsRes, stockRes] = await Promise.all([
+          fetch('/api/admin/access?module=DASHBOARD', { cache: 'no-store' }),
           fetch('/api/admin/metrics', { cache: 'no-store' }),
-          fetch('/api/admin/pool-stock/summary', { cache: 'no-store' }),
+          fetch('/api/admin/pool-stock/summary?scopeModule=DASHBOARD', { cache: 'no-store' }),
         ])
 
+        const accessData = await accessRes.json().catch(() => null)
         const metricsData = await metricsRes.json().catch(() => null)
         const stockData = await stockRes.json().catch(() => null)
+
+        if (accessRes.status === 403) {
+          setAccessDenied(true)
+          setMetrics(emptyMetrics)
+          setPoolStock([])
+          setAccess(null)
+          return
+        }
+
+        if (accessRes.ok) setAccess(accessData)
+        else setAccess(null)
 
         if (metricsRes.ok) setMetrics(metricsData)
         else setMetrics(emptyMetrics)
@@ -165,13 +187,25 @@ export default function AdminDashboard() {
   )
 
   const actionLinks = [
-    { label: 'Order List', href: '/admin/orders', Icon: PackageSearch, tone: 'slate' },
-    { label: 'Production Schedule', href: '/admin/production', Icon: Factory, tone: 'indigo' },
-    { label: 'Ship Schedule', href: '/admin/shipping', Icon: CalendarDays, tone: 'sky' },
-    { label: 'Pool Stock', href: '/admin/pool-stock', Icon: Boxes, tone: 'emerald' },
+    { label: 'Order List', href: '/admin/orders', Icon: PackageSearch, tone: 'slate', module: 'ORDER_LIST' },
+    { label: 'Production Schedule', href: '/admin/production', Icon: Factory, tone: 'indigo', module: 'PRODUCTION_SCHEDULE' },
+    { label: 'Ship Schedule', href: '/admin/shipping', Icon: CalendarDays, tone: 'sky', module: 'SHIP_SCHEDULE' },
+    { label: 'Pool Stock', href: '/admin/pool-stock', Icon: Boxes, tone: 'emerald', module: 'POOL_STOCK' },
   ] as const
 
+  const visibleActionLinks = access?.allModules || !access
+    ? actionLinks
+    : actionLinks.filter((item) => access.effectiveModules.includes(item.module))
+
   if (loading) return <div className="p-2 text-slate-600">Loading…</div>
+  if (accessDenied) {
+    return (
+      <div className="rounded-[1.75rem] border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Dashboard access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the dashboard module.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -190,9 +224,17 @@ export default function AdminDashboard() {
             <p className="mt-1 text-[13px] text-slate-500">
               Signed in as {session?.user?.email} ({session?.user?.role})
             </p>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Scope:{' '}
+              {access?.allFactories
+                ? 'All factories'
+                : access?.factories?.length
+                ? access.factories.map((factory) => factory.name).join(', ')
+                : 'All factories'}
+            </p>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {actionLinks.map(({ label, href, Icon, tone }) => (
+              {visibleActionLinks.map(({ label, href, Icon, tone }) => (
                 <QuickAction key={href} label={label} href={href} Icon={Icon} tone={tone} />
               ))}
             </div>

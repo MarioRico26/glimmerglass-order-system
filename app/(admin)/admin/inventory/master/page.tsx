@@ -33,6 +33,7 @@ export default function InventoryMasterPage() {
   const [error, setError] = useState('')
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null)
   const [savingItemId, setSavingItemId] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [categoryName, setCategoryName] = useState('')
   const [categorySortOrder, setCategorySortOrder] = useState(9999)
@@ -48,11 +49,16 @@ export default function InventoryMasterPage() {
     setLoading(true)
     setError('')
     try {
-      const [catRes, itemRes] = await Promise.all([
+      const [accessRes, catRes, itemRes] = await Promise.all([
+        fetch('/api/admin/access?module=INVENTORY', { cache: 'no-store' }),
         fetch('/api/admin/inventory/categories', { cache: 'no-store' }),
         fetch('/api/admin/inventory/items?take=500', { cache: 'no-store' }),
       ])
 
+      if (accessRes.status === 403) {
+        setAccessDenied(true)
+        throw new Error('Inventory access denied')
+      }
       const catJson = await catRes.json().catch(() => null)
       const itemJson = await itemRes.json().catch(() => null)
 
@@ -77,6 +83,15 @@ export default function InventoryMasterPage() {
   useEffect(() => {
     void loadAll()
   }, [])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Inventory access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the inventory module.</p>
+      </div>
+    )
+  }
 
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase()

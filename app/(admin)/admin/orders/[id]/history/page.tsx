@@ -54,6 +54,15 @@ interface OrderSummary {
   poolModel?: { name: string; blueprintUrl?: string | null; hasIntegratedSpa?: boolean } | null
   color?: { name: string } | null
   factory?: { id: string; name: string } | null
+  allocatedPoolStock?: {
+    id: string
+    status: string
+    quantity: number
+    serialNumber?: string | null
+    productionDate?: string | null
+    notes?: string | null
+    factory?: { id: string; name: string } | null
+  } | null
   shippingMethod?: string | null
 
   hardwareSkimmer: boolean
@@ -110,6 +119,32 @@ function labelPenetrationMode(mode?: string | null) {
   }
 }
 
+interface AllocationCandidate {
+  id: string
+  status: string
+  quantity: number
+  serialNumber?: string | null
+  productionDate?: string | null
+  notes?: string | null
+  factory?: { id: string; name: string } | null
+  allocatedToOtherOrder: boolean
+  allocatedOrder?: {
+    id: string
+    dealerName?: string | null
+  } | null
+}
+
+interface PoolStockAllocationPayload {
+  order: {
+    id: string
+    status: string
+    allocatedPoolStockId?: string | null
+  }
+  currentAllocation?: AllocationCandidate | null
+  canAllocate: boolean
+  candidates: AllocationCandidate[]
+}
+
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
     const text = await res.text()
@@ -144,6 +179,8 @@ export default function OrderHistoryPage() {
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [mediaFiles, setMediaFiles] = useState<OrderMedia[]>([])
   const [factoryList, setFactoryList] = useState<FactoryLocation[]>([])
+  const [allocation, setAllocation] = useState<PoolStockAllocationPayload | null>(null)
+  const [selectedAllocationStockId, setSelectedAllocationStockId] = useState('')
 
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>('')
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<string>('')
@@ -167,23 +204,26 @@ export default function OrderHistoryPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [allocating, setAllocating] = useState(false)
   const { labelForDocType } = useWorkflowDocLabels()
 
   const loadAll = async () => {
     try {
       setLoading(true)
 
-      const [orderRes, historyRes, mediaRes, factoriesRes] = await Promise.all([
+      const [orderRes, historyRes, mediaRes, factoriesRes, allocationRes] = await Promise.all([
         fetch(`/api/admin/orders/${orderId}/status`, { cache: 'no-store' }),
         fetch(`/api/admin/orders/${orderId}/history`, { cache: 'no-store' }),
         fetch(`/api/admin/orders/${orderId}/media`, { cache: 'no-store' }),
         fetch(`/api/factories`, { cache: 'no-store' }),
+        fetch(`/api/admin/orders/${orderId}/pool-stock-allocation`, { cache: 'no-store' }),
       ])
 
       const orderData = await safeJson<OrderSummary>(orderRes)
       const historyData = await safeJson<OrderHistory[] | { items: OrderHistory[] }>(historyRes)
       const mediaData = await safeJson<OrderMedia[] | { items: OrderMedia[] }>(mediaRes)
       const factoriesData = await safeJson<FactoryLocation[]>(factoriesRes)
+      const allocationData = await safeJson<PoolStockAllocationPayload>(allocationRes)
 
       if (orderData) {
         setSummary(orderData)
@@ -207,6 +247,18 @@ export default function OrderHistoryPage() {
 
       setHistory(extractItems(historyData))
       setMediaFiles(extractItems(mediaData))
+      if (allocationData) {
+        setAllocation(allocationData)
+        setSelectedAllocationStockId((current) => {
+          if (allocationData.currentAllocation?.id) return allocationData.currentAllocation.id
+          if (current && allocationData.candidates.some((candidate) => candidate.id === current)) return current
+          const nextAvailable = allocationData.candidates.find((candidate) => !candidate.allocatedToOtherOrder)
+          return nextAvailable?.id || ''
+        })
+      } else {
+        setAllocation(null)
+        setSelectedAllocationStockId('')
+      }
 
       if (Array.isArray(factoriesData)) setFactoryList(factoriesData)
     } catch (err) {
@@ -284,6 +336,54 @@ export default function OrderHistoryPage() {
     }
   }
 
+  const handleAllocateStock = async () => {
+    if (!selectedAllocationStockId) {
+      setMessage('❌ Select a pool stock row first.')
+      return
+    }
+    try {
+      setAllocating(true)
+      setMessage('🔄 Allocating pool stock...')
+      const res = await fetch(`/api/admin/orders/${orderId}/pool-stock-allocation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stockId: selectedAllocationStockId }),
+      })
+      const payload = await safeJson<{ message?: string }>(res)
+      if (!res.ok) throw new Error(payload?.message || 'Could not allocate pool stock')
+      await loadAll()
+      setMessage('✅ Pool stock allocated to order.')
+    } catch (error) {
+      console.error('Allocate pool stock error:', error)
+      const msg = error instanceof Error ? error.message : 'Could not allocate pool stock'
+      setMessage(`❌ ${msg}`)
+    } finally {
+      setAllocating(false)
+      setTimeout(() => setMessage(''), 3000)
+    }
+  }
+
+  const handleReleaseAllocation = async () => {
+    try {
+      setAllocating(true)
+      setMessage('🔄 Releasing allocated pool stock...')
+      const res = await fetch(`/api/admin/orders/${orderId}/pool-stock-allocation`, {
+        method: 'DELETE',
+      })
+      const payload = await safeJson<{ message?: string }>(res)
+      if (!res.ok) throw new Error(payload?.message || 'Could not release allocation')
+      await loadAll()
+      setMessage('✅ Pool stock allocation released.')
+    } catch (error) {
+      console.error('Release allocation error:', error)
+      const msg = error instanceof Error ? error.message : 'Could not release allocation'
+      setMessage(`❌ ${msg}`)
+    } finally {
+      setAllocating(false)
+      setTimeout(() => setMessage(''), 3000)
+    }
+  }
+
   const handleApprovePayment = async () => {
     try {
       setSaving(true)
@@ -331,6 +431,7 @@ export default function OrderHistoryPage() {
   const scheduledShipText = summary?.scheduledShipDate
     ? formatDateOnlyForDisplay(summary.scheduledShipDate)
     : 'Not scheduled'
+  const availableAllocationCandidates = allocation?.candidates.filter((candidate) => !candidate.allocatedToOtherOrder) ?? []
 
   return (
     <div className="w-full p-6 xl:p-8">
@@ -564,6 +665,95 @@ export default function OrderHistoryPage() {
                   </div>
                 ) : (
                   <div className="text-slate-500 italic">No linked job</div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Stock Allocation
+                </div>
+                {allocation?.currentAllocation ? (
+                  <div className="space-y-2 text-slate-800">
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                      This order is currently tied to a finished stock unit. Releasing it will return the stock row to READY.
+                    </div>
+                    <div>
+                      <span className="font-semibold">Stock Row:</span> {allocation.currentAllocation.id}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Status:</span> {allocation.currentAllocation.status}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Serial:</span>{' '}
+                      {allocation.currentAllocation.serialNumber || (
+                        <span className="italic text-slate-500">No serial</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Production Date:</span>{' '}
+                      {allocation.currentAllocation.productionDate
+                        ? formatDateOnlyForDisplay(allocation.currentAllocation.productionDate)
+                        : 'Not set'}
+                    </div>
+                    {allocation.currentAllocation.notes ? (
+                      <div>
+                        <span className="font-semibold">Notes:</span> {allocation.currentAllocation.notes}
+                      </div>
+                    ) : null}
+                    <button
+                      onClick={handleReleaseAllocation}
+                      disabled={allocating}
+                      className="mt-2 inline-flex rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {allocating ? 'Releasing…' : 'Release Allocation'}
+                    </button>
+                  </div>
+                ) : allocation?.canAllocate ? (
+                  <div className="space-y-3 text-slate-800">
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-900">
+                      Reserve a READY finished stock row that matches this order&apos;s factory, model, and color.
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                        Available Stock
+                      </label>
+                      <select
+                        value={selectedAllocationStockId}
+                        onChange={(e) => setSelectedAllocationStockId(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        disabled={allocating || availableAllocationCandidates.length === 0}
+                      >
+                        <option value="">
+                          {availableAllocationCandidates.length === 0 ? 'No matching stock available' : 'Select stock row'}
+                        </option>
+                        {availableAllocationCandidates.map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.serialNumber ? `${candidate.serialNumber} • ` : ''}
+                            {candidate.productionDate
+                              ? `${formatDateOnlyForDisplay(candidate.productionDate)} • `
+                              : ''}
+                            {candidate.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {allocation.candidates.some((candidate) => candidate.allocatedToOtherOrder) ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Some matching stock rows are already allocated to other orders and are excluded here.
+                      </div>
+                    ) : null}
+                    <button
+                      onClick={handleAllocateStock}
+                      disabled={allocating || !selectedAllocationStockId}
+                      className="inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {allocating ? 'Allocating…' : 'Allocate Stock'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-slate-500">
+                    Finished stock can only be allocated while the order is in Needs Deposit, In Production, or Pre-Shipping.
+                  </div>
                 )}
               </div>
             </div>

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
-import { Prisma } from '@prisma/client'
+import { AdminModule } from '@prisma/client'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function GET() {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    await requireAdminAccess(AdminModule.POOL_CATALOG)
     const items = await prisma.color.findMany({ orderBy: { name: 'asc' } })
     return NextResponse.json({ items })
   } catch (e:any) {
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    await requireAdminAccess(AdminModule.POOL_CATALOG)
     const { name, swatchUrl } = await req.json()
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ message: 'name requerido' }, { status: 400 })
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    await requireAdminAccess(AdminModule.POOL_CATALOG)
     const { id, name, swatchUrl } = await req.json()
     if (!id) return NextResponse.json({ message: 'id requerido' }, { status: 400 })
     const data: any = {}
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole(['ADMIN','SUPERADMIN'])
+    await requireAdminAccess(AdminModule.POOL_CATALOG)
     const { id } = await req.json()
     if (!id) return NextResponse.json({ message: 'id requerido' }, { status: 400 })
     await prisma.color.delete({ where: { id } })

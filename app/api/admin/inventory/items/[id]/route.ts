@@ -5,7 +5,7 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
-
+import { AdminModule } from '@prisma/client'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
@@ -17,7 +17,7 @@ async function getId(ctx: Ctx) {
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const id = await getId(ctx)
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const id = await getId(ctx)
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const id = await getId(ctx)

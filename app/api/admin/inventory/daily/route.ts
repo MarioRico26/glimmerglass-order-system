@@ -1,5 +1,7 @@
+import { AdminModule } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,6 +33,7 @@ async function resolveLocation(locationIdOrName: string) {
 
 export async function GET(req: Request) {
   try {
+    await requireAdminAccess(AdminModule.INVENTORY)
     const { searchParams } = new URL(req.url)
     const locationParam = searchParams.get('locationId') ?? ''
     const dateParam = searchParams.get('date') ?? ''
@@ -150,6 +153,7 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    await requireAdminAccess(AdminModule.INVENTORY)
     const body = await req.json().catch(() => null)
 
     const locationId = body?.locationId as string | undefined

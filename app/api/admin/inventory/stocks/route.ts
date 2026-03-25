@@ -5,13 +5,13 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
-
+import { AdminModule } from '@prisma/client'
 function json(message: string, status = 400, extra?: any) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireAdmin()
+  const guard = await requireAdmin(AdminModule.INVENTORY)
   if (!guard.ok) return json(guard.message, guard.status)
 
   const { searchParams } = new URL(req.url)

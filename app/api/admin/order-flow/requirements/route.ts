@@ -2,9 +2,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { Role } from '@prisma/client'
-import { authOptions } from '@/lib/authOptions'
+import { AdminModule } from '@prisma/client'
 import {
   REQUIREMENT_FIELD_KEYS,
   STATUS_LABELS,
@@ -14,6 +12,7 @@ import {
 import {
   TEMPLATE_STATUSES,
   isTemplateStatus,
+  listWorkflowProfiles,
   listTemplateRequirements,
   resetStatusRequirements,
   sanitizeRequirementDocs,
@@ -21,6 +20,7 @@ import {
   upsertStatusRequirements,
 } from '@/lib/orderRequirements'
 import { listWorkflowDocConfigs, upsertWorkflowDocLabels } from '@/lib/workflowDocConfig'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json(
@@ -29,15 +29,17 @@ function json(message: string, status = 400, extra?: Record<string, unknown>) {
   )
 }
 
-function isAdminRole(role: unknown) {
-  return role === Role.ADMIN || role === Role.SUPERADMIN
-}
-
 async function optionsPayload() {
   const docConfigs = await listWorkflowDocConfigs()
   const docMap = new Map(docConfigs.map((item) => [item.docType, item] as const))
+  const profiles = await listWorkflowProfiles()
 
   return {
+    profiles: profiles.map((profile) => ({
+      id: profile.id,
+      slug: profile.slug,
+      name: profile.name,
+    })),
     statuses: TEMPLATE_STATUSES.map((status) => ({
       value: status,
       label: STATUS_LABELS[status as FlowStatus] || status.replaceAll('_', ' '),
@@ -52,16 +54,14 @@ async function optionsPayload() {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: unknown } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdminRole(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
+    const profileId = req.nextUrl.searchParams.get('profileId') || null
 
-    const [items, options] = await Promise.all([listTemplateRequirements(), optionsPayload()])
+    const [items, options] = await Promise.all([listTemplateRequirements(profileId), optionsPayload()])
     return NextResponse.json(
-      { items, options },
+      { items, options, selectedProfileId: profileId },
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (e) {
@@ -72,10 +72,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: unknown } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdminRole(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
 
     const body = (await req.json().catch(() => null)) as
       | { docs?: Array<{ docType?: unknown; label?: unknown; sortOrder?: unknown }> }
@@ -92,13 +89,10 @@ export async function PATCH(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: unknown } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdminRole(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
 
     const body = (await req.json().catch(() => null)) as
-      | { status?: unknown; requiredDocs?: unknown; requiredFields?: unknown }
+      | { status?: unknown; requiredDocs?: unknown; requiredFields?: unknown; profileId?: unknown }
       | null
 
     const statusRaw = typeof body?.status === 'string' ? body.status : ''
@@ -108,8 +102,9 @@ export async function PUT(req: NextRequest) {
 
     const requiredDocs = sanitizeRequirementDocs(body?.requiredDocs)
     const requiredFields = sanitizeRequirementFields(body?.requiredFields)
+    const profileId = typeof body?.profileId === 'string' && body.profileId.trim() ? body.profileId.trim() : null
 
-    const item = await upsertStatusRequirements(statusRaw, requiredDocs, requiredFields)
+    const item = await upsertStatusRequirements(statusRaw, requiredDocs, requiredFields, profileId)
     return NextResponse.json(item, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('PUT /api/admin/order-flow/requirements error:', e)
@@ -119,17 +114,15 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: unknown } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdminRole(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
 
     const statusRaw = req.nextUrl.searchParams.get('status') || ''
+    const profileId = req.nextUrl.searchParams.get('profileId') || null
     if (!isTemplateStatus(statusRaw)) {
       return json('Invalid status', 400)
     }
 
-    const item = await resetStatusRequirements(statusRaw)
+    const item = await resetStatusRequirements(statusRaw, profileId)
     return NextResponse.json(item, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('DELETE /api/admin/order-flow/requirements error:', e)

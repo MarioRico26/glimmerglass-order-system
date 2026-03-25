@@ -1,11 +1,12 @@
 // app/api/admin/dealers/list/route.ts
+import { AdminModule } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function GET() {
     try {
-        await requireRole(['ADMIN', 'SUPERADMIN'])
+        await requireAdminAccess(AdminModule.DEALERS)
         const items = await prisma.dealer.findMany({
             select: { id: true, name: true, email: true },
             orderBy: { name: 'asc' },

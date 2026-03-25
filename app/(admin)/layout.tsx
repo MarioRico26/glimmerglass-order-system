@@ -3,7 +3,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ReactNode, useMemo, useState } from 'react'
+import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { signOut } from 'next-auth/react'
 
@@ -33,6 +33,13 @@ type NavItem = {
   href: string
   icon?: LucideIcon
   badge?: string
+  module?: string
+}
+
+type AccessSummary = {
+  role?: 'ADMIN' | 'SUPERADMIN'
+  allModules: boolean
+  effectiveModules: string[]
 }
 
 type NavSection =
@@ -47,59 +54,107 @@ type NavSection =
 
 function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const [access, setAccess] = useState<AccessSummary | null>(null)
+  const [loadingAccess, setLoadingAccess] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/admin/access', { cache: 'no-store' })
+        const data = await res.json().catch(() => null)
+        if (!active) return
+        if (res.ok) setAccess(data)
+        else setAccess(null)
+      } catch {
+        if (active) setAccess(null)
+      } finally {
+        if (active) setLoadingAccess(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const hasModule = (module?: string) => {
+    if (!module) return true
+    if (!access || access.allModules) return true
+    return access.effectiveModules.includes(module)
+  }
+
+  const canSeeUsersModule = () => {
+    if (!hasModule('USERS')) return false
+    return access?.role === 'SUPERADMIN'
+  }
 
   const sections = useMemo<NavSection[]>(
-    () => [
-      {
-        type: 'link',
-        item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-      },
-      {
-        type: 'group',
-        label: 'Orders',
-        icon: ClipboardList,
-        defaultOpen: true,
-        items: [
-          { label: 'Order List', href: '/admin/orders', icon: ClipboardList },
-          { label: 'New Order', href: '/admin/orders/new', icon: PlusCircle },
-          { label: 'Production Schedule', href: '/admin/production', icon: Factory },
-          { label: 'Ship Schedule', href: '/admin/shipping', icon: CalendarDays },
-          { label: 'Workflow Requirements', href: '/admin/order-flow', icon: ClipboardList },
-        ],
-      },
-      {
-        type: 'group',
-        label: 'Inventory',
-        icon: Warehouse,
-        defaultOpen: true,
-        items: [
-          { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory },
-          { label: 'Daily Sheet', href: '/admin/inventory/daily', icon: Boxes },
-          { label: 'Master Setup', href: '/admin/inventory/master', icon: SlidersHorizontal },
-        ],
-      },
-      {
-        type: 'group',
-        label: 'Catalog',
-        icon: BookOpen,
-        defaultOpen: true,
-        items: [
-          { label: 'Pool Models', href: '/admin/catalog/pool-models', icon: BookOpen },
-          { label: 'Pool Colors', href: '/admin/catalog/colors', icon: Palette },
-        ],
-      },
-      {
-        type: 'group',
-        label: 'People',
-        icon: Users,
-        defaultOpen: true,
-        items: [
-          { label: 'Dealers', href: '/admin/dealers', icon: Users },
-          { label: 'Users', href: '/admin/users', icon: UserCog },
-        ],
-      },
-    ],
-    [],
+    () => {
+      const all: NavSection[] = [
+        {
+          type: 'link',
+          item: { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, module: 'DASHBOARD' },
+        },
+        {
+          type: 'group',
+          label: 'Orders',
+          icon: ClipboardList,
+          defaultOpen: true,
+          items: [
+            { label: 'Order List', href: '/admin/orders', icon: ClipboardList, module: 'ORDER_LIST' },
+            { label: 'New Order', href: '/admin/orders/new', icon: PlusCircle, module: 'NEW_ORDER' },
+            { label: 'Production Schedule', href: '/admin/production', icon: Factory, module: 'PRODUCTION_SCHEDULE' },
+            { label: 'Ship Schedule', href: '/admin/shipping', icon: CalendarDays, module: 'SHIP_SCHEDULE' },
+            { label: 'Workflow Requirements', href: '/admin/order-flow', icon: ClipboardList, module: 'WORKFLOW_REQUIREMENTS' },
+          ],
+        },
+        {
+          type: 'group',
+          label: 'Inventory',
+          icon: Warehouse,
+          defaultOpen: true,
+          items: [
+            { label: 'Pool Stock', href: '/admin/pool-stock', icon: Factory, module: 'POOL_STOCK' },
+            { label: 'Daily Sheet', href: '/admin/inventory/daily', icon: Boxes, module: 'INVENTORY' },
+            { label: 'Master Setup', href: '/admin/inventory/master', icon: SlidersHorizontal, module: 'INVENTORY' },
+          ],
+        },
+        {
+          type: 'group',
+          label: 'Catalog',
+          icon: BookOpen,
+          defaultOpen: true,
+          items: [
+            { label: 'Pool Models', href: '/admin/catalog/pool-models', icon: BookOpen, module: 'POOL_CATALOG' },
+            { label: 'Pool Colors', href: '/admin/catalog/colors', icon: Palette, module: 'POOL_CATALOG' },
+          ],
+        },
+        {
+          type: 'group',
+          label: 'People',
+          icon: Users,
+          defaultOpen: true,
+          items: [
+            { label: 'Dealers', href: '/admin/dealers', icon: Users, module: 'DEALERS' },
+            { label: 'Users', href: '/admin/users', icon: UserCog, module: 'USERS' },
+          ],
+        },
+      ]
+
+      return all
+        .map((section) => {
+          if (section.type === 'link') {
+            return hasModule(section.item.module) ? section : null
+          }
+          const items = section.items.filter((item) => {
+            if (item.module === 'USERS') return canSeeUsersModule()
+            return hasModule(item.module)
+          })
+          return items.length ? { ...section, items } : null
+        })
+        .filter(Boolean) as NavSection[]
+    },
+    [access],
   )
 
   const isActive = (href: string) => pathname === href || (href !== '/admin' && pathname?.startsWith(href + '/')) || (href !== '/admin' && pathname?.startsWith(href))
@@ -113,7 +168,13 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
           </div>
 
           <div className="space-y-1">
-            {sections.map((sec, idx) => {
+            {loadingAccess ? (
+              <div className="space-y-2 px-2 py-2">
+                <div className="h-11 rounded-xl bg-slate-100 animate-pulse" />
+                <div className="h-28 rounded-2xl bg-slate-100 animate-pulse" />
+                <div className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
+              </div>
+            ) : sections.map((sec, idx) => {
               if (sec.type === 'link') {
                 return <NavLink key={sec.item.href} item={sec.item} active={isActive(sec.item.href)} onNavigate={onNavigate} />
               }

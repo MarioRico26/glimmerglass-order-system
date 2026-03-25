@@ -1,8 +1,8 @@
 // glimmerglass-order-system/app/api/admin/inventory/categories/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 function json(message: string, status = 400, extra?: unknown) {
   return NextResponse.json(
@@ -11,16 +11,9 @@ function json(message: string, status = 400, extra?: unknown) {
   )
 }
 
-function isAdmin(role: unknown) {
-  return role === 'ADMIN' || role === 'SUPERADMIN'
-}
-
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string | null; role?: string } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const items = await prisma.inventoryCategory.findMany({
       include: { _count: { select: { items: true } } },
@@ -36,10 +29,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string | null; role?: string } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const body = await req.json().catch(() => null)
     const name = (body?.name ?? '').toString().trim()

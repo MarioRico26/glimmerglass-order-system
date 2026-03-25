@@ -5,14 +5,13 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/requireAdmin'
-import { InventoryLocationType } from '@prisma/client'
-
+import { AdminModule, InventoryLocationType } from '@prisma/client'
 function json(data: any, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function GET(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const { searchParams } = new URL(req.url)
@@ -40,7 +39,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requireAdmin(AdminModule.INVENTORY)
   if (!gate.ok) return json({ message: gate.message }, gate.status)
 
   const body = await req.json().catch(() => null)

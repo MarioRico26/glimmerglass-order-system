@@ -1,15 +1,26 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
+import { ADMIN_MODULE_VALUES, requireAdminAccess } from '@/lib/adminAccess'
 
 type PoolStockStatus = 'READY' | 'RESERVED' | 'IN_PRODUCTION' | 'DAMAGED'
 
-export async function GET() {
+function parseModule(raw: string | null): AdminModule | undefined {
+  if (!raw) return undefined
+  return ADMIN_MODULE_VALUES.includes(raw as AdminModule) ? (raw as AdminModule) : undefined
+}
+
+export async function GET(request: NextRequest) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const module = parseModule(request.nextUrl.searchParams.get('scopeModule'))
+    const access = await requireAdminAccess(module)
+    const factoryScope =
+      access.allowedFactoryIds === null ? {} : { id: { in: access.allowedFactoryIds } }
+    const stockScope =
+      access.allowedFactoryIds === null ? {} : { factoryId: { in: access.allowedFactoryIds } }
 
     const factories = await prisma.factoryLocation.findMany({
-      where: { active: true },
+      where: { active: true, ...factoryScope },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     })
@@ -17,6 +28,7 @@ export async function GET() {
     const groups = await prisma.poolStock.groupBy({
       by: ['factoryId', 'status'],
       _sum: { quantity: true },
+      where: stockScope,
     })
 
     const map = new Map(

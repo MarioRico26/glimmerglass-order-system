@@ -17,9 +17,13 @@ export type StatusRequirementConfig = {
   requiredDocs: OrderDocTypeKey[]
   requiredFields: RequirementFieldKey[]
   source: RequirementSource
+  workflowProfileId?: string | null
 }
 
-type DbClient = Pick<typeof prisma, 'orderStatusRequirementTemplate'>
+type DbClient = Pick<
+  typeof prisma,
+  'orderStatusRequirementTemplate' | 'workflowProfileRequirementTemplate' | 'workflowProfile'
+>
 
 export const TEMPLATE_STATUSES: FlowStatus[] = [
   'IN_PRODUCTION',
@@ -62,14 +66,53 @@ export function defaultRequirementsForStatus(status: FlowStatus): Omit<StatusReq
   return { status, requiredDocs, requiredFields }
 }
 
+export type WorkflowProfileSummary = {
+  id: string
+  slug: string
+  name: string
+  active: boolean
+}
+
 function asOrderStatus(status: FlowStatus): OrderStatus {
   return status as unknown as OrderStatus
 }
 
+export async function listWorkflowProfiles(db: DbClient = prisma): Promise<WorkflowProfileSummary[]> {
+  const profiles = await db.workflowProfile.findMany({
+    where: { active: true },
+    orderBy: [{ name: 'asc' }],
+    select: { id: true, slug: true, name: true, active: true },
+  })
+  return profiles
+}
+
 export async function getStatusRequirements(
   status: FlowStatus,
+  workflowProfileId?: string | null,
   db: DbClient = prisma
 ): Promise<StatusRequirementConfig> {
+  if (workflowProfileId) {
+    const profileCustom = await db.workflowProfileRequirementTemplate.findUnique({
+      where: {
+        workflowProfileId_status: {
+          workflowProfileId,
+          status: asOrderStatus(status),
+        },
+      },
+      select: { requiredDocs: true, requiredFields: true },
+    })
+
+    if (profileCustom) {
+      return {
+        status,
+        requiredDocs: sanitizeRequirementDocs(profileCustom.requiredDocs),
+        requiredFields: sanitizeRequirementFields(profileCustom.requiredFields),
+        source: 'custom',
+        workflowProfileId,
+      }
+    }
+  }
+
   const custom = await db.orderStatusRequirementTemplate.findUnique({
     where: { status: asOrderStatus(status) },
     select: { requiredDocs: true, requiredFields: true },
@@ -77,7 +120,7 @@ export async function getStatusRequirements(
 
   if (!custom) {
     const defaults = defaultRequirementsForStatus(status)
-    return { ...defaults, source: 'default' }
+    return { ...defaults, source: 'default', workflowProfileId: workflowProfileId ?? null }
   }
 
   return {
@@ -85,13 +128,17 @@ export async function getStatusRequirements(
     requiredDocs: sanitizeRequirementDocs(custom.requiredDocs),
     requiredFields: sanitizeRequirementFields(custom.requiredFields),
     source: 'custom',
+    workflowProfileId: workflowProfileId ?? null,
   }
 }
 
 export async function listTemplateRequirements(
+  workflowProfileId?: string | null,
   db: DbClient = prisma
 ): Promise<StatusRequirementConfig[]> {
-  const items = await Promise.all(TEMPLATE_STATUSES.map((s) => getStatusRequirements(s, db)))
+  const items = await Promise.all(
+    TEMPLATE_STATUSES.map((s) => getStatusRequirements(s, workflowProfileId, db))
+  )
   return items
 }
 
@@ -99,36 +146,69 @@ export async function upsertStatusRequirements(
   status: FlowStatus,
   requiredDocs: OrderDocTypeKey[],
   requiredFields: RequirementFieldKey[],
+  workflowProfileId?: string | null,
   db: DbClient = prisma
 ): Promise<StatusRequirementConfig> {
   const docs = sanitizeRequirementDocs(requiredDocs)
   const fields = sanitizeRequirementFields(requiredFields)
 
-  await db.orderStatusRequirementTemplate.upsert({
-    where: { status: asOrderStatus(status) },
-    create: {
-      status: asOrderStatus(status),
-      requiredDocs: docs,
-      requiredFields: fields,
-    },
-    update: {
-      requiredDocs: docs,
-      requiredFields: fields,
-    },
-  })
+  if (workflowProfileId) {
+    await db.workflowProfileRequirementTemplate.upsert({
+      where: {
+        workflowProfileId_status: {
+          workflowProfileId,
+          status: asOrderStatus(status),
+        },
+      },
+      create: {
+        workflowProfileId,
+        status: asOrderStatus(status),
+        requiredDocs: docs,
+        requiredFields: fields,
+      },
+      update: {
+        requiredDocs: docs,
+        requiredFields: fields,
+      },
+    })
+  } else {
+    await db.orderStatusRequirementTemplate.upsert({
+      where: { status: asOrderStatus(status) },
+      create: {
+        status: asOrderStatus(status),
+        requiredDocs: docs,
+        requiredFields: fields,
+      },
+      update: {
+        requiredDocs: docs,
+        requiredFields: fields,
+      },
+    })
+  }
 
   return {
     status,
     requiredDocs: docs,
     requiredFields: fields,
     source: 'custom',
+    workflowProfileId: workflowProfileId ?? null,
   }
 }
 
-export async function resetStatusRequirements(status: FlowStatus, db: DbClient = prisma) {
-  await db.orderStatusRequirementTemplate.deleteMany({
-    where: { status: asOrderStatus(status) },
-  })
+export async function resetStatusRequirements(
+  status: FlowStatus,
+  workflowProfileId?: string | null,
+  db: DbClient = prisma
+) {
+  if (workflowProfileId) {
+    await db.workflowProfileRequirementTemplate.deleteMany({
+      where: { workflowProfileId, status: asOrderStatus(status) },
+    })
+  } else {
+    await db.orderStatusRequirementTemplate.deleteMany({
+      where: { status: asOrderStatus(status) },
+    })
+  }
   const defaults = defaultRequirementsForStatus(status)
-  return { ...defaults, source: 'default' as const }
+  return { ...defaults, source: 'default' as const, workflowProfileId: workflowProfileId ?? null }
 }

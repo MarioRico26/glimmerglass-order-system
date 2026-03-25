@@ -1,18 +1,12 @@
 // app/api/admin/dealers/approve/route.ts
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 async function handle(req: NextRequest) {
-    const session = await getServerSession(authOptions)
-    const role = (session?.user as any)?.role
-
-    if (!session || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
-        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
-
     try {
+        await requireAdminAccess(AdminModule.DEALERS)
         const body = await req.json().catch(() => null) as { dealerId?: string; approved?: boolean } | null
         const dealerId = body?.dealerId?.trim()
         const approved = typeof body?.approved === 'boolean' ? body!.approved : undefined
@@ -66,9 +60,9 @@ async function handle(req: NextRequest) {
                 agreementUrl: dealer.agreementUrl ?? null,
             },
         }, { status: 200 })
-    } catch (error) {
+    } catch (error: any) {
         console.error('Approval error:', error)
-        return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+        return NextResponse.json({ message: error?.message || 'Internal server error' }, { status: error?.status || 500 })
     }
 }
 

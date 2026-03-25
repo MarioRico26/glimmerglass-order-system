@@ -52,6 +52,12 @@ type CreateForm = {
   hasIntegratedSpa: boolean
 }
 
+type AccessSummary = {
+  allFactories: boolean
+  factories: Factory[]
+  allowedFactoryIds: string[] | null
+}
+
 const EMPTY_FORM: CreateForm = {
   name: '',
   productType: 'POOL',
@@ -117,22 +123,29 @@ export default function PoolModelsPage() {
   const [uploading, setUploading] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const load = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const [modelsRes, factoriesRes] = await Promise.all([
+      const [accessRes, modelsRes, factoriesRes] = await Promise.all([
+        fetch('/api/admin/access?module=POOL_CATALOG', { cache: 'no-store' }),
         fetch('/api/admin/catalog/pool-models', { cache: 'no-store' }),
         fetch('/api/catalog/factories', { cache: 'no-store' }),
       ])
 
-      const [modelsJson, factoriesJson] = await Promise.all([
+      const [accessJson, modelsJson, factoriesJson] = await Promise.all([
+        accessRes.json().catch(() => null),
         modelsRes.json().catch(() => null),
         factoriesRes.json().catch(() => null),
       ])
 
+      if (accessRes.status === 403) {
+        setAccessDenied(true)
+        throw new Error('Pool Catalog access denied')
+      }
       if (!modelsRes.ok) {
         throw new Error(modelsJson?.message || 'Failed to load pool models')
       }
@@ -140,11 +153,17 @@ export default function PoolModelsPage() {
         throw new Error(factoriesJson?.message || 'Failed to load factories')
       }
 
+      const accessData = accessJson as AccessSummary | null
+      const allowedFactoryIds = accessData?.allowedFactoryIds ?? null
       const nextItems: PoolModel[] = Array.isArray(modelsJson?.items) ? modelsJson.items : []
       const nextFactories: Factory[] = Array.isArray(factoriesJson?.items) ? factoriesJson.items : []
+      const scopedFactories =
+        allowedFactoryIds === null
+          ? nextFactories
+          : nextFactories.filter((factory) => allowedFactoryIds.includes(factory.id))
 
       setItems(nextItems)
-      setFactories(nextFactories)
+      setFactories(scopedFactories)
       setDrafts(
         nextItems.reduce<Record<string, ModelDraft>>((acc, item) => {
           acc[item.id] = toDraft(item)
@@ -162,6 +181,15 @@ export default function PoolModelsPage() {
   useEffect(() => {
     void load()
   }, [])
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Pool Catalog access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the pool catalog module.</p>
+      </div>
+    )
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

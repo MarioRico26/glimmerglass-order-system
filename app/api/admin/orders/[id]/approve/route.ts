@@ -28,6 +28,11 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
         serialNumber: true,
         requestedShipDate: true,
         productionPriority: true,
+        dealer: {
+          select: {
+            workflowProfileId: true,
+          },
+        },
       },
     })
     if (!order) return json('Order not found', 404)
@@ -35,7 +40,7 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
       return json('Only pending orders can be moved into production', 400)
     }
 
-    const requirements = await getStatusRequirements('IN_PRODUCTION')
+    const requirements = await getStatusRequirements('IN_PRODUCTION', order.dealer?.workflowProfileId ?? null)
 
     const media = await prisma.orderMedia.findMany({
       where: { orderId: id, docType: { in: requirements.requiredDocs } },

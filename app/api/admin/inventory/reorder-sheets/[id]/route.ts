@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json(
     { message, ...(extra ?? {}) },
     { status, headers: { 'Cache-Control': 'no-store' } }
   )
-}
-
-function isAdmin(role: unknown) {
-  return role === 'ADMIN' || role === 'SUPERADMIN'
 }
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
@@ -26,10 +22,7 @@ async function getId(ctx: Ctx) {
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: string } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const id = await getId(ctx)
     const sheet = await prisma.inventoryReorderSheet.findUnique({
@@ -78,10 +71,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: string } | undefined
-    if (!user?.email) return json('Unauthorized', 401)
-    if (!isAdmin(user.role)) return json('Forbidden', 403)
+    await requireAdminAccess(AdminModule.INVENTORY)
 
     const id = await getId(ctx)
     const body = await req.json().catch(() => null)

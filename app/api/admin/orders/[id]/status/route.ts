@@ -121,6 +121,17 @@ async function getOrderSummary(orderId: string) {
       poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
       color: { select: { name: true } },
       factoryLocation: { select: { id: true, name: true } },
+      allocatedPoolStock: {
+        select: {
+          id: true,
+          status: true,
+          quantity: true,
+          serialNumber: true,
+          productionDate: true,
+          notes: true,
+          factory: { select: { id: true, name: true } },
+        },
+      },
       jobId: true,
       jobRole: true,
       jobItemType: true,
@@ -161,6 +172,19 @@ async function getOrderSummary(orderId: string) {
 
     factory: order.factoryLocation
       ? { id: order.factoryLocation.id, name: order.factoryLocation.name }
+      : null,
+    allocatedPoolStock: order.allocatedPoolStock
+      ? {
+          id: order.allocatedPoolStock.id,
+          status: order.allocatedPoolStock.status,
+          quantity: order.allocatedPoolStock.quantity,
+          serialNumber: order.allocatedPoolStock.serialNumber ?? null,
+          productionDate: order.allocatedPoolStock.productionDate
+            ? order.allocatedPoolStock.productionDate.toISOString()
+            : null,
+          notes: order.allocatedPoolStock.notes ?? null,
+          factory: order.allocatedPoolStock.factory,
+        }
       : null,
     job: order.job
       ? {
@@ -213,7 +237,25 @@ async function getMissingForTarget(
   targetStatus: FlowStatus,
   input?: MissingCheckInput
 ): Promise<MissingResult> {
-  const reqConfig = await getStatusRequirements(targetStatus)
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      serialNumber: true,
+      requestedShipDate: true,
+      productionPriority: true,
+      paymentProofUrl: true,
+      dealer: {
+        select: {
+          workflowProfileId: true,
+        },
+      },
+    },
+  })
+
+  if (!order) return { ok: false, notFound: true }
+
+  const reqConfig = await getStatusRequirements(targetStatus, order.dealer?.workflowProfileId ?? null)
   const needDocs = reqConfig.requiredDocs
   const needFields = reqConfig.requiredFields
 
@@ -227,26 +269,12 @@ async function getMissingForTarget(
     }
   }
 
-  const [order, media] = await Promise.all([
-    prisma.order.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        serialNumber: true,
-        requestedShipDate: true,
-        productionPriority: true,
-        paymentProofUrl: true,
-      },
-    }),
-    needDocs.length
-      ? prisma.orderMedia.findMany({
-          where: { orderId, docType: { in: needDocs as unknown as OrderDocType[] } },
-          select: { docType: true },
-        })
-      : Promise.resolve([] as Array<{ docType: OrderDocType | null }>),
-  ])
-
-  if (!order) return { ok: false, notFound: true }
+  const media = needDocs.length
+    ? await prisma.orderMedia.findMany({
+        where: { orderId, docType: { in: needDocs as unknown as OrderDocType[] } },
+        select: { docType: true },
+      })
+    : ([] as Array<{ docType: OrderDocType | null }>)
 
   const present = new Set(
     media.map((m) => m.docType).filter(Boolean) as OrderDocType[]

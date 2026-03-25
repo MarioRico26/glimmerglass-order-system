@@ -60,6 +60,11 @@ interface Order {
   jobItemType?: 'POOL' | 'SPA' | null
   linkedJob?: boolean
   jobOrderCount?: number
+  allocatedPoolStock?: {
+    id: string
+    serialNumber?: string | null
+    status: string
+  } | null
 }
 
 type ApiResp = {
@@ -67,6 +72,11 @@ type ApiResp = {
   page: number
   pageSize: number
   total: number
+}
+
+type AccessSummary = {
+  allModules: boolean
+  effectiveModules: string[]
 }
 
 type MissingPayload = {
@@ -520,6 +530,8 @@ function AdminOrdersInner() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [access, setAccess] = useState<AccessSummary | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   // Missing requirements modal
   const [missingOpen, setMissingOpen] = useState(false)
@@ -544,6 +556,27 @@ function AdminOrdersInner() {
   const page = Math.max(1, Number(sp.get('page') || 1))
   const pageSize = Math.max(5, Number(sp.get('pageSize') || 20))
 
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/admin/access?module=ORDER_LIST', { cache: 'no-store' })
+        const data = await safeJson<AccessSummary>(res)
+        if (!active) return
+        if (res.status === 403) {
+          setAccessDenied(true)
+          return
+        }
+        if (res.ok) setAccess(data)
+      } catch {
+        if (active) setAccess(null)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const setParams = (patch: Record<string, string | number | undefined | null>) => {
     const params = new URLSearchParams(sp.toString())
     Object.entries(patch).forEach(([k, v]) => {
@@ -562,12 +595,18 @@ function AdminOrdersInner() {
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
       if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
+      params.set('scopeModule', 'ORDER_LIST')
       params.set('sort', sort)
       params.set('dir', dir)
       params.set('page', String(page))
       params.set('pageSize', String(pageSize))
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
+      if (res.status === 403) {
+        setAccessDenied(true)
+        setOrders([])
+        return
+      }
       if (!res.ok) throw new Error('Failed to load orders')
 
       const data = await safeJson<ApiResp>(res)
@@ -787,12 +826,18 @@ function AdminOrdersInner() {
       if (dealerFilter !== 'ALL') params.set('dealer', dealerFilter)
       if (factoryFilter !== 'ALL') params.set('factory', factoryFilter)
       if (finalPaymentFilter !== 'ALL') params.set('finalPayment', finalPaymentFilter)
+      params.set('scopeModule', 'ORDER_LIST')
       params.set('sort', sort)
       params.set('dir', dir)
       params.set('page', String(page))
       params.set('pageSize', String(pageSize))
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
+      if (res.status === 403) {
+        setAccessDenied(true)
+        setTotalCount(0)
+        return
+      }
       const data = (await safeJson<ApiResp>(res)) || { total: 0, items: [], page: 1, pageSize: 20 }
       setTotalCount(data.total || 0)
     })()
@@ -800,6 +845,16 @@ function AdminOrdersInner() {
   }, [q, statusFilter, dealerFilter, factoryFilter, finalPaymentFilter, sort, dir, page, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const canCreateOrder = access?.allModules || access?.effectiveModules.includes('NEW_ORDER')
+
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Order List access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the order list module.</p>
+      </div>
+    )
+  }
 
   const toggleSort = (col: 'createdAt' | 'requestedShipDate' | 'status') => {
     const nextDir = sort === col ? (dir === 'asc' ? 'desc' : 'asc') : 'desc'
@@ -862,12 +917,14 @@ function AdminOrdersInner() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/admin/orders/new"
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold"
-            >
-              Create Order
-            </Link>
+            {canCreateOrder ? (
+              <Link
+                href="/admin/orders/new"
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold"
+              >
+                Create Order
+              </Link>
+            ) : null}
 
             <a
               href={exportUrl()}
@@ -1203,6 +1260,23 @@ function AdminOrdersInner() {
                                   tone="strong"
                                 />
                                 <DataField label="Shipping Method" value={shippingMethodLabel(order.shippingMethod)} />
+                                <DataField
+                                  label="Stock Allocation"
+                                  value={
+                                    order.allocatedPoolStock ? (
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
+                                          Allocated
+                                        </span>
+                                        <span className="font-mono text-xs text-slate-700">
+                                          {order.allocatedPoolStock.serialNumber || order.allocatedPoolStock.id}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-500">Not allocated</span>
+                                    )
+                                  }
+                                />
                                 <DataField label="Invoice #" value={displayInvoiceRef(order.invoiceNumber, order.id, order.createdAt)} />
                                 <DataField
                                   label="Deposit File"
@@ -1251,6 +1325,13 @@ function AdminOrdersInner() {
                                       ) : null}
                                       {order.status === 'PRE_SHIPPING' && !order.scheduledShipDate ? (
                                         <SignalPill label="Ship Date" value="Missing" tone="violet" />
+                                      ) : null}
+                                      {order.allocatedPoolStock ? (
+                                        <SignalPill
+                                          label="Stock"
+                                          value={order.allocatedPoolStock.serialNumber || 'Allocated'}
+                                          tone="emerald"
+                                        />
                                       ) : null}
                                       {order.finalPaymentNeeded ? (
                                         <SignalPill label="Final Payment" value="Needed" tone="rose" />

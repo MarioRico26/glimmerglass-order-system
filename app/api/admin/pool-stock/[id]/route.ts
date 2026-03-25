@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/requireRole'
+import { assertFactoryAccess, requireAdminAccess } from '@/lib/adminAccess'
 
 const STATUSES = new Set(['READY', 'RESERVED', 'IN_PRODUCTION', 'DAMAGED'])
 
@@ -24,12 +25,13 @@ const baseInclude = {
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_STOCK)
     const item = await prisma.poolStock.findUnique({
       where: { id: params.id },
       include: baseInclude,
     })
     if (!item) return NextResponse.json({ message: 'Not found' }, { status: 404 })
+    assertFactoryAccess(access, item.factoryId)
     return NextResponse.json({ item })
   } catch (e: any) {
     return NextResponse.json(
@@ -41,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireRole(['ADMIN', 'SUPERADMIN'])
+    const access = await requireAdminAccess(AdminModule.POOL_STOCK)
 
     const body = await req.json().catch(() => null)
     if (!body) {
@@ -92,6 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (!current) {
         throw Object.assign(new Error('Not found'), { status: 404 })
       }
+      assertFactoryAccess(access, current.factoryId)
       const currentAny = current as any
 
       const data: any = {}

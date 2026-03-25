@@ -46,7 +46,7 @@ interface Order {
   }>
   color: Maybe<{ name: string }>
   dealer: Maybe<{ name: string }>
-  factoryLocation: Maybe<{ name: string }>
+  factoryLocation: Maybe<{ id: string; name: string }>
   createdAt?: string
   requestedShipDate?: string | null
   productionPriority?: number | null
@@ -57,6 +57,11 @@ interface Order {
   jobItemType?: 'POOL' | 'SPA' | null
   linkedJob?: boolean
   jobOrderCount?: number
+}
+
+type AccessSummary = {
+  allFactories: boolean
+  factories: Array<{ id: string; name: string }>
 }
 
 type ApiOrders = { items: Order[]; total?: number } | Order[]
@@ -200,6 +205,10 @@ function resolveFactoryName(order: Order) {
   )
 }
 
+function resolveFactoryId(order: Order) {
+  return order.factoryLocation?.id || order.poolModel?.defaultFactoryLocation?.id || ''
+}
+
 function linkedJobTone(order: Order): 'sky' | 'violet' {
   return order.jobItemType === 'SPA' ? 'violet' : 'sky'
 }
@@ -233,6 +242,8 @@ function compareOrders(a: Order, b: Order) {
 
 export default function ProductionSchedulePage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [access, setAccess] = useState<AccessSummary | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -243,6 +254,7 @@ export default function ProductionSchedulePage() {
   const [calendarMode, setCalendarMode] = useState<CalendarMode>('WEEK')
   const [focusedDate, setFocusedDate] = useState<Date>(() => cloneUTC(new Date()))
   const [filter, setFilter] = useState('')
+  const [selectedFactoryId, setSelectedFactoryId] = useState('ALL')
 
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState<Order | null>(null)
@@ -256,6 +268,20 @@ export default function ProductionSchedulePage() {
     try {
       setLoading(true)
       setError(null)
+      const accessRes = await fetch('/api/admin/access?module=PRODUCTION_SCHEDULE', { cache: 'no-store' })
+      if (accessRes.status === 403) {
+        setAccessDenied(true)
+        setOrders([])
+        return
+      }
+      const accessData = await safeJson<AccessSummary & { allFactories?: boolean; factories?: Array<{ id: string; name: string }> }>(accessRes)
+      if (accessRes.ok && accessData) {
+        setAccess({
+          allFactories: !!accessData.allFactories,
+          factories: Array.isArray(accessData.factories) ? accessData.factories : [],
+        })
+      }
+
       const params = new URLSearchParams({
         page: '1',
         pageSize: '200',
@@ -285,6 +311,29 @@ export default function ProductionSchedulePage() {
   }, [])
 
   useEffect(() => {
+    if (!access) return
+    if (access.allFactories) return
+    if (access.factories.length === 1) {
+      setSelectedFactoryId(access.factories[0].id)
+    } else if (access.factories.length > 1 && selectedFactoryId === 'ALL') {
+      setSelectedFactoryId('ALL')
+    }
+  }, [access, selectedFactoryId])
+
+  const factoryOptions = access?.allFactories
+    ? Array.from(
+        new Map(
+          orders
+            .map((order) => [resolveFactoryId(order), resolveFactoryName(order)] as const)
+            .filter(([id]) => id)
+        ).entries()
+      ).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+    : access?.factories ?? []
+
+  const factoryScopedOrders =
+    selectedFactoryId === 'ALL' ? orders : orders.filter((order) => resolveFactoryId(order) === selectedFactoryId)
+
+  useEffect(() => {
     if (!auto) return
     const t = setInterval(async () => {
       setRefreshing(true)
@@ -308,8 +357,8 @@ export default function ProductionSchedulePage() {
 
   const filteredOrders = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q) return orders
-    return orders.filter((o) => {
+    if (!q) return factoryScopedOrders
+    return factoryScopedOrders.filter((o) => {
       const haystack = [
         o.poolModel?.name,
         o.color?.name,
@@ -325,7 +374,7 @@ export default function ProductionSchedulePage() {
         .toLowerCase()
       return haystack.includes(q)
     })
-  }, [orders, filter])
+  }, [factoryScopedOrders, filter])
 
   const stats = useMemo(() => {
     const total = filteredOrders.length
@@ -530,6 +579,15 @@ export default function ProductionSchedulePage() {
     )
   }
 
+  if (accessDenied) {
+    return (
+      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+        <h1 className="text-2xl font-black">Production Schedule access denied</h1>
+        <p className="mt-2 text-sm">This user does not currently have access to the production schedule module.</p>
+      </div>
+    )
+  }
+
   return (
     <div
       className="min-h-screen p-4 xl:p-5"
@@ -554,11 +612,43 @@ export default function ProductionSchedulePage() {
             <p className="mt-1 text-[13px] text-slate-500">
               Use <strong>Priority</strong> for queue order and <strong>Production Date</strong> for the actual planned build slot.
             </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
+              <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 shadow-sm">
+                Factory Scope:
+                <span className="ml-2 font-black text-slate-900">
+                  {selectedFactoryId === 'ALL'
+                    ? access?.allFactories || (access?.factories?.length || 0) > 1
+                      ? 'All accessible factories'
+                      : 'All factories'
+                    : factoryOptions.find((factory) => factory.id === selectedFactoryId)?.name || 'Selected factory'}
+                </span>
+              </span>
+              {!access?.allFactories && access?.factories?.length === 1 ? (
+                <span className="inline-flex items-center rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 font-semibold text-sky-800 shadow-sm">
+                  Restricted to one plant
+                </span>
+              ) : null}
+            </div>
             {error && <p className="mt-3 text-sm text-rose-700">⚠️ {error}</p>}
           </div>
 
           <div className="w-full 2xl:w-auto space-y-3">
             <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+              <select
+                value={selectedFactoryId}
+                onChange={(e) => setSelectedFactoryId(e.target.value)}
+                className="h-9 rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-900 shadow-sm"
+                disabled={!access?.allFactories && (access?.factories?.length ?? 0) <= 1}
+              >
+                {(access?.allFactories || (access?.factories?.length ?? 0) > 1) && (
+                  <option value="ALL">All accessible factories</option>
+                )}
+                {factoryOptions.map((factory) => (
+                  <option key={factory.id} value={factory.id}>
+                    {factory.name}
+                  </option>
+                ))}
+              </select>
               <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
                   type="button"
