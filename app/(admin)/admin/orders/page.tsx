@@ -265,6 +265,33 @@ function DataField({
   )
 }
 
+function CompactSignalCard({
+  label,
+  value,
+  tone = 'slate',
+}: {
+  label: string
+  value: string | number
+  tone?: 'slate' | 'sky' | 'indigo' | 'violet' | 'emerald' | 'amber' | 'rose'
+}) {
+  const tones = {
+    slate: 'border-slate-200 bg-white text-slate-900',
+    sky: 'border-sky-200 bg-sky-50/90 text-sky-900',
+    indigo: 'border-indigo-200 bg-indigo-50/90 text-indigo-900',
+    violet: 'border-violet-200 bg-violet-50/90 text-violet-900',
+    emerald: 'border-emerald-200 bg-emerald-50/90 text-emerald-900',
+    amber: 'border-amber-200 bg-amber-50/90 text-amber-900',
+    rose: 'border-rose-200 bg-rose-50/90 text-rose-900',
+  }
+
+  return (
+    <div className={`rounded-[1.35rem] border px-4 py-3 shadow-sm ${tones[tone]}`}>
+      <div className="text-[10px] font-black uppercase tracking-[0.16em] opacity-80">{label}</div>
+      <div className="mt-2 text-[1.55rem] leading-none font-black">{value}</div>
+    </div>
+  )
+}
+
 /**
  * Botón “siguiente paso” según flow:
  * PENDING_PAYMENT_APPROVAL -> IN_PRODUCTION -> PRE_SHIPPING -> COMPLETED -> SERVICE_WARRANTY
@@ -763,6 +790,9 @@ function AdminOrdersInner() {
 
   const [groupBy, setGroupBy] = useState<'DEALER' | 'FACTORY'>('DEALER')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const [advancedOpen, setAdvancedOpen] = useState(
+    dealerFilter !== 'ALL' || factoryFilter !== 'ALL' || finalPaymentFilter !== 'ALL' || sort !== 'createdAt' || dir !== 'desc'
+  )
 
   function groupKeys(list: Order[], g: 'DEALER' | 'FACTORY') {
     const s = new Set<string>()
@@ -815,6 +845,32 @@ function AdminOrdersInner() {
       }
     )
   }, [orders])
+
+  const activeFilterSummary = useMemo(() => {
+    const items: Array<{ label: string; value: string; tone?: 'slate' | 'sky' | 'indigo' | 'violet' | 'emerald' | 'amber' | 'rose' }> = []
+    if (statusFilter !== 'ALL') items.push({ label: 'Status', value: labelStatus(statusFilter), tone: 'sky' })
+    if (dealerFilter !== 'ALL') items.push({ label: 'Dealer', value: dealerFilter, tone: 'slate' })
+    if (factoryFilter !== 'ALL') items.push({ label: 'Factory', value: factoryFilter, tone: 'sky' })
+    if (finalPaymentFilter !== 'ALL') {
+      items.push({
+        label: 'Final Payment',
+        value: finalPaymentFilter === 'NEEDED' ? 'Needed' : 'Received',
+        tone: finalPaymentFilter === 'NEEDED' ? 'rose' : 'emerald',
+      })
+    }
+    items.push({ label: 'Group', value: groupBy === 'DEALER' ? 'Dealer' : 'Factory', tone: 'indigo' })
+    items.push({
+      label: 'Sort',
+      value:
+        sort === 'createdAt'
+          ? `Order Date (${dir === 'asc' ? 'Oldest' : 'Newest'})`
+          : sort === 'requestedShipDate'
+            ? `Requested Ship (${dir === 'asc' ? 'Earliest' : 'Latest'})`
+            : `Status (${dir === 'asc' ? 'A-Z' : 'Z-A'})`,
+      tone: 'violet',
+    })
+    return items
+  }, [dealerFilter, dir, factoryFilter, finalPaymentFilter, groupBy, sort, statusFilter])
 
   // Total count (tu patrón)
   const [totalCount, setTotalCount] = useState(0)
@@ -953,28 +1009,28 @@ function AdminOrdersInner() {
 
       {/* Filters */}
       <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5">
-        <div className="grid gap-4 xl:grid-cols-12">
-          <div className="xl:col-span-4">
-            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
-              Search
+        <div className="space-y-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_280px_auto] xl:items-end">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+                Search
+              </div>
+              <div className="relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setParams({ q: e.target.value, page: 1 })}
+                  placeholder="Search by serial, model, dealer, factory, address"
+                  className="w-full pl-11 pr-4 h-12 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={q}
-                onChange={(e) => setParams({ q: e.target.value, page: 1 })}
-                placeholder="Search (serial, model, color, dealer, factory, address)"
-                className="w-full pl-11 pr-4 h-12 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
-              />
-            </div>
-          </div>
 
-          <div className="xl:col-span-8">
-            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
-              Filters
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+                Quick Status
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12 w-full">
                 <Filter size={16} className="shrink-0 text-slate-500" />
                 <select
                   value={statusFilter}
@@ -989,137 +1045,179 @@ function AdminOrdersInner() {
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
-                <UserCircle2 size={16} className="shrink-0 text-slate-500" />
-                <select
-                  value={dealerFilter}
-                  onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
-                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <button
+                onClick={() => setAdvancedOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold"
+              >
+                {advancedOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Advanced Controls
+              </button>
+              {(dealerFilter !== 'ALL' ||
+                factoryFilter !== 'ALL' ||
+                finalPaymentFilter !== 'ALL' ||
+                statusFilter !== 'ALL' ||
+                sort !== 'createdAt' ||
+                dir !== 'desc' ||
+                q) ? (
+                <button
+                  onClick={() =>
+                    setParams({
+                      q: null,
+                      status: null,
+                      dealer: null,
+                      factory: null,
+                      finalPayment: null,
+                      sort: 'createdAt',
+                      dir: 'desc',
+                      page: 1,
+                    })
+                  }
+                  className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold"
                 >
-                  <option value="ALL">All dealers</option>
-                  {dealers.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
-                <FactoryIcon size={16} className="shrink-0 text-slate-500" />
-                <select
-                  value={factoryFilter}
-                  onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
-                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
-                >
-                  <option value="ALL">All factories</option>
-                  {factories.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
-                <Group size={16} className="shrink-0 text-slate-500" />
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as any)}
-                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
-                >
-                  <option value="DEALER">Group by dealer</option>
-                  <option value="FACTORY">Group by factory</option>
-                </select>
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
-                <Truck size={16} className="shrink-0 text-slate-500" />
-                <select
-                  value={finalPaymentFilter}
-                  onChange={(e) => setParams({ finalPayment: e.target.value, page: 1 })}
-                  className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
-                >
-                  <option value="ALL">All final payment states</option>
-                  <option value="NEEDED">Final payment needed</option>
-                  <option value="RECEIVED">Final payment received</option>
-                </select>
-              </div>
+                  <RotateCcw size={16} />
+                  Reset View
+                </button>
+              ) : null}
             </div>
           </div>
 
-          <div className="xl:col-span-12">
-            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
-              Sort
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => toggleSort('createdAt')}
-                className={[
-                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
-                  sort === 'createdAt'
-                    ? 'border-sky-200 bg-sky-50 text-sky-900'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
-                ].join(' ')}
-                title="Sort by order date"
-              >
-                <ArrowUpDown size={16} />
-                Order Date
-              </button>
-
-              <button
-                onClick={() => toggleSort('requestedShipDate')}
-                className={[
-                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
-                  sort === 'requestedShipDate'
-                    ? 'border-sky-200 bg-sky-50 text-sky-900'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
-                ].join(' ')}
-                title="Sort by requested ship date"
-              >
-                <ArrowUpDown size={16} />
-                Requested Ship Date
-              </button>
-
-              <button
-                onClick={() => toggleSort('status')}
-                className={[
-                  'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
-                  sort === 'status'
-                    ? 'border-sky-200 bg-sky-50 text-sky-900'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
-                ].join(' ')}
-                title="Sort by status"
-              >
-                <ArrowUpDown size={16} />
-                Status
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {activeFilterSummary.map((item) => (
+              <SignalPill key={`${item.label}-${item.value}`} label={item.label} value={item.value} tone={item.tone} />
+            ))}
+            <SignalPill label="Loaded" value={String(pageSignals.total)} tone="slate" />
           </div>
-        </div>
-      </div>
 
-      <div className="grid gap-3 xl:grid-cols-5">
-        <div className="rounded-[1.6rem] border border-slate-200 bg-white/85 px-4 py-4 shadow-sm">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Loaded Orders</div>
-          <div className="mt-2 text-[1.9rem] leading-none font-black text-slate-900">{pageSignals.total}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-4 py-4 shadow-sm">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">Missing Serial</div>
-          <div className="mt-2 text-[1.9rem] leading-none font-black text-amber-900">{pageSignals.missingSerial}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-indigo-200 bg-indigo-50/90 px-4 py-4 shadow-sm">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-700">Unscheduled Production</div>
-          <div className="mt-2 text-[1.9rem] leading-none font-black text-indigo-900">{pageSignals.unscheduledProduction}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-violet-200 bg-violet-50/90 px-4 py-4 shadow-sm">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Unscheduled Shipping</div>
-          <div className="mt-2 text-[1.9rem] leading-none font-black text-violet-900">{pageSignals.unscheduledShipping}</div>
-        </div>
-        <div className="rounded-[1.6rem] border border-sky-200 bg-sky-50/90 px-4 py-4 shadow-sm">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700">Deposit File Pending</div>
-          <div className="mt-2 text-[1.9rem] leading-none font-black text-sky-900">{pageSignals.needsDepositFile}</div>
+          {!advancedOpen ? (
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+              <CompactSignalCard label="Missing Serial" value={pageSignals.missingSerial} tone="amber" />
+              <CompactSignalCard label="Unscheduled Production" value={pageSignals.unscheduledProduction} tone="indigo" />
+              <CompactSignalCard label="Unscheduled Shipping" value={pageSignals.unscheduledShipping} tone="violet" />
+              <CompactSignalCard label="Deposit File Pending" value={pageSignals.needsDepositFile} tone="sky" />
+              <CompactSignalCard label="Grouping" value={groupBy === 'DEALER' ? 'Dealer' : 'Factory'} tone="slate" />
+            </div>
+          ) : (
+            <div className="space-y-4 rounded-[1.8rem] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                  <UserCircle2 size={16} className="shrink-0 text-slate-500" />
+                  <select
+                    value={dealerFilter}
+                    onChange={(e) => setParams({ dealer: e.target.value, page: 1 })}
+                    className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                  >
+                    <option value="ALL">All dealers</option>
+                    {dealers.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                  <FactoryIcon size={16} className="shrink-0 text-slate-500" />
+                  <select
+                    value={factoryFilter}
+                    onChange={(e) => setParams({ factory: e.target.value, page: 1 })}
+                    className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                  >
+                    <option value="ALL">All factories</option>
+                    {factories.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                  <Truck size={16} className="shrink-0 text-slate-500" />
+                  <select
+                    value={finalPaymentFilter}
+                    onChange={(e) => setParams({ finalPayment: e.target.value, page: 1 })}
+                    className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                  >
+                    <option value="ALL">All final payment states</option>
+                    <option value="NEEDED">Final payment needed</option>
+                    <option value="RECEIVED">Final payment received</option>
+                  </select>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-12">
+                  <Group size={16} className="shrink-0 text-slate-500" />
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value as 'DEALER' | 'FACTORY')}
+                    className="h-full w-full bg-transparent text-sm font-semibold text-slate-900 focus:outline-none"
+                  >
+                    <option value="DEALER">Group by dealer</option>
+                    <option value="FACTORY">Group by factory</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 mb-2">
+                  Sort
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => toggleSort('createdAt')}
+                    className={[
+                      'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                      sort === 'createdAt'
+                        ? 'border-sky-200 bg-sky-50 text-sky-900'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                    ].join(' ')}
+                    title="Sort by order date"
+                  >
+                    <ArrowUpDown size={16} />
+                    Order Date
+                  </button>
+
+                  <button
+                    onClick={() => toggleSort('requestedShipDate')}
+                    className={[
+                      'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                      sort === 'requestedShipDate'
+                        ? 'border-sky-200 bg-sky-50 text-sky-900'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                    ].join(' ')}
+                    title="Sort by requested ship date"
+                  >
+                    <ArrowUpDown size={16} />
+                    Requested Ship Date
+                  </button>
+
+                  <button
+                    onClick={() => toggleSort('status')}
+                    className={[
+                      'inline-flex items-center gap-2 h-11 px-4 rounded-2xl border text-sm font-bold transition',
+                      sort === 'status'
+                        ? 'border-sky-200 bg-sky-50 text-sky-900'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-900',
+                    ].join(' ')}
+                    title="Sort by status"
+                  >
+                    <ArrowUpDown size={16} />
+                    Status
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-5">
+                <CompactSignalCard label="Loaded Orders" value={pageSignals.total} tone="slate" />
+                <CompactSignalCard label="Missing Serial" value={pageSignals.missingSerial} tone="amber" />
+                <CompactSignalCard label="Unscheduled Production" value={pageSignals.unscheduledProduction} tone="indigo" />
+                <CompactSignalCard label="Unscheduled Shipping" value={pageSignals.unscheduledShipping} tone="violet" />
+                <CompactSignalCard label="Deposit File Pending" value={pageSignals.needsDepositFile} tone="sky" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
