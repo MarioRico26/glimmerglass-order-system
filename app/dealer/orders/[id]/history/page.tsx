@@ -40,10 +40,29 @@ type OrderMedia = {
 type DealerOrderSummary = {
   id: string
   poolModel?: { name: string; blueprintUrl?: string | null; hasIntegratedSpa?: boolean } | null
+  color?: { name: string } | null
   blueprintMarkers?: BlueprintMarker[]
   penetrationMode?: string | null
   penetrationNotes?: string | null
   hardwareAutocover?: boolean
+  requestedShipDate?: string | null
+  scheduledShipDate?: string | null
+  serialNumber?: string | null
+  job?: {
+    id: string
+    role?: string | null
+    itemType?: string | null
+    linkedOrders: Array<{
+      id: string
+      status: string
+      serialNumber?: string | null
+      scheduledShipDate?: string | null
+      role?: string | null
+      itemType?: string | null
+      poolModel?: { name: string } | null
+      color?: { name: string } | null
+    }>
+  } | null
 }
 
 const aqua = '#00B2CA'
@@ -178,6 +197,47 @@ export default function DealerOrderHistoryPage() {
           markers={summary?.blueprintMarkers ?? []}
         />
       </div>
+
+      {summary?.job ? (
+        <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Linked Job</h3>
+              <p className="text-sm text-slate-600">
+                Scheduling can be coordinated across linked orders. Status, serial number, files and history are tracked per order.
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
+              {summary.job.itemType === 'SPA' ? 'Linked Spa' : 'Linked Pool'}
+            </span>
+          </div>
+
+          {summary.job.linkedOrders.length ? (
+            <div className="mt-4 grid gap-3">
+              {summary.job.linkedOrders.map((linked) => (
+                <div key={linked.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="font-semibold text-slate-900">
+                    {linked.poolModel?.name || 'Linked order'}
+                    {linked.color?.name ? ` • ${linked.color.name}` : ''}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {linked.itemType === 'SPA' ? 'Spa item' : 'Pool item'} • {labelStatus(linked.status)}
+                  </div>
+                  <div className="mt-2 grid gap-1 text-sm text-slate-700">
+                    <div>
+                      <span className="text-slate-500">Scheduled ship date:</span>{' '}
+                      {linked.scheduledShipDate ? new Date(linked.scheduledShipDate).toLocaleDateString() : 'Not set'}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Serial number:</span> {linked.serialNumber || 'Not assigned'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* TIMELINE */}
       <div className="rounded-2xl border border-white bg-white/80 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-5 mb-6">

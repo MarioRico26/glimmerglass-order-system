@@ -30,6 +30,14 @@ type Order = {
   hardwareAutocover?: boolean
   hardwareReturns?: boolean
   hardwareMainDrains?: boolean
+  requestedShipDate?: string | null
+  scheduledShipDate?: string | null
+  serialNumber?: string | null
+  jobId?: string | null
+  jobRole?: 'PRIMARY' | 'LINKED' | null
+  jobItemType?: 'POOL' | 'SPA' | null
+  linkedJob?: boolean
+  jobOrderCount?: number
 }
 
 const aqua = '#00B2CA'
@@ -70,6 +78,13 @@ function StatusBadge({ status }: { status: string }) {
   const cls = map[key] ?? 'bg-slate-50 text-slate-700 border-slate-200'
 
   return <span className={`${base} ${cls}`}>{labelStatus(status)}</span>
+}
+
+function linkedJobLabel(order: Order) {
+  if (!order.jobId) return null
+  if (order.jobItemType === 'SPA') return 'Linked Spa'
+  if (order.jobItemType === 'POOL') return 'Linked Pool'
+  return 'Linked Job'
 }
 
 export default function MyOrdersPage() {
@@ -165,6 +180,15 @@ export default function MyOrdersPage() {
                 </div>
 
                 <div className="text-sm text-slate-600 space-y-2">
+                  {linkedJobLabel(o) ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+                      <div className="font-semibold">{linkedJobLabel(o)}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-sky-800">
+                        Scheduled build and shipping can be coordinated with the linked order. Status and serial number are tracked separately for each order.
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="flex items-center gap-2">
                     <Palette size={16} className="text-slate-400" />
                     <span>
@@ -186,6 +210,23 @@ export default function MyOrdersPage() {
                       <span className="text-slate-500">Delivery:</span> {o.deliveryAddress || '-'}
                     </span>
                   </div>
+
+                  {(o.requestedShipDate || o.scheduledShipDate || o.serialNumber) ? (
+                    <div className="grid gap-1 text-slate-700">
+                      <div>
+                        <span className="text-slate-500">Requested ship date:</span>{' '}
+                        {o.requestedShipDate ? new Date(o.requestedShipDate).toLocaleDateString() : 'Not set'}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Scheduled ship date:</span>{' '}
+                        {o.scheduledShipDate ? new Date(o.scheduledShipDate).toLocaleDateString() : 'Not set'}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Serial number:</span>{' '}
+                        {o.serialNumber || 'Not assigned'}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {o.notes ? (
                     <div className="flex items-start gap-2">

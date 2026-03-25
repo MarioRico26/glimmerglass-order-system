@@ -50,7 +50,32 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       penetrationMode: true,
       penetrationNotes: true,
       hardwareAutocover: true,
+      requestedShipDate: true,
+      scheduledShipDate: true,
+      serialNumber: true,
+      jobId: true,
+      jobRole: true,
+      jobItemType: true,
       poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
+      color: { select: { name: true } },
+      job: {
+        select: {
+          id: true,
+          orders: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              status: true,
+              serialNumber: true,
+              scheduledShipDate: true,
+              jobRole: true,
+              jobItemType: true,
+              poolModel: { select: { name: true } },
+              color: { select: { name: true } },
+            },
+          },
+        },
+      },
     },
   })
 
@@ -61,9 +86,32 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   return NextResponse.json({
     id: order.id,
     poolModel: order.poolModel,
+    color: order.color ?? null,
     blueprintMarkers: normalizeBlueprintMarkers(order.blueprintMarkers),
     penetrationMode: order.penetrationMode,
     penetrationNotes: order.penetrationNotes ?? null,
     hardwareAutocover: !!order.hardwareAutocover,
+    requestedShipDate: order.requestedShipDate ? order.requestedShipDate.toISOString() : null,
+    scheduledShipDate: order.scheduledShipDate ? order.scheduledShipDate.toISOString() : null,
+    serialNumber: order.serialNumber ?? null,
+    job: order.job
+      ? {
+          id: order.job.id,
+          role: order.jobRole,
+          itemType: order.jobItemType,
+          linkedOrders: order.job.orders
+            .filter((linked) => linked.id !== order.id)
+            .map((linked) => ({
+              id: linked.id,
+              status: linked.status,
+              serialNumber: linked.serialNumber ?? null,
+              scheduledShipDate: linked.scheduledShipDate ? linked.scheduledShipDate.toISOString() : null,
+              role: linked.jobRole,
+              itemType: linked.jobItemType,
+              poolModel: linked.poolModel ? { name: linked.poolModel.name } : null,
+              color: linked.color ? { name: linked.color.name } : null,
+            })),
+        }
+      : null,
   })
 }

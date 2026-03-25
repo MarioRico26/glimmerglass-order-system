@@ -537,6 +537,9 @@ export default function OrderHistoryPage() {
                 </div>
                 {summary.job?.linkedOrders?.length ? (
                   <div className="space-y-2 text-slate-800">
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-900">
+                      Scheduling fields can be coordinated across the linked job. Status, serial number, files and history stay separate on each order.
+                    </div>
                     <div>
                       <span className="font-semibold">Job role:</span>{' '}
                       {summary.job.itemType === 'SPA' ? 'Linked spa' : 'Primary pool'}
