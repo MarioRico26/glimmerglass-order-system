@@ -1,6 +1,6 @@
 // app/api/admin/metrics/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { AdminModule } from '@prisma/client'
+import { AdminModule, OrderDocType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
@@ -58,6 +58,58 @@ export async function GET(request: NextRequest) {
       totals.total += c
       if (st in totals) totals[st] += c
     }
+
+    const activeSerialStatuses: Status[] = ['IN_PRODUCTION', 'PRE_SHIPPING', 'COMPLETED', 'SERVICE_WARRANTY']
+    const missingSerial = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: { in: activeSerialStatuses },
+        OR: [{ serialNumber: null }, { serialNumber: '' }],
+      },
+    })
+
+    const unscheduledProduction = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: 'IN_PRODUCTION',
+        scheduledProductionDate: null,
+      },
+    })
+
+    const unscheduledShipping = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: 'PRE_SHIPPING',
+        scheduledShipDate: null,
+      },
+    })
+
+    const finalPaymentNeeded = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: 'PRE_SHIPPING',
+        media: {
+          none: {
+            docType: OrderDocType.PROOF_OF_FINAL_PAYMENT,
+          },
+        },
+      },
+    })
+
+    const allocatedStock = await prisma.order.count({
+      where: {
+        ...orderScope,
+        allocatedPoolStockId: { not: null },
+      },
+    })
+
+    const asapRequests = await prisma.order.count({
+      where: {
+        ...orderScope,
+        requestedShipAsap: true,
+        status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] },
+      },
+    })
 
     // --- Últimos 6 meses (incluye meses sin órdenes con count=0) ---
     const now = new Date()
@@ -145,6 +197,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         totals,
+        signals: {
+          missingSerial,
+          unscheduledProduction,
+          unscheduledShipping,
+          finalPaymentNeeded,
+          allocatedStock,
+          asapRequests,
+        },
         monthly,
         recent,
         byFactory,

@@ -39,6 +39,14 @@ type FactoryRow = {
 
 type Metrics = {
   totals: Record<string, number>
+  signals: {
+    missingSerial: number
+    unscheduledProduction: number
+    unscheduledShipping: number
+    finalPaymentNeeded: number
+    allocatedStock: number
+    asapRequests: number
+  }
   monthly: { key: string; label: string; count: number }[]
   recent: { id: string; dealer: string; model: string; color: string; factory: string; status: string; createdAt: string }[]
   byFactory: FactoryRow[]
@@ -64,6 +72,14 @@ type AccessSummary = {
 
 const emptyMetrics: Metrics = {
   totals: { total: 0, PENDING_PAYMENT_APPROVAL: 0, IN_PRODUCTION: 0, PRE_SHIPPING: 0, COMPLETED: 0, SERVICE_WARRANTY: 0, CANCELED: 0 },
+  signals: {
+    missingSerial: 0,
+    unscheduledProduction: 0,
+    unscheduledShipping: 0,
+    finalPaymentNeeded: 0,
+    allocatedStock: 0,
+    asapRequests: 0,
+  },
   monthly: [],
   recent: [],
   byFactory: [],
@@ -176,6 +192,7 @@ export default function AdminDashboard() {
   const aqua = '#00B2CA'
   const deep = '#007A99'
   const t = useMemo(() => metrics.totals, [metrics])
+  const signals = useMemo(() => metrics.signals, [metrics])
   const poolStockTotals = useMemo(() => {
     return poolStock.reduce(
       (acc, row) => {
@@ -315,6 +332,65 @@ export default function AdminDashboard() {
         <StatCard label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={Truck} tone="violet" />
         <StatCard label="Completed" value={t.COMPLETED || 0} Icon={CheckCircle2} tone="emerald" />
         <StatCard label="Service/Warranty" value={t.SERVICE_WARRANTY || 0} Icon={CircleAlert} tone="sky" />
+      </section>
+
+      <section className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Action Required</div>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Operational Signals</h2>
+          </div>
+          <Link
+            href="/admin/orders"
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Open Order List <ArrowRight size={15} />
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <SignalCard
+            label="Missing Serial"
+            value={signals.missingSerial}
+            detail="Active orders missing a serial number."
+            href="/admin/orders"
+            tone="rose"
+          />
+          <SignalCard
+            label="Unscheduled Production"
+            value={signals.unscheduledProduction}
+            detail="In Production orders without a production date."
+            href="/admin/production"
+            tone="indigo"
+          />
+          <SignalCard
+            label="Unscheduled Shipping"
+            value={signals.unscheduledShipping}
+            detail="Pre-Shipping orders without a ship date."
+            href="/admin/shipping"
+            tone="sky"
+          />
+          <SignalCard
+            label="Final Payment Needed"
+            value={signals.finalPaymentNeeded}
+            detail="Pre-Shipping orders missing proof of final payment."
+            href="/admin/orders"
+            tone="amber"
+          />
+          <SignalCard
+            label="Allocated Stock"
+            value={signals.allocatedStock}
+            detail="Orders already tied to finished pool stock."
+            href="/admin/orders"
+            tone="emerald"
+          />
+          <SignalCard
+            label="ASAP Requests"
+            value={signals.asapRequests}
+            detail="Open orders flagged for ASAP requested ship date."
+            href="/admin/orders"
+            tone="violet"
+          />
+        </div>
       </section>
 
       <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -515,7 +591,7 @@ function StatCard({
   label: string
   value: number | string
   Icon: LucideIcon
-  tone: 'slate' | 'amber' | 'indigo' | 'violet' | 'emerald'
+  tone: 'slate' | 'amber' | 'indigo' | 'violet' | 'emerald' | 'sky'
 }) {
   const tones = {
     slate: 'border-slate-200 bg-white/82 text-slate-900',
@@ -523,6 +599,7 @@ function StatCard({
     indigo: 'border-indigo-200 bg-indigo-50/88 text-indigo-900',
     violet: 'border-violet-200 bg-violet-50/88 text-violet-900',
     emerald: 'border-emerald-200 bg-emerald-50/88 text-emerald-900',
+    sky: 'border-sky-200 bg-sky-50/88 text-sky-900',
   }
   return (
     <div className={`rounded-[1.6rem] border p-4 shadow-[0_12px_36px_rgba(13,47,69,0.08)] ${tones[tone]}`}>
@@ -532,6 +609,44 @@ function StatCard({
       </div>
       <div className="mt-3 text-[2rem] leading-none font-black">{value}</div>
     </div>
+  )
+}
+
+function SignalCard({
+  label,
+  value,
+  detail,
+  href,
+  tone,
+}: {
+  label: string
+  value: number
+  detail: string
+  href: string
+  tone: 'rose' | 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet'
+}) {
+  const tones = {
+    rose: 'border-rose-200 bg-rose-50/88 text-rose-900',
+    indigo: 'border-indigo-200 bg-indigo-50/88 text-indigo-900',
+    sky: 'border-sky-200 bg-sky-50/88 text-sky-900',
+    amber: 'border-amber-200 bg-amber-50/88 text-amber-900',
+    emerald: 'border-emerald-200 bg-emerald-50/88 text-emerald-900',
+    violet: 'border-violet-200 bg-violet-50/88 text-violet-900',
+  }
+  return (
+    <Link
+      href={href}
+      className={`group rounded-[1.45rem] border p-4 shadow-[0_12px_36px_rgba(13,47,69,0.08)] transition hover:shadow-[0_16px_40px_rgba(13,47,69,0.12)] ${tones[tone]}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[12px] font-black uppercase tracking-[0.14em] opacity-80">{label}</div>
+          <div className="mt-3 text-[2rem] leading-none font-black">{value}</div>
+        </div>
+        <ArrowRight size={16} className="mt-1 opacity-55 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+      </div>
+      <p className="mt-3 text-[13px] leading-relaxed opacity-80">{detail}</p>
+    </Link>
   )
 }
 
