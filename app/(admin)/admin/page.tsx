@@ -116,6 +116,7 @@ export default function AdminDashboard() {
   const [poolStock, setPoolStock] = useState<PoolStockSummary[]>([])
   const [access, setAccess] = useState<AccessSummary | null>(null)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [selectedFactoryId, setSelectedFactoryId] = useState('ALL')
 
   useEffect(() => {
     if (status === 'loading') return
@@ -127,8 +128,13 @@ export default function AdminDashboard() {
       try {
         const [accessRes, metricsRes, stockRes] = await Promise.all([
           fetch('/api/admin/access?module=DASHBOARD', { cache: 'no-store' }),
-          fetch('/api/admin/metrics', { cache: 'no-store' }),
-          fetch('/api/admin/pool-stock/summary?scopeModule=DASHBOARD', { cache: 'no-store' }),
+          fetch(`/api/admin/metrics${selectedFactoryId !== 'ALL' ? `?factoryId=${selectedFactoryId}` : ''}`, { cache: 'no-store' }),
+          fetch(
+            `/api/admin/pool-stock/summary?scopeModule=DASHBOARD${
+              selectedFactoryId !== 'ALL' ? `&factoryId=${selectedFactoryId}` : ''
+            }`,
+            { cache: 'no-store' }
+          ),
         ])
 
         const accessData = await accessRes.json().catch(() => null)
@@ -157,7 +163,15 @@ export default function AdminDashboard() {
         setLoading(false)
       }
     })()
-  }, [session, status, router])
+  }, [session, status, router, selectedFactoryId])
+
+  useEffect(() => {
+    if (!access) return
+    if (access.allFactories) return
+    if (access.factories.length === 1) {
+      setSelectedFactoryId(access.factories[0].id)
+    }
+  }, [access])
 
   const aqua = '#00B2CA'
   const deep = '#007A99'
@@ -185,6 +199,25 @@ export default function AdminDashboard() {
       })),
     [metrics.byFactory]
   )
+
+  const factoryOptions = useMemo(() => {
+    if (access?.allFactories) {
+      const pairs = new Map<string, string>()
+      metrics.byFactory.forEach((row) => pairs.set(row.factoryId, row.factoryName))
+      poolStock.forEach((row) => pairs.set(row.factoryId, row.factoryName))
+      return Array.from(pairs.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+    return access?.factories ?? []
+  }, [access, metrics.byFactory, poolStock])
+
+  const selectedFactoryName =
+    selectedFactoryId === 'ALL'
+      ? access?.allFactories || (access?.factories?.length || 0) > 1
+        ? 'All accessible factories'
+        : 'All factories'
+      : factoryOptions.find((factory) => factory.id === selectedFactoryId)?.name || 'Selected factory'
 
   const actionLinks = [
     { label: 'Order List', href: '/admin/orders', Icon: PackageSearch, tone: 'slate', module: 'ORDER_LIST' },
@@ -224,14 +257,17 @@ export default function AdminDashboard() {
             <p className="mt-1 text-[13px] text-slate-500">
               Signed in as {session?.user?.email} ({session?.user?.role})
             </p>
-            <p className="mt-1 text-[13px] text-slate-500">
-              Scope:{' '}
-              {access?.allFactories
-                ? 'All factories'
-                : access?.factories?.length
-                ? access.factories.map((factory) => factory.name).join(', ')
-                : 'All factories'}
-            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
+              <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 shadow-sm">
+                Factory Scope:
+                <span className="ml-2 font-black text-slate-900">{selectedFactoryName}</span>
+              </span>
+              {!access?.allFactories && access?.factories?.length === 1 ? (
+                <span className="inline-flex items-center rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 font-semibold text-sky-800 shadow-sm">
+                  Restricted to one plant
+                </span>
+              ) : null}
+            </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {visibleActionLinks.map(({ label, href, Icon, tone }) => (
@@ -240,8 +276,27 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)]">
-            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-300">Operations Pulse</div>
+        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-300">Operations Pulse</div>
+              <select
+                value={selectedFactoryId}
+                onChange={(e) => setSelectedFactoryId(e.target.value)}
+                className="h-9 min-w-[220px] rounded-2xl border border-white/10 bg-white/10 px-4 text-[13px] font-semibold text-white outline-none"
+                disabled={!access?.allFactories && (access?.factories?.length ?? 0) <= 1}
+              >
+                {(access?.allFactories || (access?.factories?.length ?? 0) > 1) && (
+                  <option value="ALL" className="text-slate-900">
+                    All accessible factories
+                  </option>
+                )}
+                {factoryOptions.map((factory) => (
+                  <option key={factory.id} value={factory.id} className="text-slate-900">
+                    {factory.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <PulseRow label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} tone="amber" />
               <PulseRow label="In Production" value={t.IN_PRODUCTION || 0} tone="indigo" />
@@ -410,7 +465,7 @@ export default function AdminDashboard() {
               ))}
               {metrics.byFactory.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-4 text-slate-500">No data.</td>
+                  <td colSpan={8} className="py-4 text-slate-500">No data.</td>
                 </tr>
               )}
             </tbody>

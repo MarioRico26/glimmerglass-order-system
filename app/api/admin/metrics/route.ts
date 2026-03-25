@@ -1,10 +1,10 @@
 // app/api/admin/metrics/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
-import { requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
+import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
 type Status =
   | 'PENDING_PAYMENT_APPROVAL'
@@ -23,12 +23,24 @@ const STATUSES: Status[] = [
   'CANCELED',
 ]
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const access = await requireAdminAccess(AdminModule.DASHBOARD)
-    const orderScope = scopedFactoryWhere(access)
+    const selectedFactoryId = request.nextUrl.searchParams.get('factoryId')
+    if (selectedFactoryId && selectedFactoryId !== 'ALL') {
+      assertFactoryAccess(access, selectedFactoryId)
+    }
+
+    const orderScope =
+      selectedFactoryId && selectedFactoryId !== 'ALL'
+        ? { factoryLocationId: selectedFactoryId }
+        : scopedFactoryWhere(access)
     const factoryScope =
-      access.allowedFactoryIds === null ? {} : { id: { in: access.allowedFactoryIds } }
+      selectedFactoryId && selectedFactoryId !== 'ALL'
+        ? { id: selectedFactoryId }
+        : access.allowedFactoryIds === null
+          ? {}
+          : { id: { in: access.allowedFactoryIds } }
 
     // --- Totales por estatus ---
     const groupByStatus = await prisma.order.groupBy({

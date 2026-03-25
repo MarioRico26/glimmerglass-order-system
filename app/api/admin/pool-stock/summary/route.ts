@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { ADMIN_MODULE_VALUES, requireAdminAccess } from '@/lib/adminAccess'
+import { ADMIN_MODULE_VALUES, assertFactoryAccess, requireAdminAccess } from '@/lib/adminAccess'
 
 type PoolStockStatus = 'READY' | 'RESERVED' | 'IN_PRODUCTION' | 'DAMAGED'
 
@@ -14,10 +14,22 @@ export async function GET(request: NextRequest) {
   try {
     const module = parseModule(request.nextUrl.searchParams.get('scopeModule'))
     const access = await requireAdminAccess(module)
+    const selectedFactoryId = request.nextUrl.searchParams.get('factoryId')
+    if (selectedFactoryId && selectedFactoryId !== 'ALL') {
+      assertFactoryAccess(access, selectedFactoryId)
+    }
     const factoryScope =
-      access.allowedFactoryIds === null ? {} : { id: { in: access.allowedFactoryIds } }
+      selectedFactoryId && selectedFactoryId !== 'ALL'
+        ? { id: selectedFactoryId }
+        : access.allowedFactoryIds === null
+          ? {}
+          : { id: { in: access.allowedFactoryIds } }
     const stockScope =
-      access.allowedFactoryIds === null ? {} : { factoryId: { in: access.allowedFactoryIds } }
+      selectedFactoryId && selectedFactoryId !== 'ALL'
+        ? { factoryId: selectedFactoryId }
+        : access.allowedFactoryIds === null
+          ? {}
+          : { factoryId: { in: access.allowedFactoryIds } }
 
     const factories = await prisma.factoryLocation.findMany({
       where: { active: true, ...factoryScope },
