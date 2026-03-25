@@ -262,6 +262,7 @@ export default function ProductionSchedulePage() {
         status: 'IN_PRODUCTION',
         sort: 'productionPriority',
         dir: 'asc',
+        scopeModule: 'PRODUCTION_SCHEDULE',
       })
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) {

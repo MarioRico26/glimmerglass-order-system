@@ -18,6 +18,23 @@ import {
 } from 'lucide-react'
 
 type Role = 'ADMIN' | 'SUPERADMIN' | 'DEALER'
+type AdminModule =
+  | 'DASHBOARD'
+  | 'ORDER_LIST'
+  | 'NEW_ORDER'
+  | 'PRODUCTION_SCHEDULE'
+  | 'SHIP_SCHEDULE'
+  | 'POOL_STOCK'
+  | 'POOL_CATALOG'
+  | 'WORKFLOW_REQUIREMENTS'
+  | 'INVENTORY'
+  | 'DEALERS'
+  | 'USERS'
+
+type FactoryOption = {
+  id: string
+  name: string
+}
 
 type UserRow = {
   id: string
@@ -25,6 +42,14 @@ type UserRow = {
   role: Role
   approved: boolean
   dealerId?: string | null
+  factoryAccesses?: Array<{
+    factoryLocationId: string
+    factoryLocation?: { id: string; name: string } | null
+  }>
+  moduleAccesses?: Array<{
+    module: AdminModule
+    accessLevel: 'VIEW' | 'EDIT'
+  }>
 }
 
 type SortKey = 'email' | 'role' | 'approved'
@@ -32,6 +57,19 @@ type SortDir = 'asc' | 'desc'
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
+const ADMIN_MODULES: Array<{ key: AdminModule; label: string }> = [
+  { key: 'DASHBOARD', label: 'Dashboard' },
+  { key: 'ORDER_LIST', label: 'Order List' },
+  { key: 'NEW_ORDER', label: 'New Order' },
+  { key: 'PRODUCTION_SCHEDULE', label: 'Production Schedule' },
+  { key: 'SHIP_SCHEDULE', label: 'Ship Schedule' },
+  { key: 'POOL_STOCK', label: 'Pool Stock' },
+  { key: 'POOL_CATALOG', label: 'Pool Catalog' },
+  { key: 'WORKFLOW_REQUIREMENTS', label: 'Workflow Requirements' },
+  { key: 'INVENTORY', label: 'Inventory' },
+  { key: 'DEALERS', label: 'Dealers' },
+  { key: 'USERS', label: 'Users' },
+]
 
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   try {
@@ -69,6 +107,7 @@ function Badge({
 
 export default function UsersAdminPage() {
   const [users, setUsers] = useState<UserRow[]>([])
+  const [factories, setFactories] = useState<FactoryOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -95,15 +134,24 @@ export default function UsersAdminPage() {
   const [pwUser, setPwUser] = useState<UserRow | null>(null)
   const [newPw, setNewPw] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
+  const [accessUser, setAccessUser] = useState<UserRow | null>(null)
+  const [selectedFactories, setSelectedFactories] = useState<string[]>([])
+  const [selectedModules, setSelectedModules] = useState<AdminModule[]>([])
+  const [accessSaving, setAccessSaving] = useState(false)
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/superadmin/users', { cache: 'no-store' })
-      const data = await safeJson<{ users: UserRow[]; message?: string }>(res)
-      if (!res.ok) throw new Error(data?.message || `Failed (${res.status})`)
+      const [usersRes, factoriesRes] = await Promise.all([
+        fetch('/api/superadmin/users', { cache: 'no-store' }),
+        fetch('/api/catalog/factories', { cache: 'no-store' }),
+      ])
+      const data = await safeJson<{ users: UserRow[]; message?: string }>(usersRes)
+      const factoriesData = await safeJson<{ items: FactoryOption[] }>(factoriesRes)
+      if (!usersRes.ok) throw new Error(data?.message || `Failed (${usersRes.status})`)
       setUsers(data?.users || [])
+      setFactories(factoriesData?.items || [])
     } catch (e: any) {
       setError(e?.message || 'Failed to load users')
       setUsers([])
@@ -223,6 +271,37 @@ export default function UsersAdminPage() {
       setError(e?.message || 'Error updating password')
     } finally {
       setPwSaving(false)
+    }
+  }
+
+  const openAccessModal = (user: UserRow) => {
+    setAccessUser(user)
+    setSelectedFactories((user.factoryAccesses || []).map((entry) => entry.factoryLocationId))
+    setSelectedModules((user.moduleAccesses || []).map((entry) => entry.module))
+  }
+
+  const saveAccess = async () => {
+    if (!accessUser) return
+    setAccessSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: accessUser.id,
+          factoryAccessIds: selectedFactories,
+          moduleAccess: selectedModules.map((module) => ({ module, accessLevel: 'VIEW' })),
+        }),
+      })
+      const data = await safeJson<{ message?: string }>(res)
+      if (!res.ok) throw new Error(data?.message || 'Error updating access')
+      await load()
+      setAccessUser(null)
+    } catch (e: any) {
+      setError(e?.message || 'Error updating access')
+    } finally {
+      setAccessSaving(false)
     }
   }
 
@@ -460,13 +539,14 @@ export default function UsersAdminPage() {
                 <th className="text-left py-2 px-3"><SortBtn k="role" label="Role" /></th>
                 <th className="text-left py-2 px-3"><SortBtn k="approved" label="Status" /></th>
                 <th className="text-left py-2 px-3">Dealer Link</th>
+                <th className="text-left py-2 px-3">Access Scope</th>
                 <th className="text-left py-2 px-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-6 text-slate-500">
+                  <td colSpan={6} className="text-center py-6 text-slate-500">
                     No users match your filters.
                   </td>
                 </tr>
@@ -495,7 +575,33 @@ export default function UsersAdminPage() {
                     </td>
                     <td className="border-t py-2 px-3">{u.dealerId ?? '—'}</td>
                     <td className="border-t py-2 px-3">
+                      {u.role === 'SUPERADMIN' ? (
+                        <Badge tone="purple">Full access</Badge>
+                      ) : u.role === 'DEALER' ? (
+                        <Badge tone="slate">Dealer portal</Badge>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="text-xs text-slate-700">
+                            Modules: {u.moduleAccesses?.length ? u.moduleAccesses.length : 'All'}
+                          </div>
+                          <div className="text-xs text-slate-700">
+                            Factories: {u.factoryAccesses?.length ? u.factoryAccesses.length : 'All'}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="border-t py-2 px-3">
                       <div className="flex flex-wrap gap-2">
+                        {u.role !== 'DEALER' ? (
+                          <button
+                            disabled={busy}
+                            onClick={() => openAccessModal(u)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-100 text-sky-800 hover:bg-sky-200"
+                            title="Manage module and factory access"
+                          >
+                            <ShieldAlert size={14} /> Access
+                          </button>
+                        ) : null}
                         <button
                           disabled={busy}
                           onClick={() => toggleApproved(u.id, !u.approved)}
@@ -567,6 +673,119 @@ export default function UsersAdminPage() {
               >
                 <Shield size={16} /> {pwSaving ? 'Saving…' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {accessUser && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-5 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+              <ShieldAlert size={18} /> Access Control
+            </h3>
+            <p className="text-sm text-slate-600 mb-4">
+              User: <span className="font-semibold">{accessUser.email}</span>
+            </p>
+
+            {accessUser.role === 'SUPERADMIN' ? (
+              <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                Superadmins bypass factory and module restrictions.
+              </div>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <div className="text-sm font-bold text-slate-900 mb-2">Modules</div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedModules.length === 0}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedModules([])
+                        }}
+                      />
+                      Full module access
+                    </label>
+                    <div className="grid gap-2">
+                      {ADMIN_MODULES.map((module) => {
+                        const checked = selectedModules.includes(module.key)
+                        return (
+                          <label key={module.key} className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedModules((prev) =>
+                                  e.target.checked
+                                    ? [...prev, module.key]
+                                    : prev.filter((item) => item !== module.key)
+                                )
+                              }}
+                            />
+                            {module.label}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-bold text-slate-900 mb-2">Factories</div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedFactories.length === 0}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedFactories([])
+                        }}
+                      />
+                      All factories
+                    </label>
+                    <div className="grid gap-2">
+                      {factories.map((factory) => {
+                        const checked = selectedFactories.includes(factory.id)
+                        return (
+                          <label key={factory.id} className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedFactories((prev) =>
+                                  e.target.checked
+                                    ? [...prev, factory.id]
+                                    : prev.filter((item) => item !== factory.id)
+                                )
+                              }}
+                            />
+                            {factory.name}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                className="px-3 h-10 rounded-xl border border-slate-200 hover:bg-slate-50"
+                onClick={() => setAccessUser(null)}
+              >
+                Close
+              </button>
+              {accessUser.role !== 'SUPERADMIN' ? (
+                <button
+                  disabled={accessSaving}
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 rounded-xl disabled:opacity-50"
+                  onClick={saveAccess}
+                >
+                  <Shield size={16} /> {accessSaving ? 'Saving…' : 'Save Access'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

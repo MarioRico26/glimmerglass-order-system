@@ -206,6 +206,7 @@ export default function ShippingSchedulePage() {
         status: 'PRE_SHIPPING',
         sort: 'scheduledShipDate',
         dir: 'asc',
+        scopeModule: 'SHIP_SCHEDULE',
       })
       const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) {

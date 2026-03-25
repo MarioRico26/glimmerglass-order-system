@@ -20,6 +20,8 @@ model User {
   mediaUploads  OrderMedia[] @relation("OrderMediaUploader")
   inventoryTxns InventoryTxn[] @relation("InventoryTxnActor")
   passwordResetTokens PasswordResetToken[]
+  factoryAccesses UserFactoryAccess[]
+  moduleAccesses  UserModuleAccess[]
 
   createdAt DateTime @default(now())
 }
@@ -237,8 +239,37 @@ model FactoryLocation {
 
   // inverse relation for InventoryLocation.factoryLocation
   inventoryLocations InventoryLocation[]
+  userAccesses UserFactoryAccess[]
 
   createdAt DateTime @default(now())
+}
+
+model UserFactoryAccess {
+  id                String @id @default(uuid())
+  userId            String
+  factoryLocationId String
+  createdAt         DateTime @default(now())
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  factoryLocation FactoryLocation @relation(fields: [factoryLocationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, factoryLocationId])
+  @@index([userId])
+  @@index([factoryLocationId])
+}
+
+model UserModuleAccess {
+  id          String @id @default(uuid())
+  userId      String
+  module      AdminModule
+  accessLevel ModuleAccessLevel @default(VIEW)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module])
+  @@index([userId])
+  @@index([module])
 }
 
 /**
@@ -510,6 +541,25 @@ enum Role {
   ADMIN
   DEALER
   SUPERADMIN
+}
+
+enum AdminModule {
+  DASHBOARD
+  ORDER_LIST
+  NEW_ORDER
+  PRODUCTION_SCHEDULE
+  SHIP_SCHEDULE
+  POOL_STOCK
+  POOL_CATALOG
+  WORKFLOW_REQUIREMENTS
+  INVENTORY
+  DEALERS
+  USERS
+}
+
+enum ModuleAccessLevel {
+  VIEW
+  EDIT
 }
 
 enum OrderStatus {

@@ -3,12 +3,11 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { PenetrationMode } from '@prisma/client'
+import { AdminModule, PenetrationMode } from '@prisma/client'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
 import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
+import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
 type BlueprintMarker = { type: 'skimmer' | 'return' | 'drain'; x: number; y: number }
 
@@ -50,14 +49,13 @@ function parseBlueprintMarkers(input: unknown) {
 // GET: obtener lista de pedidos con filtros, paginación y relaciones
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const role = (session?.user as any)?.role
-
-    if (!session?.user?.email || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
-
     const { searchParams } = new URL(req.url)
+    const scopeModuleRaw = searchParams.get('scopeModule')
+    const scopeModule =
+      scopeModuleRaw === 'PRODUCTION_SCHEDULE' || scopeModuleRaw === 'SHIP_SCHEDULE'
+        ? (scopeModuleRaw as AdminModule)
+        : undefined
+    const access = scopeModule ? await requireAdminAccess(scopeModule) : await requireAdminAccess()
     const page = parseInt(searchParams.get('page') || '1', 10)
     const pageSize = parseInt(searchParams.get('pageSize') || '20', 10)
     const sort = searchParams.get('sort') || 'createdAt'
@@ -77,6 +75,7 @@ export async function GET(req: NextRequest) {
 
     // ----- filtros -----
     const where: any = {}
+    Object.assign(where, scopedFactoryWhere(access))
 
     if (statusFilter !== 'ALL') {
       where.status =
@@ -253,13 +252,8 @@ export async function GET(req: NextRequest) {
 // POST: crear nuevo pedido (lo dejo como lo tenés)
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const role = (session?.user as any)?.role
-    const userEmail = (session?.user as any)?.email
-
-    if (!session?.user?.email || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
+    const access = await requireAdminAccess(AdminModule.NEW_ORDER)
+    const userEmail = access.email
 
     const dbUser = await prisma.user.findUnique({
       where: { email: userEmail },
@@ -292,6 +286,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: `Missing required field: ${field}` }, { status: 400 })
       }
     }
+    assertFactoryAccess(access, body.factoryLocationId)
     if (penetrationMode === 'OTHER' && !penetrationNotes) {
       return NextResponse.json({ message: 'penetrationNotes is required when penetrationMode is OTHER' }, { status: 400 })
     }

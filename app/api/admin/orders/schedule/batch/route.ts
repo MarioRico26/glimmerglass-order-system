@@ -3,21 +3,13 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { Role } from '@prisma/client'
-
-function isAdminRole(role: unknown) {
-  return role === Role.ADMIN || role === Role.SUPERADMIN
-}
+import { AdminModule } from '@prisma/client'
+import { requireAdminAccess } from '@/lib/adminAccess'
 
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as { email?: string; role?: unknown } | undefined
-    if (!user?.email) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    if (!isAdminRole(user.role)) return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
+    const access = await requireAdminAccess(AdminModule.PRODUCTION_SCHEDULE)
 
     const body = await req.json().catch(() => null) as
       | { updates?: Array<{ id?: unknown; productionPriority?: unknown }> }
@@ -50,9 +42,21 @@ export async function PATCH(req: NextRequest) {
 
     const existing = await prisma.order.findMany({
       where: { id: { in: clean.map((u) => u.id) } },
-      select: { id: true, status: true },
+      select: { id: true, status: true, factoryLocationId: true },
     })
     const existingMap = new Map(existing.map((o) => [o.id, o.status] as const))
+    const outOfScopeIds =
+      access.allowedFactoryIds === null
+        ? []
+        : existing
+            .filter((o) => !o.factoryLocationId || !access.allowedFactoryIds.includes(o.factoryLocationId))
+            .map((o) => o.id)
+    if (outOfScopeIds.length > 0) {
+      return NextResponse.json(
+        { message: 'Some orders are outside your factory scope', outOfScopeIds },
+        { status: 403 }
+      )
+    }
 
     const missingIds = clean.map((u) => u.id).filter((id) => !existingMap.has(id))
     if (missingIds.length > 0) {
