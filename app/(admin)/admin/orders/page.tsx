@@ -46,7 +46,7 @@ interface Order {
   scheduledProductionDate?: string | null
   productionPriority?: number | null
   poolModel: Maybe<{ name: string }>
-  color: Maybe<{ name: string }>
+  color: Maybe<{ name: string; swatchUrl?: string | null }>
   dealer: Maybe<{ name: string }>
   factoryLocation: Maybe<{ name: string }>
   createdAt?: string
@@ -1260,7 +1260,24 @@ function AdminOrdersInner() {
                                     />
                                     <DataField
                                       label="Color"
-                                      value={order.color?.name || 'Not set'}
+                                      value={
+                                        order.color ? (
+                                          <span className="inline-flex items-center gap-2">
+                                            {order.color.swatchUrl ? (
+                                              <img
+                                                src={order.color.swatchUrl}
+                                                alt={`${order.color.name} swatch`}
+                                                className="h-6 w-6 rounded-full border border-slate-200 object-cover"
+                                              />
+                                            ) : (
+                                              <span className="h-6 w-6 rounded-full border border-slate-200 bg-slate-100" />
+                                            )}
+                                            <span>{order.color.name}</span>
+                                          </span>
+                                        ) : (
+                                          'Not set'
+                                        )
+                                      }
                                     />
                                   </div>
                                 </div>
