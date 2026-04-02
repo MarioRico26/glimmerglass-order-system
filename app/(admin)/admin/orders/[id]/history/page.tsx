@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { createPortal } from 'react-dom'
 import { PencilLine } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
@@ -198,6 +199,7 @@ export default function OrderHistoryPage() {
   const [editAutocover, setEditAutocover] = useState(false)
 
   const [editing, setEditing] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   // ✅ usa tu modal real
   const [manualOpen, setManualOpen] = useState(false)
@@ -208,6 +210,19 @@ export default function OrderHistoryPage() {
   const [allocating, setAllocating] = useState(false)
   const { labelForDocType } = useWorkflowDocLabels()
   const hasAllocatedStock = !!summary?.allocatedPoolStock
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted || !editing) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [mounted, editing])
 
   const loadAll = async () => {
     try {
@@ -886,9 +901,10 @@ export default function OrderHistoryPage() {
         )}
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      {mounted && editing
+        ? createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="text-2xl font-black mb-1 text-slate-900">Edit Order Inputs</h2>
             <p className="text-sm text-slate-600 mb-5">
               Update core order inputs after entry. Changes are saved and logged to order history.
@@ -1159,8 +1175,10 @@ export default function OrderHistoryPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+        : null}
     </div>
   )
 }

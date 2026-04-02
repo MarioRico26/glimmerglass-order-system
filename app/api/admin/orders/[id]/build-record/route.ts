@@ -175,7 +175,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, factoryLocationId: true, status: true, serialNumber: true, allocatedPoolStockId: true },
+      select: { id: true, factoryLocationId: true, status: true },
     })
 
     if (!order) {
@@ -188,14 +188,6 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
     const dateBuilt = body?.dateBuilt ? new Date(body.dateBuilt) : null
     if (body?.dateBuilt && Number.isNaN(dateBuilt?.getTime())) {
       return NextResponse.json({ message: 'Invalid dateBuilt value' }, { status: 400 })
-    }
-
-    const nextSerial = typeof body?.serialNumber === 'string' ? body.serialNumber.trim() : ''
-    if (order.allocatedPoolStockId && nextSerial && nextSerial !== (order.serialNumber || '')) {
-      return NextResponse.json(
-        { message: 'Serial number is locked while a stock allocation is attached to this order.' },
-        { status: 409 },
-      )
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -241,10 +233,6 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
             totalWeight: row.totalWeight,
           })),
         })
-      }
-
-      if (nextSerial && nextSerial !== (order.serialNumber || '')) {
-        await tx.order.update({ where: { id: orderId }, data: { serialNumber: nextSerial } })
       }
 
       await tx.orderHistory.create({

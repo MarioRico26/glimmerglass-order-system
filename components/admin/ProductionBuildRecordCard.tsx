@@ -45,7 +45,6 @@ type Props = {
 
 type FormState = {
   dateBuilt: string
-  serialNumber: string
   gelGunOperator: string
   chopGunOperator: string
   outsideTemp: string
@@ -87,7 +86,6 @@ function formatNumber(value?: number | null) {
 function emptyForm(currentSerialNumber?: string | null): FormState {
   return {
     dateBuilt: '',
-    serialNumber: currentSerialNumber || '',
     gelGunOperator: '',
     chopGunOperator: '',
     outsideTemp: '',
@@ -124,7 +122,6 @@ function mapRecordToForm(record: BuildRecord | null, defaults: MaterialUsage[], 
 
   return {
     dateBuilt: toInputDate(record.dateBuilt),
-    serialNumber: currentSerialNumber || '',
     gelGunOperator: record.gelGunOperator || '',
     chopGunOperator: record.chopGunOperator || '',
     outsideTemp: record.outsideTemp || '',
@@ -182,7 +179,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
   }, [orderId])
 
   useEffect(() => {
-    setForm((current) => ({ ...current, serialNumber: currentSerialNumber || current.serialNumber }))
+    setForm((current) => ({ ...current }))
   }, [currentSerialNumber])
 
   const groupedRows = useMemo(() => {
@@ -224,7 +221,6 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dateBuilt: form.dateBuilt || null,
-          serialNumber: form.serialNumber,
           gelGunOperator: form.gelGunOperator,
           chopGunOperator: form.chopGunOperator,
           outsideTemp: form.outsideTemp,
@@ -241,7 +237,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
         throw new Error(data?.message || 'Failed to save build record')
       }
       setRecord(data.record)
-      setForm(mapRecordToForm(data.record, defaults, form.serialNumber))
+      setForm(mapRecordToForm(data.record, defaults, currentSerialNumber))
       setEditing(false)
       setExpanded(false)
       setMessage('Build record saved.')
@@ -265,7 +261,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
                 Date Built: {formatDate(record?.dateBuilt)}
               </span>
               <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                Serial: {form.serialNumber || 'Not set'}
+                Serial: {currentSerialNumber || 'Not set'}
               </span>
               <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                 Team: {record?.buildTeam || 'Not set'}
@@ -339,14 +335,6 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
                   <input value={form.dateBuilt} onChange={(e) => updateField('dateBuilt', e.target.value)} type="date" className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300" />
                 ) : (
                   <div className="mt-3 text-lg font-bold text-slate-900">{formatDate(record?.dateBuilt)}</div>
-                )}
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Serial Number</div>
-                {editing ? (
-                  <input value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} placeholder="Enter serial number" className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300" />
-                ) : (
-                  <div className="mt-3 text-lg font-bold text-slate-900">{form.serialNumber || 'Not set'}</div>
                 )}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
