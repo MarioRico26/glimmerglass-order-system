@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardPenLine, Factory, FlaskConical, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ClipboardPenLine, Factory, FlaskConical, Save, X } from 'lucide-react'
 
 type BuildMaterialCategory = 'GEL_COAT' | 'SKIN_RESIN' | 'BUILD_UP_RESIN' | 'CHOP' | 'OIL'
 
@@ -151,6 +151,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
   const [defaults, setDefaults] = useState<MaterialUsage[]>([])
   const [form, setForm] = useState<FormState>(() => emptyForm(currentSerialNumber))
   const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -242,6 +243,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
       setRecord(data.record)
       setForm(mapRecordToForm(data.record, defaults, form.serialNumber))
       setEditing(false)
+      setExpanded(false)
       setMessage('Build record saved.')
       await onSaved?.()
     } catch (e: any) {
@@ -253,43 +255,71 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between gap-4">
-        <div>
-          <div className="text-sm font-semibold text-slate-700">Production Build Record</div>
-          <div className="mt-1 text-xs text-slate-500">Capture the actual build sheet directly on the order.</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {editing ? (
-            <>
+      <div className="px-6 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-slate-700">Production Build Record</div>
+            <div className="mt-1 text-xs text-slate-500">Capture the actual build sheet directly on the order.</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                Date Built: {formatDate(record?.dateBuilt)}
+              </span>
+              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                Serial: {form.serialNumber || 'Not set'}
+              </span>
+              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                Team: {record?.buildTeam || 'Not set'}
+              </span>
+              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                Shell Weight: {formatNumber(record?.shellWeight)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {editing ? (
+              <>
+                <button
+                  onClick={cancelEditing}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  <X size={16} />
+                  Cancel
+                </button>
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+                >
+                  <Save size={16} />
+                  {saving ? 'Saving…' : 'Save Build Record'}
+                </button>
+              </>
+            ) : (
               <button
-                onClick={cancelEditing}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                onClick={() => {
+                  setExpanded(true)
+                  setEditing(true)
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100"
               >
-                <X size={16} />
-                Cancel
+                <ClipboardPenLine size={16} />
+                {record ? 'Edit Build Record' : 'Start Build Record'}
               </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
-              >
-                <Save size={16} />
-                {saving ? 'Saving…' : 'Save Build Record'}
-              </button>
-            </>
-          ) : (
+            )}
+
             <button
-              onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100"
+              onClick={() => setExpanded((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
             >
-              <ClipboardPenLine size={16} />
-              {record ? 'Edit Build Record' : 'Start Build Record'}
+              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {expanded ? 'Collapse' : 'Expand'}
             </button>
-          )}
+          </div>
         </div>
       </div>
 
-      <div className="px-6 py-5">
+      {!expanded ? null : <div className="border-t border-slate-100 px-6 py-5">
         {loading ? (
           <div className="grid gap-4 md:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -423,7 +453,7 @@ export default function ProductionBuildRecordCard({ orderId, currentSerialNumber
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }
