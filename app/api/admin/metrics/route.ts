@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AdminModule, OrderDocType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { startOfDay, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
 import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
@@ -100,6 +100,23 @@ export async function GET(request: NextRequest) {
       where: {
         ...orderScope,
         allocatedPoolStockId: { not: null },
+      },
+    })
+
+    const allocatedStockNoShip = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: 'PRE_SHIPPING',
+        allocatedPoolStockId: { not: null },
+        scheduledShipDate: null,
+      },
+    })
+
+    const overdueRequestedShip = await prisma.order.count({
+      where: {
+        ...orderScope,
+        status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] },
+        requestedShipDate: { lt: startOfDay(new Date()) },
       },
     })
 
@@ -203,6 +220,8 @@ export async function GET(request: NextRequest) {
           unscheduledShipping,
           finalPaymentNeeded,
           allocatedStock,
+          allocatedStockNoShip,
+          overdueRequestedShip,
           asapRequests,
         },
         monthly,

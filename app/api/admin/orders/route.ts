@@ -121,6 +121,25 @@ export async function GET(req: NextRequest) {
       ]
     } else if (signalFilter === 'ALLOCATED_STOCK') {
       where.AND = [...(where.AND || []), { allocatedPoolStockId: { not: null } }]
+    } else if (signalFilter === 'ALLOCATED_STOCK_NO_SHIP') {
+      where.AND = [
+        ...(where.AND || []),
+        { status: 'PRE_SHIPPING' },
+        { allocatedPoolStockId: { not: null } },
+        { scheduledShipDate: null },
+      ]
+    } else if (signalFilter === 'OVERDUE_REQUESTED_SHIP') {
+      where.AND = [
+        ...(where.AND || []),
+        { status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] } },
+        { requestedShipDate: { lt: new Date() } },
+      ]
+    } else if (signalFilter === 'ASAP_REQUESTS') {
+      where.AND = [
+        ...(where.AND || []),
+        { requestedShipAsap: true },
+        { status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] } },
+      ]
     }
 
     if (q) {

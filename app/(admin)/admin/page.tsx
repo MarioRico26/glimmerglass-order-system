@@ -45,6 +45,8 @@ type Metrics = {
     unscheduledShipping: number
     finalPaymentNeeded: number
     allocatedStock: number
+    allocatedStockNoShip: number
+    overdueRequestedShip: number
     asapRequests: number
   }
   monthly: { key: string; label: string; count: number }[]
@@ -78,6 +80,8 @@ const emptyMetrics: Metrics = {
     unscheduledShipping: 0,
     finalPaymentNeeded: 0,
     allocatedStock: 0,
+    allocatedStockNoShip: 0,
+    overdueRequestedShip: 0,
     asapRequests: 0,
   },
   monthly: [],
@@ -236,6 +240,18 @@ export default function AdminDashboard() {
         : 'All factories'
       : factoryOptions.find((factory) => factory.id === selectedFactoryId)?.name || 'Selected factory'
 
+  const orderListHref = (params: Record<string, string>) => {
+    const query = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) query.set(key, value)
+    })
+    if (selectedFactoryId !== 'ALL') {
+      const factoryName = factoryOptions.find((factory) => factory.id === selectedFactoryId)?.name
+      if (factoryName) query.set('factory', factoryName)
+    }
+    return `/admin/orders${query.toString() ? `?${query.toString()}` : ''}`
+  }
+
   const actionLinks = [
     { label: 'Order List', href: '/admin/orders', Icon: PackageSearch, tone: 'slate', module: 'ORDER_LIST' },
     { label: 'Production Schedule', href: '/admin/production', Icon: Factory, tone: 'indigo', module: 'PRODUCTION_SCHEDULE' },
@@ -337,58 +353,99 @@ export default function AdminDashboard() {
       <section className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Action Required</div>
-            <h2 className="mt-1 text-xl font-black text-slate-900">Operational Signals</h2>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Action Center</div>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Needs Attention</h2>
           </div>
           <Link
-            href="/admin/orders"
+            href={orderListHref({})}
             className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
           >
             Open Order List <ArrowRight size={15} />
           </Link>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <SignalCard
-            label="Missing Serial"
-            value={signals.missingSerial}
-            detail="Active orders missing a serial number."
-            href="/admin/orders"
-            tone="rose"
+        <div className="space-y-5">
+          <ActionGroup
+            title="Critical"
+            detail="Issues that usually block shipping or create immediate customer pressure."
+            cards={[
+              {
+                label: 'Final Payment Needed',
+                value: signals.finalPaymentNeeded,
+                detail: 'Pre-Shipping orders missing proof of final payment.',
+                href: orderListHref({ status: 'PRE_SHIPPING', finalPayment: 'NEEDED' }),
+                tone: 'rose',
+              },
+              {
+                label: 'Overdue Requested Ship',
+                value: signals.overdueRequestedShip,
+                detail: 'Open orders where the requested ship date is already behind.',
+                href: orderListHref({ signal: 'OVERDUE_REQUESTED_SHIP' }),
+                tone: 'amber',
+              },
+              {
+                label: 'Stock Reserved / No Ship Date',
+                value: signals.allocatedStockNoShip,
+                detail: 'Reserved stock that still has no scheduled ship date.',
+                href: orderListHref({ signal: 'ALLOCATED_STOCK_NO_SHIP' }),
+                tone: 'indigo',
+              },
+            ]}
           />
-          <SignalCard
-            label="Unscheduled Production"
-            value={signals.unscheduledProduction}
-            detail="In Production orders without a production date."
-            href="/admin/production"
-            tone="indigo"
+
+          <ActionGroup
+            title="Attention"
+            detail="Open operational gaps that should be closed before orders move deeper into the workflow."
+            cards={[
+              {
+                label: 'Missing Serial',
+                value: signals.missingSerial,
+                detail: 'Active orders missing a serial number.',
+                href: orderListHref({ signal: 'MISSING_SERIAL' }),
+                tone: 'amber',
+              },
+              {
+                label: 'Unscheduled Production',
+                value: signals.unscheduledProduction,
+                detail: 'In Production orders without a production date.',
+                href: orderListHref({ signal: 'UNSCHEDULED_PRODUCTION' }),
+                tone: 'indigo',
+              },
+              {
+                label: 'Unscheduled Shipping',
+                value: signals.unscheduledShipping,
+                detail: 'Pre-Shipping orders without a ship date.',
+                href: orderListHref({ signal: 'UNSCHEDULED_SHIPPING' }),
+                tone: 'sky',
+              },
+            ]}
           />
-          <SignalCard
-            label="Unscheduled Shipping"
-            value={signals.unscheduledShipping}
-            detail="Pre-Shipping orders without a ship date."
-            href="/admin/shipping"
-            tone="sky"
-          />
-          <SignalCard
-            label="Final Payment Needed"
-            value={signals.finalPaymentNeeded}
-            detail="Pre-Shipping orders missing proof of final payment."
-            href="/admin/orders"
-            tone="amber"
-          />
-          <SignalCard
-            label="Allocated Stock"
-            value={signals.allocatedStock}
-            detail="Orders already tied to finished pool stock."
-            href="/admin/orders"
-            tone="emerald"
-          />
-          <SignalCard
-            label="ASAP Requests"
-            value={signals.asapRequests}
-            detail="Open orders flagged for ASAP requested ship date."
-            href="/admin/orders"
-            tone="violet"
+
+          <ActionGroup
+            title="Operational"
+            detail="Useful active views for dispatching work across ops, production, and admin."
+            cards={[
+              {
+                label: 'Needs Deposit',
+                value: t.PENDING_PAYMENT_APPROVAL || 0,
+                detail: 'Orders still waiting on deposit-side progress.',
+                href: orderListHref({ signal: 'NEEDS_DEPOSIT_FILE' }),
+                tone: 'sky',
+              },
+              {
+                label: 'ASAP Requests',
+                value: signals.asapRequests,
+                detail: 'Open orders flagged for ASAP requested ship date.',
+                href: orderListHref({ signal: 'ASAP_REQUESTS' }),
+                tone: 'violet',
+              },
+              {
+                label: 'Allocated Stock',
+                value: signals.allocatedStock,
+                detail: 'Orders already tied to finished pool stock.',
+                href: orderListHref({ signal: 'ALLOCATED_STOCK' }),
+                tone: 'emerald',
+              },
+            ]}
           />
         </div>
       </section>
@@ -647,6 +704,45 @@ function SignalCard({
       </div>
       <p className="mt-3 text-[13px] leading-relaxed opacity-80">{detail}</p>
     </Link>
+  )
+}
+
+function ActionGroup({
+  title,
+  detail,
+  cards,
+}: {
+  title: string
+  detail: string
+  cards: Array<{
+    label: string
+    value: number
+    detail: string
+    href: string
+    tone: 'rose' | 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet'
+  }>
+}) {
+  return (
+    <div className="rounded-[1.45rem] border border-slate-200 bg-slate-50/70 p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{title}</div>
+          <div className="mt-1 text-sm text-slate-600">{detail}</div>
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {cards.map((card) => (
+          <SignalCard
+            key={`${title}-${card.label}`}
+            label={card.label}
+            value={card.value}
+            detail={card.detail}
+            href={card.href}
+            tone={card.tone}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 

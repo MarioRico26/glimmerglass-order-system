@@ -106,6 +106,25 @@ export async function GET(req: NextRequest) {
       ]
     } else if (signalFilter === 'ALLOCATED_STOCK') {
       where.AND = [...((where.AND as unknown[]) || []), { allocatedPoolStockId: { not: null } }]
+    } else if (signalFilter === 'ALLOCATED_STOCK_NO_SHIP') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { status: 'PRE_SHIPPING' },
+        { allocatedPoolStockId: { not: null } },
+        { scheduledShipDate: null },
+      ]
+    } else if (signalFilter === 'OVERDUE_REQUESTED_SHIP') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] } },
+        { requestedShipDate: { lt: new Date() } },
+      ]
+    } else if (signalFilter === 'ASAP_REQUESTS') {
+      where.AND = [
+        ...((where.AND as unknown[]) || []),
+        { requestedShipAsap: true },
+        { status: { in: ['PENDING_PAYMENT_APPROVAL', 'IN_PRODUCTION', 'PRE_SHIPPING'] } },
+      ]
     }
     if (q) {
       where.OR = [

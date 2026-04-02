@@ -81,6 +81,9 @@ type SignalFilter =
   | 'UNSCHEDULED_SHIPPING'
   | 'NEEDS_DEPOSIT_FILE'
   | 'ALLOCATED_STOCK'
+  | 'ALLOCATED_STOCK_NO_SHIP'
+  | 'OVERDUE_REQUESTED_SHIP'
+  | 'ASAP_REQUESTS'
 
 type AccessSummary = {
   allModules: boolean
