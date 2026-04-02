@@ -98,6 +98,7 @@ model Order {
   histories     OrderHistory[]
   media         OrderMedia[]
   notifications Notification[]
+  buildRecord   OrderBuildRecord?
 
   jobId       String?
   job         OrderJob?      @relation(fields: [jobId], references: [id])
@@ -155,6 +156,43 @@ model OrderMedia {
   visibleToDealer Boolean       @default(true)
 
   @@index([uploadedByUserId])
+}
+
+model OrderBuildRecord {
+  id              String   @id @default(uuid())
+  orderId         String   @unique
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dateBuilt       DateTime?
+  gelGunOperator  String?
+  chopGunOperator String?
+  outsideTemp     String?
+  moldTemp        String?
+  buildTeam       String?
+  shellWeight     Float?
+  buildHours      Float?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  materialUsages OrderBuildMaterialUsage[]
+}
+
+model OrderBuildMaterialUsage {
+  id            String                @id @default(uuid())
+  buildRecordId String
+  buildRecord   OrderBuildRecord      @relation(fields: [buildRecordId], references: [id], onDelete: Cascade)
+  category      BuildMaterialCategory
+  slotLabel     String
+  sortOrder     Int                   @default(0)
+  batchNumber   String?
+  startWeight   Float?
+  finishWeight  Float?
+  netWeight     Float?
+  totalWeight   Float?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([buildRecordId, category, sortOrder])
 }
 
 model OrderStatusRequirementTemplate {
@@ -626,6 +664,14 @@ enum PenetrationMode {
   PENETRATIONS_WITHOUT_INSTALL
   NO_PENETRATIONS
   OTHER
+}
+
+enum BuildMaterialCategory {
+  GEL_COAT
+  SKIN_RESIN
+  BUILD_UP_RESIN
+  CHOP
+  OIL
 }
 
 enum MediaType {

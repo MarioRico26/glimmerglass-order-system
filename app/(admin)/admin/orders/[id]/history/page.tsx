@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { PencilLine } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
+import ProductionBuildRecordCard from '@/components/admin/ProductionBuildRecordCard'
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
@@ -757,6 +758,14 @@ export default function OrderHistoryPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="px-6 pb-6">
+              <ProductionBuildRecordCard
+                orderId={orderId}
+                currentSerialNumber={summary.serialNumber}
+                onSaved={loadAll}
+              />
             </div>
 
             <div className="px-6 pb-6">
