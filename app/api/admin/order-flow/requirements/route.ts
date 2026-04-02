@@ -39,6 +39,8 @@ async function optionsPayload() {
       id: profile.id,
       slug: profile.slug,
       name: profile.name,
+      dealerCount: profile.dealerCount,
+      dealerNames: profile.dealerNames,
     })),
     statuses: TEMPLATE_STATUSES.map((status) => ({
       value: status,

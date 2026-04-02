@@ -1,0 +1,774 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.0/archimate3_Diagram.xsd"
+       identifier="id-glimmerglass-os">
+  <name xml:lang="en">Glimmerglass Order System — Architecture</name>
+  <documentation xml:lang="en">ArchiMate 3.0 model for the Glimmerglass Order System. A B2B pool manufacturing order management SaaS built on Next.js 15, PostgreSQL/Neon, and Vercel. Covers Business, Application, and Technology layers.</documentation>
+
+  <!-- ================================================================== -->
+  <!-- ELEMENTS                                                             -->
+  <!-- ================================================================== -->
+  <elements>
+
+    <!-- ── BUSINESS ACTORS ───────────────────────────────────────────── -->
+    <element identifier="id-ba-admin" xsi:type="BusinessActor">
+      <name xml:lang="en">Admin</name>
+      <documentation xml:lang="en">Internal factory/operations staff. Manages orders, production, inventory, dealers.</documentation>
+    </element>
+    <element identifier="id-ba-dealer" xsi:type="BusinessActor">
+      <name xml:lang="en">Dealer / Distribuidor</name>
+      <documentation xml:lang="en">External distributor/reseller. Creates orders, uploads payment proof, tracks status.</documentation>
+    </element>
+    <element identifier="id-ba-superadmin" xsi:type="BusinessActor">
+      <name xml:lang="en">SuperAdmin</name>
+      <documentation xml:lang="en">System administrator. Manages users, module access, factory access.</documentation>
+    </element>
+
+    <!-- ── BUSINESS ROLES ─────────────────────────────────────────────── -->
+    <element identifier="id-br-admin" xsi:type="BusinessRole">
+      <name xml:lang="en">Rol: ADMIN</name>
+    </element>
+    <element identifier="id-br-dealer" xsi:type="BusinessRole">
+      <name xml:lang="en">Rol: DEALER</name>
+    </element>
+    <element identifier="id-br-superadmin" xsi:type="BusinessRole">
+      <name xml:lang="en">Rol: SUPERADMIN</name>
+    </element>
+
+    <!-- ── BUSINESS PROCESSES ─────────────────────────────────────────── -->
+    <element identifier="id-bp-order-creation" xsi:type="BusinessProcess">
+      <name xml:lang="en">Crear Orden</name>
+      <documentation xml:lang="en">Dealer selects pool model, color, hardware options and submits an order with initial payment proof.</documentation>
+    </element>
+    <element identifier="id-bp-payment-approval" xsi:type="BusinessProcess">
+      <name xml:lang="en">Aprobar Pago</name>
+      <documentation xml:lang="en">Admin reviews payment proof, uploads quote and invoice, validates requirements, transitions order to IN_PRODUCTION.</documentation>
+    </element>
+    <element identifier="id-bp-production" xsi:type="BusinessProcess">
+      <name xml:lang="en">Gestión de Producción</name>
+      <documentation xml:lang="en">Admin records build details (materials, team, serial number), uploads build sheet and post-production media.</documentation>
+    </element>
+    <element identifier="id-bp-shipping" xsi:type="BusinessProcess">
+      <name xml:lang="en">Gestión de Envío</name>
+      <documentation xml:lang="en">Admin schedules shipping, uploads checklist and bill of lading, records final payment, transitions to COMPLETED.</documentation>
+    </element>
+    <element identifier="id-bp-dealer-onboarding" xsi:type="BusinessProcess">
+      <name xml:lang="en">Onboarding de Dealer</name>
+      <documentation xml:lang="en">Dealer registers, signs agreement, uploads tax documents. Admin approves account.</documentation>
+    </element>
+    <element identifier="id-bp-inventory-mgmt" xsi:type="BusinessProcess">
+      <name xml:lang="en">Gestión de Inventario</name>
+      <documentation xml:lang="en">Admin tracks finished pool stock (READY/RESERVED/IN_PRODUCTION) and raw materials (resin, gel coat, pigment) with daily reorder sheets.</documentation>
+    </element>
+    <element identifier="id-bp-catalog-mgmt" xsi:type="BusinessProcess">
+      <name xml:lang="en">Gestión de Catálogo</name>
+      <documentation xml:lang="en">Admin manages pool models, colors, and factory locations.</documentation>
+    </element>
+    <element identifier="id-bp-user-mgmt" xsi:type="BusinessProcess">
+      <name xml:lang="en">Gestión de Usuarios</name>
+      <documentation xml:lang="en">SuperAdmin creates/edits admin users, assigns module-level (VIEW/EDIT) and factory-level access.</documentation>
+    </element>
+    <element identifier="id-bp-workflow-config" xsi:type="BusinessProcess">
+      <name xml:lang="en">Configurar Workflow de Dealer</name>
+      <documentation xml:lang="en">Admin assigns a WorkflowProfile to a dealer, customizing required documents and fields per status transition.</documentation>
+    </element>
+    <element identifier="id-bp-notifications" xsi:type="BusinessProcess">
+      <name xml:lang="en">Notificaciones</name>
+      <documentation xml:lang="en">System sends real-time alerts to dealers on order status changes, approvals, and rejections.</documentation>
+    </element>
+
+    <!-- ── BUSINESS OBJECTS ───────────────────────────────────────────── -->
+    <element identifier="id-bo-order" xsi:type="BusinessObject">
+      <name xml:lang="en">Orden</name>
+      <documentation xml:lang="en">Core business entity. Tracks pool model, color, status, shipping, build metadata, and serial number.</documentation>
+    </element>
+    <element identifier="id-bo-pool-model" xsi:type="BusinessObject">
+      <name xml:lang="en">Modelo de Piscina</name>
+    </element>
+    <element identifier="id-bo-color" xsi:type="BusinessObject">
+      <name xml:lang="en">Color / Finish</name>
+    </element>
+    <element identifier="id-bo-dealer-profile" xsi:type="BusinessObject">
+      <name xml:lang="en">Perfil de Dealer</name>
+      <documentation xml:lang="en">Dealer company info, agreement status, onboarding progress, assigned workflow profile.</documentation>
+    </element>
+    <element identifier="id-bo-invoice" xsi:type="BusinessObject">
+      <name xml:lang="en">Invoice / Comprobante de Pago</name>
+    </element>
+    <element identifier="id-bo-build-record" xsi:type="BusinessObject">
+      <name xml:lang="en">Registro de Producción</name>
+      <documentation xml:lang="en">Build team, shell weight, material usage (gel coat, resin, chop) per order.</documentation>
+    </element>
+    <element identifier="id-bo-pool-stock" xsi:type="BusinessObject">
+      <name xml:lang="en">Stock de Piscinas Terminadas</name>
+      <documentation xml:lang="en">Finished pools inventory: READY, RESERVED, IN_PRODUCTION, DAMAGED.</documentation>
+    </element>
+    <element identifier="id-bo-workflow-profile" xsi:type="BusinessObject">
+      <name xml:lang="en">Perfil de Workflow</name>
+      <documentation xml:lang="en">Per-dealer customizable requirements (documents + fields) per order status transition.</documentation>
+    </element>
+    <element identifier="id-bo-material-inventory" xsi:type="BusinessObject">
+      <name xml:lang="en">Inventario de Materiales</name>
+      <documentation xml:lang="en">Raw materials (pigment, resin, gel coat, chop) tracked by location with reorder thresholds.</documentation>
+    </element>
+
+    <!-- ── APPLICATION COMPONENTS ─────────────────────────────────────── -->
+    <element identifier="id-ac-nextjs" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Next.js 15 App</name>
+      <documentation xml:lang="en">Full-stack monolith. React 19 frontend + Route Handler API. Deployed on Vercel.</documentation>
+    </element>
+    <element identifier="id-ac-admin-portal" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Admin Portal</name>
+      <documentation xml:lang="en">UI for orders, production, shipping, inventory, dealers, catalog, users. Route group: /admin.</documentation>
+    </element>
+    <element identifier="id-ac-dealer-portal" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Dealer Portal</name>
+      <documentation xml:lang="en">UI for dealers: create orders, track status, upload docs, view in-stock pools, notifications. Route group: /dealer.</documentation>
+    </element>
+    <element identifier="id-ac-auth" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Auth (NextAuth 4)</name>
+      <documentation xml:lang="en">Credentials provider + JWT sessions. Role (ADMIN/DEALER/SUPERADMIN) embedded in token. bcryptjs password hashing.</documentation>
+    </element>
+    <element identifier="id-ac-order-api" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Order API</name>
+      <documentation xml:lang="en">Routes: /api/admin/orders, /api/orders. Handles CRUD, status transitions (with requirement gates), media uploads, history, build records, pool-stock allocation.</documentation>
+    </element>
+    <element identifier="id-ac-dealer-api" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Dealer API</name>
+      <documentation xml:lang="en">Routes: /api/admin/dealers, /api/dealer. Dealer profile, approval, onboarding, agreement signing, metrics.</documentation>
+    </element>
+    <element identifier="id-ac-catalog-api" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Catalog API</name>
+      <documentation xml:lang="en">Routes: /api/admin/catalog, /api/catalog. Pool models, colors, factory locations. Pool stock CRUD.</documentation>
+    </element>
+    <element identifier="id-ac-inventory-api" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Inventory API</name>
+      <documentation xml:lang="en">Routes: /api/admin/inventory. Items, categories, locations, stocks, transactions, reorder sheets.</documentation>
+    </element>
+    <element identifier="id-ac-notification-svc" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Notification Service</name>
+      <documentation xml:lang="en">Creates dealer notifications on order events. Dealer bell icon, unread count, mark-read. Uses lib/createNotification.ts.</documentation>
+    </element>
+    <element identifier="id-ac-audit-logger" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Audit Logger</name>
+      <documentation xml:lang="en">Records all material actions to AuditLog (USER_LOGIN, ORDER_CREATED, FILE_UPLOADED, AGREEMENT_SIGNED, etc.) via lib/audit.ts.</documentation>
+    </element>
+    <element identifier="id-ac-workflow-engine" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Workflow Engine</name>
+      <documentation xml:lang="en">Validates requirements (docs + fields) before status transitions. Supports global templates and per-dealer WorkflowProfiles. lib/orderRequirements.ts.</documentation>
+    </element>
+    <element identifier="id-ac-mailer" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Mailer</name>
+      <documentation xml:lang="en">SMTP email for password reset. lib/mailer.ts + lib/passwordReset.ts.</documentation>
+    </element>
+    <element identifier="id-ac-prisma" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Prisma ORM</name>
+      <documentation xml:lang="en">Type-safe database access. Uses @prisma/adapter-neon for Neon serverless. lib/prisma.ts singleton.</documentation>
+    </element>
+    <element identifier="id-ac-rbac" xsi:type="ApplicationComponent">
+      <name xml:lang="en">RBAC Middleware</name>
+      <documentation xml:lang="en">Route protection via next/middleware + server-side requireRole/requireAdmin checks. UserModuleAccess (VIEW/EDIT) + UserFactoryAccess.</documentation>
+    </element>
+
+    <!-- ── APPLICATION INTERFACES ──────────────────────────────────────── -->
+    <element identifier="id-ai-dealer-ui" xsi:type="ApplicationInterface">
+      <name xml:lang="en">Dealer Portal UI</name>
+    </element>
+    <element identifier="id-ai-admin-ui" xsi:type="ApplicationInterface">
+      <name xml:lang="en">Admin Portal UI</name>
+    </element>
+    <element identifier="id-ai-rest-api" xsi:type="ApplicationInterface">
+      <name xml:lang="en">REST API (/api/*)</name>
+    </element>
+
+    <!-- ── APPLICATION SERVICES ───────────────────────────────────────── -->
+    <element identifier="id-as-auth-svc" xsi:type="ApplicationService">
+      <name xml:lang="en">Autenticación JWT</name>
+    </element>
+    <element identifier="id-as-order-mgmt" xsi:type="ApplicationService">
+      <name xml:lang="en">Gestión de Órdenes</name>
+    </element>
+    <element identifier="id-as-file-upload" xsi:type="ApplicationService">
+      <name xml:lang="en">Carga de Archivos</name>
+    </element>
+    <element identifier="id-as-notifications" xsi:type="ApplicationService">
+      <name xml:lang="en">Notificaciones Dealer</name>
+    </element>
+    <element identifier="id-as-rbac-svc" xsi:type="ApplicationService">
+      <name xml:lang="en">Control de Acceso (RBAC)</name>
+    </element>
+
+    <!-- ── DATA OBJECTS ───────────────────────────────────────────────── -->
+    <element identifier="id-do-user" xsi:type="DataObject">
+      <name xml:lang="en">User</name>
+    </element>
+    <element identifier="id-do-dealer" xsi:type="DataObject">
+      <name xml:lang="en">Dealer</name>
+    </element>
+    <element identifier="id-do-order" xsi:type="DataObject">
+      <name xml:lang="en">Order</name>
+      <documentation xml:lang="en">Status: PENDING_PAYMENT_APPROVAL | IN_PRODUCTION | PRE_SHIPPING | COMPLETED | SERVICE_WARRANTY | CANCELED</documentation>
+    </element>
+    <element identifier="id-do-order-history" xsi:type="DataObject">
+      <name xml:lang="en">OrderHistory</name>
+    </element>
+    <element identifier="id-do-order-media" xsi:type="DataObject">
+      <name xml:lang="en">OrderMedia</name>
+      <documentation xml:lang="en">Types: PROOF_OF_PAYMENT, QUOTE, INVOICE, BUILD_SHEET, POST_PRODUCTION_MEDIA, SHIPPING_CHECKLIST, BILL_OF_LADING, etc.</documentation>
+    </element>
+    <element identifier="id-do-order-build-record" xsi:type="DataObject">
+      <name xml:lang="en">OrderBuildRecord</name>
+    </element>
+    <element identifier="id-do-pool-model" xsi:type="DataObject">
+      <name xml:lang="en">PoolModel</name>
+    </element>
+    <element identifier="id-do-color" xsi:type="DataObject">
+      <name xml:lang="en">Color</name>
+    </element>
+    <element identifier="id-do-pool-stock" xsi:type="DataObject">
+      <name xml:lang="en">PoolStock</name>
+    </element>
+    <element identifier="id-do-pool-stock-txn" xsi:type="DataObject">
+      <name xml:lang="en">PoolStockTxn</name>
+    </element>
+    <element identifier="id-do-workflow-profile" xsi:type="DataObject">
+      <name xml:lang="en">WorkflowProfile</name>
+    </element>
+    <element identifier="id-do-workflow-req-template" xsi:type="DataObject">
+      <name xml:lang="en">WorkflowProfileRequirementTemplate</name>
+    </element>
+    <element identifier="id-do-inventory-item" xsi:type="DataObject">
+      <name xml:lang="en">InventoryItem</name>
+    </element>
+    <element identifier="id-do-inventory-stock" xsi:type="DataObject">
+      <name xml:lang="en">InventoryStock</name>
+    </element>
+    <element identifier="id-do-inventory-txn" xsi:type="DataObject">
+      <name xml:lang="en">InventoryTxn</name>
+    </element>
+    <element identifier="id-do-reorder-sheet" xsi:type="DataObject">
+      <name xml:lang="en">InventoryReorderSheet</name>
+    </element>
+    <element identifier="id-do-notification" xsi:type="DataObject">
+      <name xml:lang="en">Notification</name>
+    </element>
+    <element identifier="id-do-audit-log" xsi:type="DataObject">
+      <name xml:lang="en">AuditLog</name>
+    </element>
+    <element identifier="id-do-factory" xsi:type="DataObject">
+      <name xml:lang="en">FactoryLocation</name>
+    </element>
+    <element identifier="id-do-user-module-access" xsi:type="DataObject">
+      <name xml:lang="en">UserModuleAccess</name>
+    </element>
+    <element identifier="id-do-user-factory-access" xsi:type="DataObject">
+      <name xml:lang="en">UserFactoryAccess</name>
+    </element>
+
+    <!-- ── TECHNOLOGY NODES ───────────────────────────────────────────── -->
+    <element identifier="id-tn-vercel" xsi:type="Node">
+      <name xml:lang="en">Vercel Platform</name>
+      <documentation xml:lang="en">Hosting, edge network, serverless functions. Deploys Next.js App. Manages environment variables.</documentation>
+    </element>
+    <element identifier="id-tn-neon" xsi:type="Node">
+      <name xml:lang="en">Neon PostgreSQL</name>
+      <documentation xml:lang="en">Serverless PostgreSQL. Accessed via @neondatabase/serverless + @prisma/adapter-neon.</documentation>
+    </element>
+    <element identifier="id-tn-vercel-blob" xsi:type="Node">
+      <name xml:lang="en">Vercel Blob Storage</name>
+      <documentation xml:lang="en">Cloud file storage for agreements, payment proofs, invoices, build sheets, photos. @vercel/blob.</documentation>
+    </element>
+    <element identifier="id-tn-smtp" xsi:type="Node">
+      <name xml:lang="en">SMTP Server</name>
+      <documentation xml:lang="en">External SMTP for transactional emails (password reset). Configured via environment variables.</documentation>
+    </element>
+
+    <!-- ── SYSTEM SOFTWARE ────────────────────────────────────────────── -->
+    <element identifier="id-ss-nextjs-runtime" xsi:type="SystemSoftware">
+      <name xml:lang="en">Next.js 15 Runtime</name>
+    </element>
+    <element identifier="id-ss-postgres" xsi:type="SystemSoftware">
+      <name xml:lang="en">PostgreSQL</name>
+    </element>
+
+    <!-- ── TECHNOLOGY SERVICES ────────────────────────────────────────── -->
+    <element identifier="id-ts-db" xsi:type="TechnologyService">
+      <name xml:lang="en">Database Service</name>
+    </element>
+    <element identifier="id-ts-storage" xsi:type="TechnologyService">
+      <name xml:lang="en">File Storage Service</name>
+    </element>
+    <element identifier="id-ts-email" xsi:type="TechnologyService">
+      <name xml:lang="en">Email Service</name>
+    </element>
+    <element identifier="id-ts-hosting" xsi:type="TechnologyService">
+      <name xml:lang="en">Hosting &amp; CDN</name>
+    </element>
+
+    <!-- ── GROUPINGS ──────────────────────────────────────────────────── -->
+    <element identifier="id-grp-frontend" xsi:type="Grouping">
+      <name xml:lang="en">Frontend (React / Next.js)</name>
+    </element>
+    <element identifier="id-grp-backend" xsi:type="Grouping">
+      <name xml:lang="en">Backend / API Routes</name>
+    </element>
+    <element identifier="id-grp-core" xsi:type="Grouping">
+      <name xml:lang="en">Core Services</name>
+    </element>
+    <element identifier="id-grp-data-layer" xsi:type="Grouping">
+      <name xml:lang="en">Data Layer (Prisma + Neon)</name>
+    </element>
+    <element identifier="id-grp-order-domain" xsi:type="Grouping">
+      <name xml:lang="en">Dominio: Órdenes</name>
+    </element>
+    <element identifier="id-grp-dealer-domain" xsi:type="Grouping">
+      <name xml:lang="en">Dominio: Dealers &amp; Usuarios</name>
+    </element>
+    <element identifier="id-grp-inventory-domain" xsi:type="Grouping">
+      <name xml:lang="en">Dominio: Inventario</name>
+    </element>
+    <element identifier="id-grp-catalog-domain" xsi:type="Grouping">
+      <name xml:lang="en">Dominio: Catálogo</name>
+    </element>
+  </elements>
+
+  <!-- ================================================================== -->
+  <!-- RELATIONSHIPS                                                        -->
+  <!-- ================================================================== -->
+  <relationships>
+
+    <!-- Actor → Role (Assignment) -->
+    <relationship identifier="id-rel-a1" xsi:type="AssignmentRelationship" source="id-ba-admin" target="id-br-admin"/>
+    <relationship identifier="id-rel-a2" xsi:type="AssignmentRelationship" source="id-ba-dealer" target="id-br-dealer"/>
+    <relationship identifier="id-rel-a3" xsi:type="AssignmentRelationship" source="id-ba-superadmin" target="id-br-superadmin"/>
+
+    <!-- Role → Process (Assignment) -->
+    <relationship identifier="id-rel-a4" xsi:type="AssignmentRelationship" source="id-br-dealer" target="id-bp-order-creation"/>
+    <relationship identifier="id-rel-a5" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-payment-approval"/>
+    <relationship identifier="id-rel-a6" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-production"/>
+    <relationship identifier="id-rel-a7" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-shipping"/>
+    <relationship identifier="id-rel-a8" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-inventory-mgmt"/>
+    <relationship identifier="id-rel-a9" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-dealer-onboarding"/>
+    <relationship identifier="id-rel-a10" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-catalog-mgmt"/>
+    <relationship identifier="id-rel-a11" xsi:type="AssignmentRelationship" source="id-br-admin" target="id-bp-workflow-config"/>
+    <relationship identifier="id-rel-a12" xsi:type="AssignmentRelationship" source="id-br-superadmin" target="id-bp-user-mgmt"/>
+    <relationship identifier="id-rel-a13" xsi:type="AssignmentRelationship" source="id-br-dealer" target="id-bp-dealer-onboarding"/>
+
+    <!-- Order Lifecycle Triggering -->
+    <relationship identifier="id-rel-t1" xsi:type="TriggeringRelationship" source="id-bp-order-creation" target="id-bp-payment-approval"/>
+    <relationship identifier="id-rel-t2" xsi:type="TriggeringRelationship" source="id-bp-payment-approval" target="id-bp-production"/>
+    <relationship identifier="id-rel-t3" xsi:type="TriggeringRelationship" source="id-bp-production" target="id-bp-shipping"/>
+    <relationship identifier="id-rel-t4" xsi:type="TriggeringRelationship" source="id-bp-order-creation" target="id-bp-notifications"/>
+    <relationship identifier="id-rel-t5" xsi:type="TriggeringRelationship" source="id-bp-payment-approval" target="id-bp-notifications"/>
+
+    <!-- Process → Business Object (Access) -->
+    <relationship identifier="id-rel-acc1" xsi:type="AccessRelationship" source="id-bp-order-creation" target="id-bo-order" accessType="Write"/>
+    <relationship identifier="id-rel-acc2" xsi:type="AccessRelationship" source="id-bp-payment-approval" target="id-bo-invoice" accessType="ReadWrite"/>
+    <relationship identifier="id-rel-acc3" xsi:type="AccessRelationship" source="id-bp-production" target="id-bo-build-record" accessType="Write"/>
+    <relationship identifier="id-rel-acc4" xsi:type="AccessRelationship" source="id-bp-inventory-mgmt" target="id-bo-pool-stock" accessType="ReadWrite"/>
+    <relationship identifier="id-rel-acc5" xsi:type="AccessRelationship" source="id-bp-inventory-mgmt" target="id-bo-material-inventory" accessType="ReadWrite"/>
+    <relationship identifier="id-rel-acc6" xsi:type="AccessRelationship" source="id-bp-workflow-config" target="id-bo-workflow-profile" accessType="ReadWrite"/>
+    <relationship identifier="id-rel-acc7" xsi:type="AccessRelationship" source="id-bp-order-creation" target="id-bo-pool-model" accessType="Read"/>
+
+    <!-- Application → Business Role (Serving) -->
+    <relationship identifier="id-rel-s1" xsi:type="ServingRelationship" source="id-ac-dealer-portal" target="id-br-dealer"/>
+    <relationship identifier="id-rel-s2" xsi:type="ServingRelationship" source="id-ac-admin-portal" target="id-br-admin"/>
+    <relationship identifier="id-rel-s3" xsi:type="ServingRelationship" source="id-ac-admin-portal" target="id-br-superadmin"/>
+
+    <!-- App serves actors (System Context) -->
+    <relationship identifier="id-rel-s4" xsi:type="ServingRelationship" source="id-ac-nextjs" target="id-ba-dealer"/>
+    <relationship identifier="id-rel-s5" xsi:type="ServingRelationship" source="id-ac-nextjs" target="id-ba-admin"/>
+    <relationship identifier="id-rel-s6" xsi:type="ServingRelationship" source="id-ac-nextjs" target="id-ba-superadmin"/>
+
+    <!-- External infrastructure serves application (System Context) -->
+    <relationship identifier="id-rel-s7" xsi:type="ServingRelationship" source="id-tn-vercel" target="id-ac-nextjs"/>
+    <relationship identifier="id-rel-s8" xsi:type="ServingRelationship" source="id-tn-neon" target="id-ac-nextjs"/>
+    <relationship identifier="id-rel-s9" xsi:type="ServingRelationship" source="id-tn-vercel-blob" target="id-ac-nextjs"/>
+    <relationship identifier="id-rel-s10" xsi:type="ServingRelationship" source="id-tn-smtp" target="id-ac-nextjs"/>
+
+    <!-- Next.js Composition -->
+    <relationship identifier="id-rel-c1" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-admin-portal"/>
+    <relationship identifier="id-rel-c2" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-dealer-portal"/>
+    <relationship identifier="id-rel-c3" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-c4" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-dealer-api"/>
+    <relationship identifier="id-rel-c5" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-catalog-api"/>
+    <relationship identifier="id-rel-c6" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-inventory-api"/>
+    <relationship identifier="id-rel-c7" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-auth"/>
+    <relationship identifier="id-rel-c8" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-notification-svc"/>
+    <relationship identifier="id-rel-c9" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-audit-logger"/>
+    <relationship identifier="id-rel-c10" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-workflow-engine"/>
+    <relationship identifier="id-rel-c11" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-mailer"/>
+    <relationship identifier="id-rel-c12" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-prisma"/>
+    <relationship identifier="id-rel-c13" xsi:type="CompositionRelationship" source="id-ac-nextjs" target="id-ac-rbac"/>
+
+    <!-- Auth serves portals -->
+    <relationship identifier="id-rel-s11" xsi:type="ServingRelationship" source="id-ac-auth" target="id-ac-admin-portal"/>
+    <relationship identifier="id-rel-s12" xsi:type="ServingRelationship" source="id-ac-auth" target="id-ac-dealer-portal"/>
+
+    <!-- Workflow engine serves Order API -->
+    <relationship identifier="id-rel-s13" xsi:type="ServingRelationship" source="id-ac-workflow-engine" target="id-ac-order-api"/>
+    <!-- Notification service serves APIs -->
+    <relationship identifier="id-rel-s14" xsi:type="ServingRelationship" source="id-ac-notification-svc" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-s15" xsi:type="ServingRelationship" source="id-ac-notification-svc" target="id-ac-dealer-api"/>
+    <!-- Audit serves all APIs -->
+    <relationship identifier="id-rel-s16" xsi:type="ServingRelationship" source="id-ac-audit-logger" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-s17" xsi:type="ServingRelationship" source="id-ac-audit-logger" target="id-ac-dealer-api"/>
+    <!-- Mailer serves auth -->
+    <relationship identifier="id-rel-s18" xsi:type="ServingRelationship" source="id-ac-mailer" target="id-ac-auth"/>
+
+    <!-- Prisma serves APIs -->
+    <relationship identifier="id-rel-s19" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-s20" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-dealer-api"/>
+    <relationship identifier="id-rel-s21" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-catalog-api"/>
+    <relationship identifier="id-rel-s22" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-inventory-api"/>
+    <relationship identifier="id-rel-s23" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-auth"/>
+    <relationship identifier="id-rel-s24" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-notification-svc"/>
+    <relationship identifier="id-rel-s25" xsi:type="ServingRelationship" source="id-ac-prisma" target="id-ac-audit-logger"/>
+
+    <!-- RBAC serves APIs and portals -->
+    <relationship identifier="id-rel-s26" xsi:type="ServingRelationship" source="id-ac-rbac" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-s27" xsi:type="ServingRelationship" source="id-ac-rbac" target="id-ac-dealer-api"/>
+    <relationship identifier="id-rel-s28" xsi:type="ServingRelationship" source="id-ac-rbac" target="id-ac-inventory-api"/>
+
+    <!-- Application Interfaces assigned to components -->
+    <relationship identifier="id-rel-a14" xsi:type="AssignmentRelationship" source="id-ac-dealer-portal" target="id-ai-dealer-ui"/>
+    <relationship identifier="id-rel-a15" xsi:type="AssignmentRelationship" source="id-ac-admin-portal" target="id-ai-admin-ui"/>
+    <relationship identifier="id-rel-a16" xsi:type="AssignmentRelationship" source="id-ac-nextjs" target="id-ai-rest-api"/>
+
+    <!-- App Services realized by components -->
+    <relationship identifier="id-rel-r1" xsi:type="RealizationRelationship" source="id-ac-auth" target="id-as-auth-svc"/>
+    <relationship identifier="id-rel-r2" xsi:type="RealizationRelationship" source="id-ac-order-api" target="id-as-order-mgmt"/>
+    <relationship identifier="id-rel-r3" xsi:type="RealizationRelationship" source="id-ac-order-api" target="id-as-file-upload"/>
+    <relationship identifier="id-rel-r4" xsi:type="RealizationRelationship" source="id-ac-notification-svc" target="id-as-notifications"/>
+    <relationship identifier="id-rel-r5" xsi:type="RealizationRelationship" source="id-ac-rbac" target="id-as-rbac-svc"/>
+
+    <!-- Business Objects realized by Data Objects -->
+    <relationship identifier="id-rel-r6" xsi:type="RealizationRelationship" source="id-do-order" target="id-bo-order"/>
+    <relationship identifier="id-rel-r7" xsi:type="RealizationRelationship" source="id-do-pool-model" target="id-bo-pool-model"/>
+    <relationship identifier="id-rel-r8" xsi:type="RealizationRelationship" source="id-do-dealer" target="id-bo-dealer-profile"/>
+    <relationship identifier="id-rel-r9" xsi:type="RealizationRelationship" source="id-do-order-build-record" target="id-bo-build-record"/>
+    <relationship identifier="id-rel-r10" xsi:type="RealizationRelationship" source="id-do-pool-stock" target="id-bo-pool-stock"/>
+    <relationship identifier="id-rel-r11" xsi:type="RealizationRelationship" source="id-do-workflow-profile" target="id-bo-workflow-profile"/>
+    <relationship identifier="id-rel-r12" xsi:type="RealizationRelationship" source="id-do-inventory-item" target="id-bo-material-inventory"/>
+
+    <!-- Data Object Aggregations (Domain Model) -->
+    <relationship identifier="id-rel-agg1" xsi:type="AggregationRelationship" source="id-do-order" target="id-do-order-history"/>
+    <relationship identifier="id-rel-agg2" xsi:type="AggregationRelationship" source="id-do-order" target="id-do-order-media"/>
+    <relationship identifier="id-rel-agg3" xsi:type="AggregationRelationship" source="id-do-order" target="id-do-order-build-record"/>
+    <relationship identifier="id-rel-agg4" xsi:type="AggregationRelationship" source="id-do-inventory-item" target="id-do-inventory-stock"/>
+    <relationship identifier="id-rel-agg5" xsi:type="AggregationRelationship" source="id-do-inventory-item" target="id-do-inventory-txn"/>
+    <relationship identifier="id-rel-agg6" xsi:type="AggregationRelationship" source="id-do-reorder-sheet" target="id-do-inventory-stock"/>
+    <relationship identifier="id-rel-agg7" xsi:type="AggregationRelationship" source="id-do-pool-stock" target="id-do-pool-stock-txn"/>
+    <relationship identifier="id-rel-agg8" xsi:type="AggregationRelationship" source="id-do-user" target="id-do-user-module-access"/>
+    <relationship identifier="id-rel-agg9" xsi:type="AggregationRelationship" source="id-do-user" target="id-do-user-factory-access"/>
+    <relationship identifier="id-rel-agg10" xsi:type="AggregationRelationship" source="id-do-workflow-profile" target="id-do-workflow-req-template"/>
+
+    <!-- Data Object Associations (Domain Model) -->
+    <relationship identifier="id-rel-as1" xsi:type="AssociationRelationship" source="id-do-dealer" target="id-do-order"/>
+    <relationship identifier="id-rel-as2" xsi:type="AssociationRelationship" source="id-do-dealer" target="id-do-workflow-profile"/>
+    <relationship identifier="id-rel-as3" xsi:type="AssociationRelationship" source="id-do-order" target="id-do-pool-model"/>
+    <relationship identifier="id-rel-as4" xsi:type="AssociationRelationship" source="id-do-order" target="id-do-color"/>
+    <relationship identifier="id-rel-as5" xsi:type="AssociationRelationship" source="id-do-order" target="id-do-pool-stock"/>
+    <relationship identifier="id-rel-as6" xsi:type="AssociationRelationship" source="id-do-dealer" target="id-do-notification"/>
+    <relationship identifier="id-rel-as7" xsi:type="AssociationRelationship" source="id-do-order" target="id-do-notification"/>
+    <relationship identifier="id-rel-as8" xsi:type="AssociationRelationship" source="id-do-user" target="id-do-factory"/>
+
+    <!-- Technology: Vercel composes runtime -->
+    <relationship identifier="id-rel-c14" xsi:type="CompositionRelationship" source="id-tn-vercel" target="id-ss-nextjs-runtime"/>
+    <relationship identifier="id-rel-c15" xsi:type="CompositionRelationship" source="id-tn-neon" target="id-ss-postgres"/>
+
+    <!-- Technology Services realized by nodes -->
+    <relationship identifier="id-rel-r13" xsi:type="RealizationRelationship" source="id-tn-neon" target="id-ts-db"/>
+    <relationship identifier="id-rel-r14" xsi:type="RealizationRelationship" source="id-tn-vercel-blob" target="id-ts-storage"/>
+    <relationship identifier="id-rel-r15" xsi:type="RealizationRelationship" source="id-tn-smtp" target="id-ts-email"/>
+    <relationship identifier="id-rel-r16" xsi:type="RealizationRelationship" source="id-tn-vercel" target="id-ts-hosting"/>
+
+    <!-- Tech Services serve Application Components -->
+    <relationship identifier="id-rel-s30" xsi:type="ServingRelationship" source="id-ts-db" target="id-ac-prisma"/>
+    <relationship identifier="id-rel-s31" xsi:type="ServingRelationship" source="id-ts-storage" target="id-ac-order-api"/>
+    <relationship identifier="id-rel-s32" xsi:type="ServingRelationship" source="id-ts-email" target="id-ac-mailer"/>
+    <relationship identifier="id-rel-s33" xsi:type="ServingRelationship" source="id-ts-hosting" target="id-ac-nextjs"/>
+  </relationships>
+
+  <!-- ================================================================== -->
+  <!-- VIEWS                                                                -->
+  <!-- ================================================================== -->
+  <views>
+    <diagrams>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- VIEW 00 — SYSTEM CONTEXT                                       -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <view identifier="id-view-00" xsi:type="Diagram">
+        <name xml:lang="en">00 - System Context</name>
+        <documentation xml:lang="en">High-level view: who uses the system and what external services it depends on.</documentation>
+
+        <!-- Actors row (top) -->
+        <node identifier="n0-admin" elementRef="id-ba-admin" xsi:type="Element" x="80" y="40" w="140" h="65"/>
+        <node identifier="n0-dealer" elementRef="id-ba-dealer" xsi:type="Element" x="300" y="40" w="160" h="65"/>
+        <node identifier="n0-superadmin" elementRef="id-ba-superadmin" xsi:type="Element" x="540" y="40" w="140" h="65"/>
+
+        <!-- The System (center) -->
+        <node identifier="n0-nextjs" elementRef="id-ac-nextjs" xsi:type="Element" x="220" y="240" w="300" h="70"/>
+
+        <!-- External Services (bottom) -->
+        <node identifier="n0-vercel" elementRef="id-tn-vercel" xsi:type="Element" x="40" y="440" w="160" h="55"/>
+        <node identifier="n0-neon" elementRef="id-tn-neon" xsi:type="Element" x="230" y="440" w="160" h="55"/>
+        <node identifier="n0-blob" elementRef="id-tn-vercel-blob" xsi:type="Element" x="420" y="440" w="160" h="55"/>
+        <node identifier="n0-smtp" elementRef="id-tn-smtp" xsi:type="Element" x="610" y="440" w="140" h="55"/>
+
+        <!-- Connections: App serves Actors -->
+        <connection identifier="cn0-1" relationshipRef="id-rel-s4" source="n0-nextjs" target="n0-dealer" xsi:type="Relationship"/>
+        <connection identifier="cn0-2" relationshipRef="id-rel-s5" source="n0-nextjs" target="n0-admin" xsi:type="Relationship"/>
+        <connection identifier="cn0-3" relationshipRef="id-rel-s6" source="n0-nextjs" target="n0-superadmin" xsi:type="Relationship"/>
+
+        <!-- Connections: External services serve App -->
+        <connection identifier="cn0-4" relationshipRef="id-rel-s7" source="n0-vercel" target="n0-nextjs" xsi:type="Relationship"/>
+        <connection identifier="cn0-5" relationshipRef="id-rel-s8" source="n0-neon" target="n0-nextjs" xsi:type="Relationship"/>
+        <connection identifier="cn0-6" relationshipRef="id-rel-s9" source="n0-blob" target="n0-nextjs" xsi:type="Relationship"/>
+        <connection identifier="cn0-7" relationshipRef="id-rel-s10" source="n0-smtp" target="n0-nextjs" xsi:type="Relationship"/>
+      </view>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- VIEW 01 — BUSINESS PROCESS VIEW (ORDER LIFECYCLE)             -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <view identifier="id-view-01" xsi:type="Diagram">
+        <name xml:lang="en">01 - Business Process View</name>
+        <documentation xml:lang="en">Business roles, core processes (order lifecycle chain), and key business objects.</documentation>
+
+        <!-- Roles row -->
+        <node identifier="n1-br-admin" elementRef="id-br-admin" xsi:type="Element" x="40" y="40" w="140" h="55"/>
+        <node identifier="n1-br-dealer" elementRef="id-br-dealer" xsi:type="Element" x="220" y="40" w="140" h="55"/>
+        <node identifier="n1-br-superadmin" elementRef="id-br-superadmin" xsi:type="Element" x="400" y="40" w="160" h="55"/>
+
+        <!-- Order Lifecycle (Triggering chain) -->
+        <node identifier="n1-bp-create" elementRef="id-bp-order-creation" xsi:type="Element" x="40" y="180" w="160" h="55"/>
+        <node identifier="n1-bp-payment" elementRef="id-bp-payment-approval" xsi:type="Element" x="240" y="180" w="160" h="55"/>
+        <node identifier="n1-bp-prod" elementRef="id-bp-production" xsi:type="Element" x="440" y="180" w="180" h="55"/>
+        <node identifier="n1-bp-ship" elementRef="id-bp-shipping" xsi:type="Element" x="660" y="180" w="160" h="55"/>
+
+        <!-- Supporting Processes -->
+        <node identifier="n1-bp-onboard" elementRef="id-bp-dealer-onboarding" xsi:type="Element" x="40" y="310" w="180" h="55"/>
+        <node identifier="n1-bp-inv" elementRef="id-bp-inventory-mgmt" xsi:type="Element" x="260" y="310" w="180" h="55"/>
+        <node identifier="n1-bp-wf" elementRef="id-bp-workflow-config" xsi:type="Element" x="480" y="310" w="200" h="55"/>
+        <node identifier="n1-bp-users" elementRef="id-bp-user-mgmt" xsi:type="Element" x="720" y="310" w="170" h="55"/>
+        <node identifier="n1-bp-notif" elementRef="id-bp-notifications" xsi:type="Element" x="480" y="180" w="0" h="0"/>
+
+        <!-- Business Objects -->
+        <node identifier="n1-bo-order" elementRef="id-bo-order" xsi:type="Element" x="40" y="440" w="150" h="55"/>
+        <node identifier="n1-bo-invoice" elementRef="id-bo-invoice" xsi:type="Element" x="220" y="440" w="170" h="55"/>
+        <node identifier="n1-bo-build" elementRef="id-bo-build-record" xsi:type="Element" x="420" y="440" w="170" h="55"/>
+        <node identifier="n1-bo-stock" elementRef="id-bo-pool-stock" xsi:type="Element" x="620" y="440" w="190" h="55"/>
+        <node identifier="n1-bo-wfp" elementRef="id-bo-workflow-profile" xsi:type="Element" x="40" y="540" w="170" h="55"/>
+        <node identifier="n1-bo-mat" elementRef="id-bo-material-inventory" xsi:type="Element" x="240" y="540" w="190" h="55"/>
+
+        <!-- Role assignments to processes -->
+        <connection identifier="cn1-a4" relationshipRef="id-rel-a4" source="n1-br-dealer" target="n1-bp-create" xsi:type="Relationship"/>
+        <connection identifier="cn1-a5" relationshipRef="id-rel-a5" source="n1-br-admin" target="n1-bp-payment" xsi:type="Relationship"/>
+        <connection identifier="cn1-a6" relationshipRef="id-rel-a6" source="n1-br-admin" target="n1-bp-prod" xsi:type="Relationship"/>
+        <connection identifier="cn1-a7" relationshipRef="id-rel-a7" source="n1-br-admin" target="n1-bp-ship" xsi:type="Relationship"/>
+        <connection identifier="cn1-a8" relationshipRef="id-rel-a8" source="n1-br-admin" target="n1-bp-inv" xsi:type="Relationship"/>
+        <connection identifier="cn1-a9" relationshipRef="id-rel-a9" source="n1-br-admin" target="n1-bp-onboard" xsi:type="Relationship"/>
+        <connection identifier="cn1-a11" relationshipRef="id-rel-a11" source="n1-br-admin" target="n1-bp-wf" xsi:type="Relationship"/>
+        <connection identifier="cn1-a12" relationshipRef="id-rel-a12" source="n1-br-superadmin" target="n1-bp-users" xsi:type="Relationship"/>
+        <connection identifier="cn1-a13" relationshipRef="id-rel-a13" source="n1-br-dealer" target="n1-bp-onboard" xsi:type="Relationship"/>
+
+        <!-- Order lifecycle triggering -->
+        <connection identifier="cn1-t1" relationshipRef="id-rel-t1" source="n1-bp-create" target="n1-bp-payment" xsi:type="Relationship"/>
+        <connection identifier="cn1-t2" relationshipRef="id-rel-t2" source="n1-bp-payment" target="n1-bp-prod" xsi:type="Relationship"/>
+        <connection identifier="cn1-t3" relationshipRef="id-rel-t3" source="n1-bp-prod" target="n1-bp-ship" xsi:type="Relationship"/>
+
+        <!-- Process access to business objects -->
+        <connection identifier="cn1-acc1" relationshipRef="id-rel-acc1" source="n1-bp-create" target="n1-bo-order" xsi:type="Relationship"/>
+        <connection identifier="cn1-acc2" relationshipRef="id-rel-acc2" source="n1-bp-payment" target="n1-bo-invoice" xsi:type="Relationship"/>
+        <connection identifier="cn1-acc3" relationshipRef="id-rel-acc3" source="n1-bp-prod" target="n1-bo-build" xsi:type="Relationship"/>
+        <connection identifier="cn1-acc4" relationshipRef="id-rel-acc4" source="n1-bp-inv" target="n1-bo-stock" xsi:type="Relationship"/>
+        <connection identifier="cn1-acc5" relationshipRef="id-rel-acc5" source="n1-bp-inv" target="n1-bo-mat" xsi:type="Relationship"/>
+        <connection identifier="cn1-acc6" relationshipRef="id-rel-acc6" source="n1-bp-wf" target="n1-bo-wfp" xsi:type="Relationship"/>
+      </view>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- VIEW 02 — APPLICATION LAYER                                    -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <view identifier="id-view-02" xsi:type="Diagram">
+        <name xml:lang="en">02 - Application Layer</name>
+        <documentation xml:lang="en">Application components, services, and interfaces grouped by concern.</documentation>
+
+        <!-- Grouping: Frontend -->
+        <node identifier="n2-grp-fe" elementRef="id-grp-frontend" xsi:type="Element" x="20" y="20" w="420" h="140">
+          <node identifier="n2-admin-portal" elementRef="id-ac-admin-portal" xsi:type="Element" x="40" y="60" w="160" h="55"/>
+          <node identifier="n2-dealer-portal" elementRef="id-ac-dealer-portal" xsi:type="Element" x="230" y="60" w="160" h="55"/>
+        </node>
+
+        <!-- Interfaces row -->
+        <node identifier="n2-ai-admin" elementRef="id-ai-admin-ui" xsi:type="Element" x="40" y="190" w="150" h="40"/>
+        <node identifier="n2-ai-dealer" elementRef="id-ai-dealer-ui" xsi:type="Element" x="230" y="190" w="150" h="40"/>
+        <node identifier="n2-ai-api" elementRef="id-ai-rest-api" xsi:type="Element" x="500" y="190" w="160" h="40"/>
+
+        <!-- Grouping: Core Services -->
+        <node identifier="n2-grp-core" elementRef="id-grp-core" xsi:type="Element" x="460" y="20" w="300" h="140">
+          <node identifier="n2-auth" elementRef="id-ac-auth" xsi:type="Element" x="480" y="60" w="130" h="55"/>
+          <node identifier="n2-rbac" elementRef="id-ac-rbac" xsi:type="Element" x="630" y="60" w="110" h="55"/>
+        </node>
+
+        <!-- Grouping: Backend APIs -->
+        <node identifier="n2-grp-be" elementRef="id-grp-backend" xsi:type="Element" x="20" y="260" w="740" h="160">
+          <node identifier="n2-order-api" elementRef="id-ac-order-api" xsi:type="Element" x="40" y="300" w="140" h="55"/>
+          <node identifier="n2-dealer-api" elementRef="id-ac-dealer-api" xsi:type="Element" x="210" y="300" w="140" h="55"/>
+          <node identifier="n2-catalog-api" elementRef="id-ac-catalog-api" xsi:type="Element" x="380" y="300" w="140" h="55"/>
+          <node identifier="n2-inventory-api" elementRef="id-ac-inventory-api" xsi:type="Element" x="550" y="300" w="150" h="55"/>
+          <node identifier="n2-notif-svc" elementRef="id-ac-notification-svc" xsi:type="Element" x="40" y="380" w="160" h="55"/>
+          <node identifier="n2-audit" elementRef="id-ac-audit-logger" xsi:type="Element" x="230" y="380" w="150" h="55"/>
+          <node identifier="n2-wf-engine" elementRef="id-ac-workflow-engine" xsi:type="Element" x="410" y="380" w="160" h="55"/>
+          <node identifier="n2-mailer" elementRef="id-ac-mailer" xsi:type="Element" x="600" y="380" w="130" h="55"/>
+        </node>
+
+        <!-- Grouping: Data Layer -->
+        <node identifier="n2-grp-data" elementRef="id-grp-data-layer" xsi:type="Element" x="20" y="460" w="300" h="90">
+          <node identifier="n2-prisma" elementRef="id-ac-prisma" xsi:type="Element" x="40" y="490" w="160" h="55"/>
+        </node>
+
+        <!-- Application Services -->
+        <node identifier="n2-as-auth" elementRef="id-as-auth-svc" xsi:type="Element" x="360" y="490" w="140" h="45"/>
+        <node identifier="n2-as-order" elementRef="id-as-order-mgmt" xsi:type="Element" x="520" y="490" w="150" h="45"/>
+        <node identifier="n2-as-notif" elementRef="id-as-notifications" xsi:type="Element" x="360" y="550" w="150" h="45"/>
+        <node identifier="n2-as-rbac" elementRef="id-as-rbac-svc" xsi:type="Element" x="520" y="550" w="170" h="45"/>
+
+        <!-- Interfaces assigned -->
+        <connection identifier="cn2-a14" relationshipRef="id-rel-a14" source="n2-dealer-portal" target="n2-ai-dealer" xsi:type="Relationship"/>
+        <connection identifier="cn2-a15" relationshipRef="id-rel-a15" source="n2-admin-portal" target="n2-ai-admin" xsi:type="Relationship"/>
+
+        <!-- Auth serves portals -->
+        <connection identifier="cn2-s11" relationshipRef="id-rel-s11" source="n2-auth" target="n2-admin-portal" xsi:type="Relationship"/>
+        <connection identifier="cn2-s12" relationshipRef="id-rel-s12" source="n2-auth" target="n2-dealer-portal" xsi:type="Relationship"/>
+
+        <!-- Workflow serves Order API -->
+        <connection identifier="cn2-s13" relationshipRef="id-rel-s13" source="n2-wf-engine" target="n2-order-api" xsi:type="Relationship"/>
+
+        <!-- Notification serves APIs -->
+        <connection identifier="cn2-s14" relationshipRef="id-rel-s14" source="n2-notif-svc" target="n2-order-api" xsi:type="Relationship"/>
+
+        <!-- Prisma serves APIs -->
+        <connection identifier="cn2-s19" relationshipRef="id-rel-s19" source="n2-prisma" target="n2-order-api" xsi:type="Relationship"/>
+        <connection identifier="cn2-s20" relationshipRef="id-rel-s20" source="n2-prisma" target="n2-dealer-api" xsi:type="Relationship"/>
+        <connection identifier="cn2-s21" relationshipRef="id-rel-s21" source="n2-prisma" target="n2-catalog-api" xsi:type="Relationship"/>
+        <connection identifier="cn2-s22" relationshipRef="id-rel-s22" source="n2-prisma" target="n2-inventory-api" xsi:type="Relationship"/>
+
+        <!-- Application Services realized -->
+        <connection identifier="cn2-r1" relationshipRef="id-rel-r1" source="n2-auth" target="n2-as-auth" xsi:type="Relationship"/>
+        <connection identifier="cn2-r2" relationshipRef="id-rel-r2" source="n2-order-api" target="n2-as-order" xsi:type="Relationship"/>
+        <connection identifier="cn2-r4" relationshipRef="id-rel-r4" source="n2-notif-svc" target="n2-as-notif" xsi:type="Relationship"/>
+        <connection identifier="cn2-r5" relationshipRef="id-rel-r5" source="n2-rbac" target="n2-as-rbac" xsi:type="Relationship"/>
+      </view>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- VIEW 03 — TECHNOLOGY LAYER                                     -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <view identifier="id-view-03" xsi:type="Diagram">
+        <name xml:lang="en">03 - Technology Layer</name>
+        <documentation xml:lang="en">Infrastructure deployment: Vercel hosting, Neon database, Blob storage, SMTP. Application runtime components shown for context.</documentation>
+
+        <!-- Application runtime (top, for context) -->
+        <node identifier="n3-nextjs" elementRef="id-ac-nextjs" xsi:type="Element" x="220" y="30" w="300" h="55"/>
+        <node identifier="n3-prisma" elementRef="id-ac-prisma" xsi:type="Element" x="220" y="110" w="140" h="45"/>
+
+        <!-- Technology Services row -->
+        <node identifier="n3-ts-hosting" elementRef="id-ts-hosting" xsi:type="Element" x="40" y="230" w="160" h="50"/>
+        <node identifier="n3-ts-db" elementRef="id-ts-db" xsi:type="Element" x="240" y="230" w="160" h="50"/>
+        <node identifier="n3-ts-storage" elementRef="id-ts-storage" xsi:type="Element" x="440" y="230" w="160" h="50"/>
+        <node identifier="n3-ts-email" elementRef="id-ts-email" xsi:type="Element" x="640" y="230" w="140" h="50"/>
+
+        <!-- Technology Nodes -->
+        <node identifier="n3-vercel" elementRef="id-tn-vercel" xsi:type="Element" x="20" y="350" w="200" h="110">
+          <node identifier="n3-ss-runtime" elementRef="id-ss-nextjs-runtime" xsi:type="Element" x="40" y="390" w="160" h="45"/>
+        </node>
+        <node identifier="n3-neon" elementRef="id-tn-neon" xsi:type="Element" x="250" y="350" w="180" h="110">
+          <node identifier="n3-ss-postgres" elementRef="id-ss-postgres" xsi:type="Element" x="270" y="390" w="140" h="45"/>
+        </node>
+        <node identifier="n3-blob" elementRef="id-tn-vercel-blob" xsi:type="Element" x="460" y="350" w="180" h="80"/>
+        <node identifier="n3-smtp" elementRef="id-tn-smtp" xsi:type="Element" x="660" y="350" w="150" h="80"/>
+
+        <!-- Tech services realized by nodes -->
+        <connection identifier="cn3-r16" relationshipRef="id-rel-r16" source="n3-vercel" target="n3-ts-hosting" xsi:type="Relationship"/>
+        <connection identifier="cn3-r13" relationshipRef="id-rel-r13" source="n3-neon" target="n3-ts-db" xsi:type="Relationship"/>
+        <connection identifier="cn3-r14" relationshipRef="id-rel-r14" source="n3-blob" target="n3-ts-storage" xsi:type="Relationship"/>
+        <connection identifier="cn3-r15" relationshipRef="id-rel-r15" source="n3-smtp" target="n3-ts-email" xsi:type="Relationship"/>
+
+        <!-- Tech services serve app -->
+        <connection identifier="cn3-s33" relationshipRef="id-rel-s33" source="n3-ts-hosting" target="n3-nextjs" xsi:type="Relationship"/>
+        <connection identifier="cn3-s30" relationshipRef="id-rel-s30" source="n3-ts-db" target="n3-prisma" xsi:type="Relationship"/>
+      </view>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- VIEW 04 — DOMAIN DATA MODEL                                    -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <view identifier="id-view-04" xsi:type="Diagram">
+        <name xml:lang="en">04 - Domain Data Model</name>
+        <documentation xml:lang="en">Key Prisma data objects and their relationships. Reflects PostgreSQL schema on Neon.</documentation>
+
+        <!-- Grouping: Orders domain -->
+        <node identifier="n4-grp-order" elementRef="id-grp-order-domain" xsi:type="Element" x="20" y="20" w="580" h="300">
+          <node identifier="n4-order" elementRef="id-do-order" xsi:type="Element" x="200" y="60" w="140" h="55"/>
+          <node identifier="n4-oh" elementRef="id-do-order-history" xsi:type="Element" x="40" y="160" w="150" h="55"/>
+          <node identifier="n4-om" elementRef="id-do-order-media" xsi:type="Element" x="220" y="160" w="140" h="55"/>
+          <node identifier="n4-obr" elementRef="id-do-order-build-record" xsi:type="Element" x="400" y="160" w="170" h="55"/>
+          <node identifier="n4-pmodel" elementRef="id-do-pool-model" xsi:type="Element" x="40" y="260" w="140" h="55"/>
+          <node identifier="n4-color" elementRef="id-do-color" xsi:type="Element" x="210" y="260" w="120" h="55"/>
+          <node identifier="n4-pstock" elementRef="id-do-pool-stock" xsi:type="Element" x="360" y="260" w="130" h="55"/>
+          <node identifier="n4-pstxn" elementRef="id-do-pool-stock-txn" xsi:type="Element" x="510" y="260" w="70" h="55"/>
+        </node>
+
+        <!-- Grouping: Dealers & Users -->
+        <node identifier="n4-grp-dealer" elementRef="id-grp-dealer-domain" xsi:type="Element" x="620" y="20" w="340" h="300">
+          <node identifier="n4-dealer" elementRef="id-do-dealer" xsi:type="Element" x="640" y="60" w="130" h="55"/>
+          <node identifier="n4-user" elementRef="id-do-user" xsi:type="Element" x="800" y="60" w="130" h="55"/>
+          <node identifier="n4-wfp" elementRef="id-do-workflow-profile" xsi:type="Element" x="640" y="160" w="150" h="55"/>
+          <node identifier="n4-wfreq" elementRef="id-do-workflow-req-template" xsi:type="Element" x="640" y="260" w="190" h="55"/>
+          <node identifier="n4-uma" elementRef="id-do-user-module-access" xsi:type="Element" x="800" y="160" w="140" h="55"/>
+          <node identifier="n4-ufa" elementRef="id-do-user-factory-access" xsi:type="Element" x="800" y="260" w="140" h="55"/>
+        </node>
+
+        <!-- Grouping: Inventory domain -->
+        <node identifier="n4-grp-inv" elementRef="id-grp-inventory-domain" xsi:type="Element" x="20" y="360" w="460" h="220">
+          <node identifier="n4-inv-item" elementRef="id-do-inventory-item" xsi:type="Element" x="40" y="400" w="140" h="55"/>
+          <node identifier="n4-inv-stock" elementRef="id-do-inventory-stock" xsi:type="Element" x="220" y="400" w="140" h="55"/>
+          <node identifier="n4-inv-txn" elementRef="id-do-inventory-txn" xsi:type="Element" x="400" y="400" w="140" h="55"/>
+          <node identifier="n4-reorder" elementRef="id-do-reorder-sheet" xsi:type="Element" x="130" y="500" w="180" h="55"/>
+        </node>
+
+        <!-- Notifications & Audit -->
+        <node identifier="n4-notif" elementRef="id-do-notification" xsi:type="Element" x="500" y="380" w="140" h="55"/>
+        <node identifier="n4-audit" elementRef="id-do-audit-log" xsi:type="Element" x="500" y="460" w="130" h="55"/>
+        <node identifier="n4-factory" elementRef="id-do-factory" xsi:type="Element" x="660" y="380" w="160" h="55"/>
+
+        <!-- Order domain relationships -->
+        <connection identifier="cn4-agg1" relationshipRef="id-rel-agg1" source="n4-order" target="n4-oh" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg2" relationshipRef="id-rel-agg2" source="n4-order" target="n4-om" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg3" relationshipRef="id-rel-agg3" source="n4-order" target="n4-obr" xsi:type="Relationship"/>
+        <connection identifier="cn4-as3" relationshipRef="id-rel-as3" source="n4-order" target="n4-pmodel" xsi:type="Relationship"/>
+        <connection identifier="cn4-as4" relationshipRef="id-rel-as4" source="n4-order" target="n4-color" xsi:type="Relationship"/>
+        <connection identifier="cn4-as5" relationshipRef="id-rel-as5" source="n4-order" target="n4-pstock" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg7" relationshipRef="id-rel-agg7" source="n4-pstock" target="n4-pstxn" xsi:type="Relationship"/>
+
+        <!-- Dealer/User relationships -->
+        <connection identifier="cn4-as1" relationshipRef="id-rel-as1" source="n4-dealer" target="n4-order" xsi:type="Relationship"/>
+        <connection identifier="cn4-as2" relationshipRef="id-rel-as2" source="n4-dealer" target="n4-wfp" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg10" relationshipRef="id-rel-agg10" source="n4-wfp" target="n4-wfreq" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg8" relationshipRef="id-rel-agg8" source="n4-user" target="n4-uma" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg9" relationshipRef="id-rel-agg9" source="n4-user" target="n4-ufa" xsi:type="Relationship"/>
+
+        <!-- Inventory relationships -->
+        <connection identifier="cn4-agg4" relationshipRef="id-rel-agg4" source="n4-inv-item" target="n4-inv-stock" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg5" relationshipRef="id-rel-agg5" source="n4-inv-item" target="n4-inv-txn" xsi:type="Relationship"/>
+        <connection identifier="cn4-agg6" relationshipRef="id-rel-agg6" source="n4-reorder" target="n4-inv-stock" xsi:type="Relationship"/>
+
+        <!-- Notifications / Audit -->
+        <connection identifier="cn4-as6" relationshipRef="id-rel-as6" source="n4-dealer" target="n4-notif" xsi:type="Relationship"/>
+        <connection identifier="cn4-as7" relationshipRef="id-rel-as7" source="n4-order" target="n4-notif" xsi:type="Relationship"/>
+      </view>
+
+    </diagrams>
+  </views>
+
+</model>

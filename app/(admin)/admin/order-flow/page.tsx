@@ -1,11 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   GripVertical,
+  Copy,
+  Pencil,
+  Plus,
   RefreshCw,
   Save,
   RotateCcw,
@@ -26,13 +30,19 @@ type FieldOption = { value: string }
 type ApiPayload = {
   items: RequirementItem[]
   options: {
-    profiles?: Array<{ id: string; slug: string; name: string }>
+    profiles?: Array<{ id: string; slug: string; name: string; dealerCount: number; dealerNames: string[] }>
     statuses: StatusOption[]
     docs: DocOption[]
     fields: FieldOption[]
   }
   selectedProfileId?: string | null
 }
+
+type ProfileManagerState =
+  | { mode: 'create'; title: string; submitLabel: string; defaultName: string; sourceProfileId?: string | null }
+  | { mode: 'duplicate'; title: string; submitLabel: string; defaultName: string; sourceProfileId: string }
+  | { mode: 'rename'; title: string; submitLabel: string; defaultName: string; sourceProfileId: string }
+  | null
 
 function prettyField(field: string) {
   if (field === 'serialNumber') return 'Serial Number'
@@ -50,7 +60,7 @@ export default function AdminOrderFlowRequirementsPage() {
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([])
   const [docOptions, setDocOptions] = useState<DocOption[]>([])
   const [fieldOptions, setFieldOptions] = useState<FieldOption[]>([])
-  const [workflowProfiles, setWorkflowProfiles] = useState<Array<{ id: string; slug: string; name: string }>>([])
+  const [workflowProfiles, setWorkflowProfiles] = useState<Array<{ id: string; slug: string; name: string; dealerCount: number; dealerNames: string[] }>>([])
   const [selectedProfileId, setSelectedProfileId] = useState('')
   const [loading, setLoading] = useState(true)
   const [busyStatus, setBusyStatus] = useState<FlowStatus | null>(null)
@@ -60,11 +70,32 @@ export default function AdminOrderFlowRequirementsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [profileManager, setProfileManager] = useState<ProfileManagerState>(null)
+  const [profileName, setProfileName] = useState('')
+  const [profileBusy, setProfileBusy] = useState(false)
 
   const itemMap = useMemo(
     () => new Map(items.map((item) => [item.status, item] as const)),
     [items]
   )
+  const activeProfile = useMemo(
+    () => workflowProfiles.find((profile) => profile.id === selectedProfileId) || null,
+    [workflowProfiles, selectedProfileId]
+  )
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted || !profileManager) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [mounted, profileManager])
 
   const load = async () => {
     try {
@@ -268,6 +299,71 @@ export default function AdminOrderFlowRequirementsPage() {
     }
   }
 
+  function openProfileManager(state: ProfileManagerState) {
+    setProfileManager(state)
+    setProfileName(state?.defaultName || '')
+    setError(null)
+    setMessage(null)
+  }
+
+  function closeProfileManager() {
+    setProfileManager(null)
+    setProfileName('')
+    setProfileBusy(false)
+  }
+
+  async function submitProfileManager() {
+    if (!profileManager) return
+    try {
+      setProfileBusy(true)
+      setError(null)
+      setMessage(null)
+
+      if (profileManager.mode === 'rename') {
+        const res = await fetch('/api/admin/order-flow/profiles', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profileId: profileManager.sourceProfileId,
+            name: profileName,
+          }),
+        })
+        const payload = (await res.json().catch(() => null)) as
+          | { profile?: { id: string; name: string } ; message?: string }
+          | null
+        if (!res.ok || !payload?.profile) throw new Error(payload?.message || 'Failed to rename profile')
+        setSelectedProfileId(payload.profile.id)
+        setMessage(`Workflow profile renamed to ${payload.profile.name}.`)
+      } else {
+        const res = await fetch('/api/admin/order-flow/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: profileManager.mode,
+            name: profileName,
+            sourceProfileId: profileManager.sourceProfileId || null,
+          }),
+        })
+        const payload = (await res.json().catch(() => null)) as
+          | { profile?: { id: string; name: string }; message?: string }
+          | null
+        if (!res.ok || !payload?.profile) throw new Error(payload?.message || 'Failed to create profile')
+        setSelectedProfileId(payload.profile.id)
+        setMessage(
+          profileManager.mode === 'duplicate'
+            ? `Workflow profile duplicated as ${payload.profile.name}.`
+            : `Workflow profile ${payload.profile.name} created from the global workflow.`
+        )
+      }
+
+      closeProfileManager()
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save workflow profile')
+      setProfileBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-white bg-white/70 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,122,153,0.12)] p-6">
@@ -295,12 +391,121 @@ export default function AdminOrderFlowRequirementsPage() {
               ))}
             </select>
             <button
+              onClick={() =>
+                openProfileManager({
+                  mode: 'create',
+                  title: 'Create Workflow Profile',
+                  submitLabel: 'Create Profile',
+                  defaultName: 'New Workflow Profile',
+                })
+              }
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold"
+            >
+              <Plus size={16} />
+              New Profile
+            </button>
+            {activeProfile ? (
+              <>
+                <button
+                  onClick={() =>
+                    openProfileManager({
+                      mode: 'duplicate',
+                      title: 'Duplicate Workflow Profile',
+                      submitLabel: 'Duplicate Profile',
+                      defaultName: `${activeProfile.name} Copy`,
+                      sourceProfileId: activeProfile.id,
+                    })
+                  }
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                >
+                  <Copy size={16} />
+                  Duplicate
+                </button>
+                <button
+                  onClick={() =>
+                    openProfileManager({
+                      mode: 'rename',
+                      title: 'Rename Workflow Profile',
+                      submitLabel: 'Rename Profile',
+                      defaultName: activeProfile.name,
+                      sourceProfileId: activeProfile.id,
+                    })
+                  }
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
+                >
+                  <Pencil size={16} />
+                  Rename
+                </button>
+              </>
+            ) : null}
+            <button
               onClick={() => void load()}
               className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-semibold"
             >
               <RefreshCw size={16} />
               Refresh
             </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Editing Context
+            </div>
+            {activeProfile ? (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="text-lg font-black text-slate-900">{activeProfile.name}</div>
+                  <div className="text-sm text-slate-600">
+                    Dealer-specific workflow profile. Changes here affect only dealers assigned to this profile.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900">
+                    {activeProfile.dealerCount} assigned dealer{activeProfile.dealerCount === 1 ? '' : 's'}
+                  </span>
+                  <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                    Profile slug: {activeProfile.slug}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="text-lg font-black text-slate-900">Global Default Workflow</div>
+                <div className="text-sm text-slate-600">
+                  Changes here apply to all dealers that are not assigned to a dealer-specific workflow profile.
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Assigned Dealers
+            </div>
+            {activeProfile ? (
+              activeProfile.dealerNames.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {activeProfile.dealerNames.map((dealerName) => (
+                    <span
+                      key={dealerName}
+                      className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-900"
+                    >
+                      {dealerName}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 text-sm text-amber-700">
+                  No dealers are currently assigned to this profile. You can assign them from Admin &gt; Dealers.
+                </div>
+              )
+            ) : (
+              <div className="mt-3 text-sm text-slate-600">
+                The global workflow is used automatically whenever a dealer does not have a specific workflow profile assigned.
+              </div>
+            )}
           </div>
         </div>
 
@@ -526,6 +731,50 @@ export default function AdminOrderFlowRequirementsPage() {
           </div>
         </div>
       )}
+
+      {mounted && profileManager
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+                <h2 className="text-2xl font-black text-slate-900">{profileManager.title}</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  {profileManager.mode === 'create'
+                    ? 'This will create a new workflow profile using the current global workflow as its starting point.'
+                    : profileManager.mode === 'duplicate'
+                    ? 'This will create a new profile by copying the currently selected dealer-specific workflow.'
+                    : 'This only changes the visible profile name. The internal slug stays stable.'}
+                </p>
+
+                <div className="mt-5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Profile Name</label>
+                  <input
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                    placeholder="Enter profile name"
+                  />
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    onClick={closeProfileManager}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void submitProfileManager()}
+                    disabled={profileBusy || !profileName.trim()}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
+                  >
+                    {profileBusy ? 'Saving…' : profileManager.submitLabel}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
