@@ -63,6 +63,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         fileUrl: true,
         type: true, // MediaType (photo/proof/update/note)
         docType: true, // OrderDocType (WARRANTY/MANUAL/etc)
+        documentDefinition: {
+          select: {
+            key: true,
+          },
+        },
         uploadedAt: true,
         uploadedByUserId: true,
         uploadedByRole: true,
@@ -90,7 +95,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         id: item.id,
         fileUrl: item.fileUrl,
         type: item.type,
-        docType: item.docType,
+        docType: item.documentDefinition?.key ?? item.docType,
         uploadedAt: item.uploadedAt,
         uploadedByRole: resolvedRole,
         uploadedByDisplayName: resolvedDisplayName,

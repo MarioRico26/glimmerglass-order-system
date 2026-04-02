@@ -24,7 +24,16 @@ type RequirementItem = {
 }
 
 type StatusOption = { value: FlowStatus; label: string }
-type DocOption = { value: string; label: string; sortOrder?: number; source?: 'default' | 'custom' }
+type DocOption = {
+  id: string
+  value: string
+  key: string
+  label: string
+  sortOrder?: number
+  source?: 'legacy' | 'custom'
+  legacyDocType?: string | null
+  visibleToDealerDefault?: boolean
+}
 type FieldOption = { value: string }
 
 type ApiPayload = {
@@ -42,6 +51,10 @@ type ProfileManagerState =
   | { mode: 'create'; title: string; submitLabel: string; defaultName: string; sourceProfileId?: string | null }
   | { mode: 'duplicate'; title: string; submitLabel: string; defaultName: string; sourceProfileId: string }
   | { mode: 'rename'; title: string; submitLabel: string; defaultName: string; sourceProfileId: string }
+  | null
+
+type DocumentManagerState =
+  | { title: string; submitLabel: string }
   | null
 
 function prettyField(field: string) {
@@ -74,6 +87,10 @@ export default function AdminOrderFlowRequirementsPage() {
   const [profileManager, setProfileManager] = useState<ProfileManagerState>(null)
   const [profileName, setProfileName] = useState('')
   const [profileBusy, setProfileBusy] = useState(false)
+  const [documentManager, setDocumentManager] = useState<DocumentManagerState>(null)
+  const [documentLabel, setDocumentLabel] = useState('')
+  const [documentVisibleToDealer, setDocumentVisibleToDealer] = useState(true)
+  const [documentBusy, setDocumentBusy] = useState(false)
 
   const itemMap = useMemo(
     () => new Map(items.map((item) => [item.status, item] as const)),
@@ -89,13 +106,13 @@ export default function AdminOrderFlowRequirementsPage() {
   }, [])
 
   useEffect(() => {
-    if (!mounted || !profileManager) return
+    if (!mounted || (!profileManager && !documentManager)) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [mounted, profileManager])
+  }, [mounted, profileManager, documentManager])
 
   const load = async () => {
     try {
@@ -167,6 +184,12 @@ export default function AdminOrderFlowRequirementsPage() {
   function updateDocLabel(docType: string, label: string) {
     setDocOptions((prev) =>
       prev.map((doc) => (doc.value === docType ? { ...doc, label } : doc))
+    )
+  }
+
+  function updateDocVisibility(docType: string, visibleToDealerDefault: boolean) {
+    setDocOptions((prev) =>
+      prev.map((doc) => (doc.value === docType ? { ...doc, visibleToDealerDefault } : doc))
     )
   }
 
@@ -261,19 +284,23 @@ export default function AdminOrderFlowRequirementsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           docs: docOptions.map((doc) => ({
-            docType: doc.value,
+            key: doc.value,
             label: doc.label,
             sortOrder: doc.sortOrder ?? 0,
+            visibleToDealerDefault: doc.visibleToDealerDefault ?? true,
           })),
         }),
       })
       const payload = (await res.json().catch(() => null)) as
         | {
             items?: Array<{
-              docType: string
+              id: string
+              key: string
               label: string
               sortOrder?: number
-              source?: 'default' | 'custom'
+              source?: 'legacy' | 'custom'
+              legacyDocType?: string | null
+              visibleToDealerDefault?: boolean
             }>
             message?: string
           }
@@ -285,10 +312,14 @@ export default function AdminOrderFlowRequirementsPage() {
 
       setDocOptions(
         payload.items.map((item) => ({
-          value: item.docType,
+          id: item.id,
+          value: item.key,
+          key: item.key,
           label: item.label,
           sortOrder: item.sortOrder,
           source: item.source,
+          legacyDocType: item.legacyDocType,
+          visibleToDealerDefault: item.visibleToDealerDefault,
         }))
       )
       setMessage('Document labels saved.')
@@ -310,6 +341,24 @@ export default function AdminOrderFlowRequirementsPage() {
     setProfileManager(null)
     setProfileName('')
     setProfileBusy(false)
+  }
+
+  function openDocumentManager() {
+    setDocumentManager({
+      title: 'Create Workflow Document',
+      submitLabel: 'Create Document',
+    })
+    setDocumentLabel('')
+    setDocumentVisibleToDealer(true)
+    setError(null)
+    setMessage(null)
+  }
+
+  function closeDocumentManager() {
+    setDocumentManager(null)
+    setDocumentLabel('')
+    setDocumentVisibleToDealer(true)
+    setDocumentBusy(false)
   }
 
   async function submitProfileManager() {
@@ -361,6 +410,60 @@ export default function AdminOrderFlowRequirementsPage() {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save workflow profile')
       setProfileBusy(false)
+    }
+  }
+
+  async function submitDocumentManager() {
+    if (!documentManager) return
+    try {
+      setDocumentBusy(true)
+      setError(null)
+      setMessage(null)
+
+      const res = await fetch('/api/admin/order-flow/requirements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: documentLabel,
+          visibleToDealerDefault: documentVisibleToDealer,
+        }),
+      })
+
+      const payload = (await res.json().catch(() => null)) as
+        | {
+            id?: string
+            key?: string
+            label?: string
+            sortOrder?: number
+            source?: 'legacy' | 'custom'
+            legacyDocType?: string | null
+            visibleToDealerDefault?: boolean
+            message?: string
+          }
+        | null
+
+      if (!res.ok || !payload?.id || !payload?.key) {
+        throw new Error(payload?.message || 'Failed to create workflow document')
+      }
+
+      const nextDoc: DocOption = {
+        id: payload.id,
+        key: payload.key,
+        value: payload.key,
+        label: payload.label || documentLabel.trim(),
+        sortOrder: payload.sortOrder,
+        source: payload.source,
+        legacyDocType: payload.legacyDocType,
+        visibleToDealerDefault: payload.visibleToDealerDefault,
+      }
+
+      setDocOptions((prev) => [...prev, nextDoc].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)))
+      setDocLabelsOpen(true)
+      setMessage(`Workflow document ${nextDoc.label} created.`)
+      closeDocumentManager()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create workflow document')
+      setDocumentBusy(false)
     }
   }
 
@@ -566,7 +669,14 @@ export default function AdminOrderFlowRequirementsPage() {
 
             {docLabelsOpen ? (
               <div className="mt-4">
-                <div className="mb-4 flex justify-end">
+                <div className="mb-4 flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={openDocumentManager}
+                    className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                  >
+                    <Plus size={16} />
+                    New Document
+                  </button>
                   <button
                     onClick={() => void saveDocLabels()}
                     disabled={savingLabels}
@@ -614,8 +724,26 @@ export default function AdminOrderFlowRequirementsPage() {
                       <div className="mt-2 text-[11px] text-slate-500">
                         Order: <span className="font-semibold">{doc.sortOrder ?? 0}</span>
                       </div>
+                      <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                        <span>
+                          Source:{' '}
+                          <span className="font-semibold uppercase">{doc.source || 'default'}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateDocVisibility(doc.value, !(doc.visibleToDealerDefault ?? true))}
+                          className={[
+                            'rounded-full border px-2 py-1 font-semibold',
+                            doc.visibleToDealerDefault ?? true
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : 'border-slate-200 bg-white text-slate-600',
+                          ].join(' ')}
+                        >
+                          {doc.visibleToDealerDefault ?? true ? 'Dealer default on' : 'Dealer default off'}
+                        </button>
+                      </div>
                       <div className="mt-1 text-[11px] text-slate-500">
-                        Source: <span className="font-semibold uppercase">{doc.source || 'default'}</span>
+                        Internal key: <span className="font-semibold">{doc.key}</span>
                       </div>
                     </label>
                   ))}
@@ -768,6 +896,65 @@ export default function AdminOrderFlowRequirementsPage() {
                     className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
                   >
                     {profileBusy ? 'Saving…' : profileManager.submitLabel}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {mounted && documentManager
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+                <h2 className="text-2xl font-black text-slate-900">{documentManager.title}</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  This creates a real workflow document definition that can be assigned to workflow stages and used in upload media immediately.
+                </p>
+
+                <div className="mt-5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Document Label</label>
+                  <input
+                    value={documentLabel}
+                    onChange={(e) => setDocumentLabel(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                    placeholder="Example: Final QA Photos"
+                  />
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">Dealer visibility default</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This only sets the default for new uploads. Admin can still override visibility file by file.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentVisibleToDealer((prev) => !prev)}
+                    className={[
+                      'mt-3 rounded-full border px-3 py-2 text-sm font-semibold',
+                      documentVisibleToDealer
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-white text-slate-700',
+                    ].join(' ')}
+                  >
+                    {documentVisibleToDealer ? 'Visible to dealer by default' : 'Internal only by default'}
+                  </button>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    onClick={closeDocumentManager}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void submitDocumentManager()}
+                    disabled={documentBusy || !documentLabel.trim()}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
+                  >
+                    {documentBusy ? 'Saving…' : documentManager.submitLabel}
                   </button>
                 </div>
               </div>

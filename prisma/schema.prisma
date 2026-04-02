@@ -146,6 +146,9 @@ model OrderMedia {
   type       MediaType
   uploadedAt DateTime  @default(now())
 
+  documentDefinitionId String?
+  documentDefinition   WorkflowDocumentDefinition? @relation(fields: [documentDefinitionId], references: [id], onDelete: SetNull)
+
   uploadedByUserId   String?
   uploadedByUser     User?         @relation("OrderMediaUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
   uploadedByRole     Role?
@@ -156,6 +159,7 @@ model OrderMedia {
   visibleToDealer Boolean       @default(true)
 
   @@index([uploadedByUserId])
+  @@index([documentDefinitionId])
 }
 
 model OrderBuildRecord {
@@ -214,6 +218,7 @@ model WorkflowProfile {
 
   dealers              Dealer[]
   requirementTemplates WorkflowProfileRequirementTemplate[]
+  requirementDocuments WorkflowProfileRequirementDocument[]
 }
 
 model WorkflowProfileRequirementTemplate {
@@ -237,6 +242,47 @@ model WorkflowDocConfig {
   sortOrder Int          @default(0)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+}
+
+model WorkflowDocumentDefinition {
+  id                     String      @id @default(uuid())
+  key                    String      @unique
+  label                  String
+  active                 Boolean     @default(true)
+  sortOrder              Int         @default(0)
+  legacyDocType          OrderDocType? @unique
+  visibleToDealerDefault Boolean     @default(true)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  media               OrderMedia[]
+  defaultRequirements OrderStatusRequirementDocument[]
+  profileRequirements WorkflowProfileRequirementDocument[]
+}
+
+model OrderStatusRequirementDocument {
+  id                   String                    @id @default(uuid())
+  status               OrderStatus
+  documentDefinitionId String
+  documentDefinition   WorkflowDocumentDefinition @relation(fields: [documentDefinitionId], references: [id], onDelete: Cascade)
+  createdAt            DateTime                  @default(now())
+
+  @@unique([status, documentDefinitionId])
+  @@index([documentDefinitionId])
+}
+
+model WorkflowProfileRequirementDocument {
+  id                   String                    @id @default(uuid())
+  workflowProfileId    String
+  workflowProfile      WorkflowProfile           @relation(fields: [workflowProfileId], references: [id], onDelete: Cascade)
+  status               OrderStatus
+  documentDefinitionId String
+  documentDefinition   WorkflowDocumentDefinition @relation(fields: [documentDefinitionId], references: [id], onDelete: Cascade)
+  createdAt            DateTime                  @default(now())
+
+  @@unique([workflowProfileId, status, documentDefinitionId])
+  @@index([workflowProfileId])
+  @@index([documentDefinitionId])
 }
 
 model PoolModel {

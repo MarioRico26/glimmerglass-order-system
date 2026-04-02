@@ -5,8 +5,7 @@ export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/requireRole'
-import { OrderDocType } from '@prisma/client'
-import { getStatusRequirements } from '@/lib/orderRequirements'
+import { getStatusRequirements, listPresentOrderDocumentKeys } from '@/lib/orderRequirements'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -42,19 +41,12 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
 
     const requirements = await getStatusRequirements('IN_PRODUCTION', order.dealer?.workflowProfileId ?? null)
 
-    const media = await prisma.orderMedia.findMany({
-      where: { orderId: id, docType: { in: requirements.requiredDocs } },
-      select: { docType: true },
-    })
-
-    const present = new Set(media.map((m) => m.docType).filter(Boolean) as OrderDocType[])
+    const present = await listPresentOrderDocumentKeys(id)
     if (order.paymentProofUrl) {
       present.add('PROOF_OF_PAYMENT')
     }
 
-    const missingDocs = requirements.requiredDocs.filter((d) =>
-      !present.has(d as unknown as OrderDocType)
-    )
+    const missingDocs = requirements.requiredDocs.filter((d) => !present.has(d))
 
     const missingFields: string[] = []
     for (const f of requirements.requiredFields) {

@@ -2,40 +2,35 @@ import type { OrderDocType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { DOC_TYPE_LABELS, WORKFLOW_DOC_OPTIONS, type OrderDocTypeKey } from '@/lib/orderFlow'
 
-type DbClient = Pick<typeof prisma, 'workflowDocConfig'>
+type DbClient = Pick<typeof prisma, 'workflowDocumentDefinition' | '$transaction'>
 
-export type WorkflowDocConfigItem = {
-  docType: OrderDocTypeKey
+export type WorkflowDocDefinitionItem = {
+  id: string
+  key: string
   label: string
   sortOrder: number
-  source: 'default' | 'custom'
+  source: 'legacy' | 'custom'
+  legacyDocType: OrderDocTypeKey | null
+  active: boolean
+  visibleToDealerDefault: boolean
 }
 
-const validDocSet = new Set<OrderDocTypeKey>(WORKFLOW_DOC_OPTIONS)
-
-export const DEFAULT_WORKFLOW_DOC_LABELS: Record<OrderDocTypeKey, string> = WORKFLOW_DOC_OPTIONS.reduce(
-  (acc, docType) => {
-    acc[docType] = DOC_TYPE_LABELS[docType] || docType.replaceAll('_', ' ')
-    return acc
-  },
-  {} as Record<OrderDocTypeKey, string>
-)
-
-export const DEFAULT_WORKFLOW_DOC_ORDER: Record<OrderDocTypeKey, number> = WORKFLOW_DOC_OPTIONS.reduce(
-  (acc, docType, index) => {
-    acc[docType] = index
-    return acc
-  },
-  {} as Record<OrderDocTypeKey, number>
-)
-
-function isKnownDocType(value: string): value is OrderDocTypeKey {
-  return validDocSet.has(value as OrderDocTypeKey)
-}
+const LEGACY_DOC_DEFINITIONS = WORKFLOW_DOC_OPTIONS.map((docType, index) => ({
+  id: `docdef-${docType.toLowerCase().replaceAll('_', '-')}`,
+  key: docType,
+  label: DOC_TYPE_LABELS[docType] || docType.replaceAll('_', ' '),
+  sortOrder: index,
+  legacyDocType: docType,
+  visibleToDealerDefault: true,
+}))
 
 function sanitizeLabel(value: unknown) {
   if (typeof value !== 'string') return ''
   return value.trim().replace(/\s+/g, ' ').slice(0, 120)
+}
+
+function normalizeLabelKey(value: string) {
+  return sanitizeLabel(value).toLowerCase()
 }
 
 function sanitizeSortOrder(value: unknown, fallback: number) {
@@ -49,101 +44,189 @@ function isMissingTableError(error: unknown) {
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    ((error as { code?: string }).code === 'P2021' ||
-      (error as { code?: string }).code === 'P2022')
+    ((error as { code?: string }).code === 'P2021' || (error as { code?: string }).code === 'P2022')
   )
 }
 
-async function readCustomLabels(db: DbClient = prisma) {
-  try {
-    const rows = await db.workflowDocConfig.findMany({
-      select: { docType: true, label: true, sortOrder: true },
-      orderBy: [{ sortOrder: 'asc' }, { docType: 'asc' }],
-    })
+function slugifyKey(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60)
+}
 
-    return rows
-      .filter((row) => isKnownDocType(row.docType))
-      .map((row) => ({
-        docType: row.docType as OrderDocTypeKey,
-        label: sanitizeLabel(row.label),
-        sortOrder: sanitizeSortOrder(row.sortOrder, DEFAULT_WORKFLOW_DOC_ORDER[row.docType as OrderDocTypeKey]),
-      }))
-      .filter((row) => row.label.length > 0)
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      return []
-    }
-    throw error
+async function uniqueCustomDocumentKey(baseLabel: string, db: DbClient) {
+  const base = slugifyKey(baseLabel) || 'custom_document'
+  let attempt = 0
+  while (attempt < 100) {
+    const key = attempt === 0 ? base : `${base}_${attempt + 1}`
+    const existing = await db.workflowDocumentDefinition.findUnique({
+      where: { key },
+      select: { id: true },
+    })
+    if (!existing) return key
+    attempt += 1
+  }
+  throw new Error('Could not generate a unique document key')
+}
+
+function fromDb(item: {
+  id: string
+  key: string
+  label: string
+  sortOrder: number
+  legacyDocType: OrderDocType | null
+  active: boolean
+  visibleToDealerDefault: boolean
+}): WorkflowDocDefinitionItem {
+  return {
+    id: item.id,
+    key: item.key,
+    label: item.label,
+    sortOrder: item.sortOrder,
+    source: item.legacyDocType ? 'legacy' : 'custom',
+    legacyDocType: (item.legacyDocType as OrderDocTypeKey | null) ?? null,
+    active: item.active,
+    visibleToDealerDefault: item.visibleToDealerDefault,
   }
 }
 
-export async function listWorkflowDocConfigs(db: DbClient = prisma): Promise<WorkflowDocConfigItem[]> {
-  const customRows = await readCustomLabels(db)
-  const customMap = new Map(customRows.map((row) => [row.docType, row] as const))
-
-  return WORKFLOW_DOC_OPTIONS.map((docType) => ({
-    docType,
-    label: customMap.get(docType)?.label || DEFAULT_WORKFLOW_DOC_LABELS[docType],
-    sortOrder: customMap.get(docType)?.sortOrder ?? DEFAULT_WORKFLOW_DOC_ORDER[docType],
-    source: customMap.has(docType) ? 'custom' : 'default',
-  })).sort((a, b) => a.sortOrder - b.sortOrder || a.docType.localeCompare(b.docType))
+export async function listWorkflowDocConfigs(db: DbClient = prisma): Promise<WorkflowDocDefinitionItem[]> {
+  try {
+    const rows = await db.workflowDocumentDefinition.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      select: {
+        id: true,
+        key: true,
+        label: true,
+        sortOrder: true,
+        legacyDocType: true,
+        active: true,
+        visibleToDealerDefault: true,
+      },
+    })
+    return rows.map(fromDb)
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      return LEGACY_DOC_DEFINITIONS.map((item) => ({ ...item, source: 'legacy' as const, active: true }))
+    }
+    throw error
+  }
 }
 
 export async function getWorkflowDocLabelMap(db: DbClient = prisma) {
   const items = await listWorkflowDocConfigs(db)
   return items.reduce(
     (acc, item) => {
-      acc[item.docType] = item.label
+      acc[item.key] = item.label
+      if (item.legacyDocType) acc[item.legacyDocType] = item.label
       return acc
     },
-    {} as Record<OrderDocTypeKey, string>
+    {} as Record<string, string>
   )
 }
 
-export async function upsertWorkflowDocLabels(
-  entries: Array<{ docType?: unknown; label?: unknown; sortOrder?: unknown }>,
+export async function getWorkflowDocDefinitionMap(db: DbClient = prisma) {
+  const items = await listWorkflowDocConfigs(db)
+  return items.reduce(
+    (acc, item) => {
+      acc[item.key] = item
+      if (item.legacyDocType) acc[item.legacyDocType] = item
+      return acc
+    },
+    {} as Record<string, WorkflowDocDefinitionItem>
+  )
+}
+
+export async function createWorkflowDocumentDefinition(
+  input: { label?: unknown; visibleToDealerDefault?: unknown },
   db: DbClient = prisma
-): Promise<WorkflowDocConfigItem[]> {
+) {
+  const label = sanitizeLabel(input.label)
+  if (!label) {
+    throw new Error('Document label is required')
+  }
+
+  const existingItems = await listWorkflowDocConfigs(db)
+  if (existingItems.some((item) => normalizeLabelKey(item.label) === normalizeLabelKey(label))) {
+    throw new Error('A workflow document with that label already exists')
+  }
+  const key = await uniqueCustomDocumentKey(label, db)
+  const sortOrder = existingItems.length
+
+  const created = await db.workflowDocumentDefinition.create({
+    data: {
+      key,
+      label,
+      sortOrder,
+      visibleToDealerDefault:
+        typeof input.visibleToDealerDefault === 'boolean' ? input.visibleToDealerDefault : true,
+    },
+    select: {
+      id: true,
+      key: true,
+      label: true,
+      sortOrder: true,
+      legacyDocType: true,
+      active: true,
+      visibleToDealerDefault: true,
+    },
+  })
+
+  return fromDb(created)
+}
+
+export async function upsertWorkflowDocLabels(
+  entries: Array<{ key?: unknown; docType?: unknown; label?: unknown; sortOrder?: unknown; active?: unknown; visibleToDealerDefault?: unknown }>,
+  db: DbClient = prisma
+): Promise<WorkflowDocDefinitionItem[]> {
+  const current = await listWorkflowDocConfigs(db)
+  const currentMap = new Map(current.map((item) => [item.key, item] as const))
+
   const normalized = entries
     .map((entry, index) => {
-      const docType = typeof entry?.docType === 'string' ? entry.docType : ''
+      const keyRaw = typeof entry?.key === 'string' ? entry.key : typeof entry?.docType === 'string' ? entry.docType : ''
+      const key = keyRaw.trim()
       const label = sanitizeLabel(entry?.label)
       const sortOrder = sanitizeSortOrder(entry?.sortOrder, index)
-      return { docType, label, sortOrder }
+      const active = typeof entry?.active === 'boolean' ? entry.active : true
+      const visibleToDealerDefault =
+        typeof entry?.visibleToDealerDefault === 'boolean'
+          ? entry.visibleToDealerDefault
+          : currentMap.get(key)?.visibleToDealerDefault ?? true
+      return { key, label, sortOrder, active, visibleToDealerDefault }
     })
-    .filter((entry) => isKnownDocType(entry.docType) && entry.label.length > 0) as Array<{
-    docType: OrderDocTypeKey
-    label: string
-    sortOrder: number
-  }>
+    .filter((entry) => entry.key && entry.label)
 
   if (normalized.length === 0) {
     throw new Error('No valid document labels provided')
   }
 
-  try {
-    await prisma.$transaction(
-      normalized.map((entry) =>
-        db.workflowDocConfig.upsert({
-          where: { docType: entry.docType as OrderDocType },
-          create: {
-            docType: entry.docType as OrderDocType,
-            label: entry.label,
-            sortOrder: entry.sortOrder,
-          },
-          update: {
-            label: entry.label,
-            sortOrder: entry.sortOrder,
-          },
-        })
-      )
-    )
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new Error('Workflow document config table is not available yet. Run the Prisma migration first.')
-    }
-    throw error
+  const duplicateLabels = normalized.reduce((acc, entry) => {
+    const labelKey = normalizeLabelKey(entry.label)
+    acc[labelKey] = (acc[labelKey] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  if (Object.values(duplicateLabels).some((count) => count > 1)) {
+    throw new Error('Document labels must stay unique')
   }
+
+  await db.$transaction(
+    normalized.map((entry) =>
+      db.workflowDocumentDefinition.update({
+        where: { key: entry.key },
+        data: {
+          label: entry.label,
+          sortOrder: entry.sortOrder,
+          active: entry.active,
+          visibleToDealerDefault: entry.visibleToDealerDefault,
+        },
+      })
+    )
+  )
 
   return listWorkflowDocConfigs(db)
 }

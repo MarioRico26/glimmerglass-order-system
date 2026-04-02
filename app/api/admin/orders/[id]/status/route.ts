@@ -6,15 +6,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import { Role, OrderDocType, type OrderStatus } from '@prisma/client'
-import { getStatusRequirements } from '@/lib/orderRequirements'
+import { Role, type OrderStatus } from '@prisma/client'
+import {
+  getStatusRequirements,
+  listPresentOrderDocumentKeys,
+  type RequirementDocKey,
+} from '@/lib/orderRequirements'
 
 import {
   FLOW_ORDER,
   labelOrderStatus,
   normalizeOrderStatus,
   type FlowStatus,
-  type OrderDocTypeKey,
   type RequirementFieldKey,
 } from '@/lib/orderFlow'
 import { formatDateOnlyForInput } from '@/lib/dateOnly'
@@ -224,9 +227,9 @@ async function getOrderSummary(orderId: string) {
 type MissingCheckInput = { serialNumber?: string | null }
 type MissingOk = {
   ok: true
-  requiredDocs: OrderDocTypeKey[]
+  requiredDocs: RequirementDocKey[]
   requiredFields: RequirementFieldKey[]
-  missingDocs: OrderDocTypeKey[]
+  missingDocs: RequirementDocKey[]
   missingFields: string[]
 }
 type MissingNotFound = { ok: false; notFound: true }
@@ -269,23 +272,14 @@ async function getMissingForTarget(
     }
   }
 
-  const media = needDocs.length
-    ? await prisma.orderMedia.findMany({
-        where: { orderId, docType: { in: needDocs as unknown as OrderDocType[] } },
-        select: { docType: true },
-      })
-    : ([] as Array<{ docType: OrderDocType | null }>)
-
-  const present = new Set(
-    media.map((m) => m.docType).filter(Boolean) as OrderDocType[]
-  )
+  const present = needDocs.length ? await listPresentOrderDocumentKeys(orderId) : new Set<string>()
 
   // If a legacy payment proof URL exists on the order, treat PROOF_OF_PAYMENT as satisfied.
   if (order.paymentProofUrl) {
     present.add('PROOF_OF_PAYMENT')
   }
 
-  const missingDocs = needDocs.filter((d) => !present.has(d as unknown as OrderDocType))
+  const missingDocs = needDocs.filter((d) => !present.has(d))
 
   const hasSerialOverride = input?.serialNumber !== undefined
   const serialForValidation = hasSerialOverride

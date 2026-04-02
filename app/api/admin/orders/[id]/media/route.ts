@@ -62,6 +62,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         fileUrl: true,
         type: true,
         docType: true,
+        documentDefinition: {
+          select: {
+            key: true,
+          },
+        },
         visibleToDealer: true,
         uploadedAt: true,
         uploadedByUserId: true,
@@ -88,7 +93,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: item.id,
         fileUrl: item.fileUrl,
         type: item.type,
-        docType: item.docType,
+        docType: item.documentDefinition?.key ?? item.docType,
         visibleToDealer: item.visibleToDealer,
         uploadedAt: item.uploadedAt,
         uploadedByRole: resolvedRole,
@@ -123,18 +128,32 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
 
     // ✅ IMPORTANT: this is the business category you care about
-    const docTypeRaw = (form.get('docType')?.toString() || '').trim()
-    const validDocTypes = new Set(Object.values(OrderDocType))
-    if (docTypeRaw && !validDocTypes.has(docTypeRaw as OrderDocType)) {
+    const documentKeyRaw = (form.get('documentKey')?.toString() || form.get('docType')?.toString() || '').trim()
+    if (!documentKeyRaw) {
       return NextResponse.json(
-        { message: 'Invalid docType' },
+        { message: 'Document selection is required' },
         { status: 400, headers: { 'Cache-Control': 'no-store' } }
       )
     }
-    const docType = docTypeRaw ? (docTypeRaw as OrderDocType) : null
+    const documentDefinition = await prisma.workflowDocumentDefinition.findUnique({
+      where: { key: documentKeyRaw },
+      select: {
+        id: true,
+        key: true,
+        legacyDocType: true,
+        visibleToDealerDefault: true,
+      },
+    })
+    if (!documentDefinition) {
+      return NextResponse.json(
+        { message: 'Invalid document type' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+    const docType = documentDefinition.legacyDocType ? (documentDefinition.legacyDocType as OrderDocType) : null
 
     // ✅ dealer visibility
-    const visibleToDealer = toBool(form.get('visibleToDealer'), true)
+    const visibleToDealer = toBool(form.get('visibleToDealer'), documentDefinition.visibleToDealerDefault)
 
     const uploader =
       session.user.email
@@ -163,7 +182,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         orderId,
         fileUrl: url,
         type: toMediaTypeFromMime(file.type), // technical type
-        docType,                               // business type
+        docType,                               // legacy business type when applicable
+        documentDefinitionId: documentDefinition.id,
         visibleToDealer,
         uploadedByUserId: uploader?.id ?? null,
         uploadedByRole,
@@ -175,6 +195,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         fileUrl: true,
         type: true,
         docType: true,
+        documentDefinition: {
+          select: {
+            key: true,
+          },
+        },
         visibleToDealer: true,
         uploadedAt: true,
         uploadedByRole: true,
@@ -183,7 +208,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       },
     })
 
-    return NextResponse.json(media, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json(
+      {
+        ...media,
+        docType: media.documentDefinition?.key ?? media.docType,
+      },
+      { status: 201, headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (e) {
     console.error('POST /orders/[id]/media error:', e)
     return NextResponse.json({ message: 'Internal server error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })

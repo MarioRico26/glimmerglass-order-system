@@ -6,7 +6,6 @@ import { AdminModule } from '@prisma/client'
 import {
   REQUIREMENT_FIELD_KEYS,
   STATUS_LABELS,
-  WORKFLOW_DOC_OPTIONS,
   type FlowStatus,
 } from '@/lib/orderFlow'
 import {
@@ -19,7 +18,11 @@ import {
   sanitizeRequirementFields,
   upsertStatusRequirements,
 } from '@/lib/orderRequirements'
-import { listWorkflowDocConfigs, upsertWorkflowDocLabels } from '@/lib/workflowDocConfig'
+import {
+  createWorkflowDocumentDefinition,
+  listWorkflowDocConfigs,
+  upsertWorkflowDocLabels,
+} from '@/lib/workflowDocConfig'
 import { requireAdminAccess } from '@/lib/adminAccess'
 
 function json(message: string, status = 400, extra?: Record<string, unknown>) {
@@ -31,7 +34,6 @@ function json(message: string, status = 400, extra?: Record<string, unknown>) {
 
 async function optionsPayload() {
   const docConfigs = await listWorkflowDocConfigs()
-  const docMap = new Map(docConfigs.map((item) => [item.docType, item] as const))
   const profiles = await listWorkflowProfiles()
 
   return {
@@ -46,11 +48,15 @@ async function optionsPayload() {
       value: status,
       label: STATUS_LABELS[status as FlowStatus] || status.replaceAll('_', ' '),
     })),
-    docs: WORKFLOW_DOC_OPTIONS.map((d) => ({
-      value: d,
-      label: docMap.get(d)?.label || d,
-      sortOrder: docMap.get(d)?.sortOrder ?? 0,
-      source: docMap.get(d)?.source || 'default',
+    docs: docConfigs.map((d) => ({
+      id: d.id,
+      value: d.key,
+      key: d.key,
+      label: d.label,
+      sortOrder: d.sortOrder ?? 0,
+      source: d.source,
+      legacyDocType: d.legacyDocType,
+      visibleToDealerDefault: d.visibleToDealerDefault,
     })),
     fields: REQUIREMENT_FIELD_KEYS.map((f) => ({ value: f })),
   }
@@ -77,7 +83,15 @@ export async function PATCH(req: NextRequest) {
     await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
 
     const body = (await req.json().catch(() => null)) as
-      | { docs?: Array<{ docType?: unknown; label?: unknown; sortOrder?: unknown }> }
+      | {
+          docs?: Array<{
+            key?: unknown
+            docType?: unknown
+            label?: unknown
+            sortOrder?: unknown
+            visibleToDealerDefault?: unknown
+          }>
+        }
       | null
 
     const docs = Array.isArray(body?.docs) ? body.docs : []
@@ -85,6 +99,26 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ items }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('PATCH /api/admin/order-flow/requirements error:', e)
+    return json(e instanceof Error ? e.message : 'Internal server error', 500)
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    await requireAdminAccess(AdminModule.WORKFLOW_REQUIREMENTS)
+
+    const body = (await req.json().catch(() => null)) as
+      | { label?: unknown; visibleToDealerDefault?: unknown }
+      | null
+
+    const item = await createWorkflowDocumentDefinition({
+      label: body?.label,
+      visibleToDealerDefault: body?.visibleToDealerDefault,
+    })
+
+    return NextResponse.json(item, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('POST /api/admin/order-flow/requirements error:', e)
     return json(e instanceof Error ? e.message : 'Internal server error', 500)
   }
 }
