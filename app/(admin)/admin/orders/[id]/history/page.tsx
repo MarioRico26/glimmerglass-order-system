@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
-import { PencilLine } from 'lucide-react'
+import { ArrowRight, CheckCircle2, PencilLine, TriangleAlert } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import ProductionBuildRecordCard from '@/components/admin/ProductionBuildRecordCard'
@@ -171,6 +171,11 @@ function formatUploader(media: Pick<OrderMedia, 'uploadedByDisplayName' | 'uploa
   if (displayName) return displayName
   if (email) return email
   return 'Legacy upload'
+}
+
+function shippingMethodLabel(value?: string | null) {
+  if (!value) return 'Not set'
+  return SHIPPING_LABELS[value] || value
 }
 
 export default function OrderHistoryPage() {
@@ -449,6 +454,89 @@ export default function OrderHistoryPage() {
     ? formatDateOnlyForDisplay(summary.scheduledShipDate)
     : 'Not scheduled'
   const availableAllocationCandidates = allocation?.candidates.filter((candidate) => !candidate.allocatedToOtherOrder) ?? []
+  const hasFinalPaymentProof = mediaFiles.some((file) => file.docType === 'PROOF_OF_FINAL_PAYMENT')
+  const blockers = summary
+    ? [
+        summary.status === 'PENDING_PAYMENT_APPROVAL' && !summary.paymentProofUrl
+          ? 'Proof of Deposit has not been uploaded yet.'
+          : null,
+        summary.status === 'IN_PRODUCTION' && !summary.serialNumber
+          ? 'Serial Number is still missing for an active production order.'
+          : null,
+        summary.status === 'IN_PRODUCTION' && typeof summary.productionPriority !== 'number'
+          ? 'Production Priority is not assigned.'
+          : null,
+        summary.status === 'PRE_SHIPPING' && !summary.scheduledShipDate
+          ? 'Scheduled Ship Date is still missing.'
+          : null,
+        summary.status === 'PRE_SHIPPING' && !hasFinalPaymentProof
+          ? 'Proof of Final Payment is still missing.'
+          : null,
+        summary.allocatedPoolStock && summary.status === 'PRE_SHIPPING' && !summary.scheduledShipDate
+          ? 'Finished stock is reserved but shipping is not scheduled.'
+          : null,
+      ].filter(Boolean) as string[]
+    : []
+
+  const nextAction = summary
+    ? summary.status === 'PENDING_PAYMENT_APPROVAL' && !summary.paymentProofUrl
+      ? {
+          title: 'Upload Proof of Deposit',
+          detail: 'This order cannot move cleanly into production until the deposit file is attached.',
+          href: `/admin/orders/${orderId}/media`,
+          cta: 'Open Upload Media',
+        }
+      : summary.status === 'PENDING_PAYMENT_APPROVAL'
+      ? {
+          title: 'Approve Deposit and Move to In Production',
+          detail: 'Deposit proof is present. The next operational step is to approve it and move the order forward.',
+          href: '',
+          cta: '',
+        }
+      : summary.status === 'IN_PRODUCTION' && !summary.serialNumber
+      ? {
+          title: 'Set Serial Number',
+          detail: 'Production is active, but the serial number is still missing on the order.',
+          href: '',
+          cta: '',
+        }
+      : summary.status === 'IN_PRODUCTION' && typeof summary.productionPriority !== 'number'
+      ? {
+          title: 'Assign Production Priority',
+          detail: 'This order is in production without a priority value.',
+          href: '',
+          cta: '',
+        }
+      : summary.status === 'PRE_SHIPPING' && !hasFinalPaymentProof
+      ? {
+          title: 'Upload Proof of Final Payment',
+          detail: 'Shipping should not close out cleanly until final payment is recorded.',
+          href: `/admin/orders/${orderId}/media`,
+          cta: 'Open Upload Media',
+        }
+      : summary.status === 'PRE_SHIPPING' && !summary.scheduledShipDate
+      ? {
+          title: 'Schedule Ship Date',
+          detail: 'This order is already in Pre-Shipping but still does not have a scheduled ship date.',
+          href: '/admin/shipping',
+          cta: 'Open Ship Schedule',
+        }
+      : summary.status === 'COMPLETED'
+      ? {
+          title: 'Review for Service/Warranty Follow-up',
+          detail: 'Completed orders can move into Service/Warranty when post-delivery action is needed.',
+          href: '',
+          cta: '',
+        }
+      : summary.status === 'SERVICE_WARRANTY'
+      ? {
+          title: 'Track Warranty / Service Documents',
+          detail: 'Use uploaded media and timeline updates to capture the service resolution cleanly.',
+          href: `/admin/orders/${orderId}/media`,
+          cta: 'Open Upload Media',
+        }
+      : null
+    : null
 
   return (
     <div className="w-full p-6 xl:p-8">
@@ -500,6 +588,125 @@ export default function OrderHistoryPage() {
 
       {summary && (
         <>
+          <div className="mb-8 grid gap-4 xl:grid-cols-[1.2fr,0.8fr,0.8fr]">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Operational Summary
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-800">
+                  {labelOrderStatus(summary.status)}
+                </span>
+                {summary.factory?.name ? (
+                  <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
+                    Factory: {summary.factory.name}
+                  </span>
+                ) : null}
+                {summary.color?.name ? (
+                  <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                    Color: {summary.color.name}
+                  </span>
+                ) : null}
+                {summary.requestedShipAsap ? (
+                  <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                    ASAP Request
+                  </span>
+                ) : null}
+                {summary.allocatedPoolStock ? (
+                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                    Stock Allocated
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Dealer</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{summary.dealer?.name || 'Not set'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Model</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{summary.poolModel?.name || 'Not set'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Requested Ship</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{requestedShipText}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Scheduled Ship</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{scheduledShipText}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Serial Number</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {summary.serialNumber || <span className="italic text-slate-500">Not set</span>}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Shipping Method</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{shippingMethodLabel(summary.shippingMethod)}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-slate-900">
+                <CheckCircle2 size={18} className="text-emerald-600" />
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Next Action</div>
+              </div>
+              {nextAction ? (
+                <div className="mt-4">
+                  <div className="text-lg font-black text-slate-900">{nextAction.title}</div>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">{nextAction.detail}</p>
+                  {nextAction.href ? (
+                    <Link
+                      href={nextAction.href}
+                      className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100"
+                    >
+                      {nextAction.cta}
+                      <ArrowRight size={15} />
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 hover:bg-sky-100"
+                    >
+                      Edit Order
+                      <ArrowRight size={15} />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                  No immediate blocker detected on this order.
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-slate-900">
+                <TriangleAlert size={18} className="text-amber-600" />
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Blocked By</div>
+              </div>
+              {blockers.length ? (
+                <div className="mt-4 space-y-3">
+                  {blockers.map((blocker) => (
+                    <div
+                      key={blocker}
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900"
+                    >
+                      {blocker}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                  Nothing is currently blocking this order from the data visible here.
+                </div>
+              )}
+            </section>
+          </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mb-8">
             <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-700">Order Summary</span>
