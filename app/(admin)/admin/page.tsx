@@ -29,6 +29,9 @@ import {
   BarChart,
   Bar,
   Legend,
+  LineChart,
+  Line,
+  Cell,
 } from 'recharts'
 
 type FactoryRow = {
@@ -50,6 +53,14 @@ type Metrics = {
     asapRequests: number
   }
   monthly: { key: string; label: string; count: number }[]
+  statusTrend: {
+    key: string
+    label: string
+    needsDeposit: number
+    production: number
+    preShipping: number
+    finalPaymentNeeded: number
+  }[]
   recent: { id: string; dealer: string; model: string; color: string; factory: string; status: string; createdAt: string }[]
   byFactory: FactoryRow[]
 }
@@ -85,6 +96,7 @@ const emptyMetrics: Metrics = {
     asapRequests: 0,
   },
   monthly: [],
+  statusTrend: [],
   recent: [],
   byFactory: [],
 }
@@ -220,6 +232,17 @@ export default function AdminDashboard() {
       })),
     [metrics.byFactory]
   )
+  const riskSnapshotData = useMemo(
+    () => [
+      { label: 'Final Payment', value: signals.finalPaymentNeeded, fill: '#e11d48' },
+      { label: 'Overdue Ship', value: signals.overdueRequestedShip, fill: '#f59e0b' },
+      { label: 'Missing Serial', value: signals.missingSerial, fill: '#f59e0b' },
+      { label: 'Prod. Unscheduled', value: signals.unscheduledProduction, fill: '#6366f1' },
+      { label: 'Ship Unscheduled', value: signals.unscheduledShipping, fill: '#0ea5e9' },
+      { label: 'Stock / No Ship', value: signals.allocatedStockNoShip, fill: '#0f766e' },
+    ],
+    [signals]
+  )
 
   const factoryOptions = useMemo(() => {
     if (access?.allFactories) {
@@ -343,9 +366,30 @@ export default function AdminDashboard() {
 
       <section className="grid gap-4 xl:grid-cols-6">
         <StatCard label="Total Orders" value={t.total || 0} Icon={PackageSearch} tone="slate" />
-        <StatCard label="Needs Deposit" value={t.PENDING_PAYMENT_APPROVAL || 0} Icon={Clock3} tone="amber" />
-        <StatCard label="In Production" value={t.IN_PRODUCTION || 0} Icon={CircleCheckBig} tone="indigo" />
-        <StatCard label="Pre-Shipping" value={t.PRE_SHIPPING || 0} Icon={Truck} tone="violet" />
+        <StatCard
+          label="Needs Deposit"
+          value={t.PENDING_PAYMENT_APPROVAL || 0}
+          Icon={Clock3}
+          tone="amber"
+          trend={metrics.statusTrend}
+          trendKey="needsDeposit"
+        />
+        <StatCard
+          label="In Production"
+          value={t.IN_PRODUCTION || 0}
+          Icon={CircleCheckBig}
+          tone="indigo"
+          trend={metrics.statusTrend}
+          trendKey="production"
+        />
+        <StatCard
+          label="Pre-Shipping"
+          value={t.PRE_SHIPPING || 0}
+          Icon={Truck}
+          tone="violet"
+          trend={metrics.statusTrend}
+          trendKey="preShipping"
+        />
         <StatCard label="Completed" value={t.COMPLETED || 0} Icon={CheckCircle2} tone="emerald" />
         <StatCard label="Service/Warranty" value={t.SERVICE_WARRANTY || 0} Icon={CircleAlert} tone="sky" />
       </section>
@@ -531,6 +575,52 @@ export default function AdminDashboard() {
         </div>
 
         <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="mb-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Risk Snapshot</div>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Current Operational Pressure</h2>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={riskSnapshotData} layout="vertical" margin={{ left: 18, right: 18 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6eef2" />
+                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
+                <YAxis dataKey="label" type="category" width={120} tick={{ fill: '#475569', fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="value" radius={[0, 7, 7, 0]}>
+                  {riskSnapshotData.map((entry) => (
+                    <CellBar key={entry.label} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
+          <div className="mb-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Flow Trends</div>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Weekly Workflow Pressure</h2>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={metrics.statusTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6eef2" />
+                <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                <Line type="monotone" dataKey="needsDeposit" name="Needs Deposit" stroke="#f59e0b" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="production" name="In Production" stroke="#6366f1" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="preShipping" name="Pre-Shipping" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="finalPaymentNeeded" name="Final Payment Needed" stroke="#e11d48" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-white bg-white/82 p-5 shadow-[0_18px_50px_rgba(13,47,69,0.10)] backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Finished Pools</div>
@@ -644,11 +734,15 @@ function StatCard({
   value,
   Icon,
   tone,
+  trend,
+  trendKey,
 }: {
   label: string
   value: number | string
   Icon: LucideIcon
   tone: 'slate' | 'amber' | 'indigo' | 'violet' | 'emerald' | 'sky'
+  trend?: Metrics['statusTrend']
+  trendKey?: 'needsDeposit' | 'production' | 'preShipping' | 'finalPaymentNeeded'
 }) {
   const tones = {
     slate: 'border-slate-200 bg-white/82 text-slate-900',
@@ -665,8 +759,44 @@ function StatCard({
         <Icon size={18} className="opacity-75" />
       </div>
       <div className="mt-3 text-[2rem] leading-none font-black">{value}</div>
+      {trend && trendKey ? (
+        <div className="mt-3 h-12">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={trend}>
+              <Area
+                type="monotone"
+                dataKey={trendKey}
+                stroke={
+                  tone === 'amber'
+                    ? '#d97706'
+                    : tone === 'indigo'
+                    ? '#4f46e5'
+                    : tone === 'violet'
+                    ? '#7c3aed'
+                    : '#0284c7'
+                }
+                fillOpacity={0.18}
+                fill={
+                  tone === 'amber'
+                    ? '#f59e0b'
+                    : tone === 'indigo'
+                    ? '#6366f1'
+                    : tone === 'violet'
+                    ? '#8b5cf6'
+                    : '#38bdf8'
+                }
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
     </div>
   )
+}
+
+function CellBar({ fill }: { fill: string }) {
+  return <Cell fill={fill} />
 }
 
 function SignalCard({

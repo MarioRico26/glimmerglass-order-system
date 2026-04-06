@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AdminModule, OrderDocType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { startOfDay, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek, subMonths, subWeeks } from 'date-fns'
 import { normalizeOrderStatus } from '@/lib/orderFlow'
 import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
 
@@ -144,6 +144,67 @@ export async function GET(request: NextRequest) {
       monthly.push({ key, label, count })
     }
 
+    const statusTrend: Array<{
+      key: string
+      label: string
+      needsDeposit: number
+      production: number
+      preShipping: number
+      finalPaymentNeeded: number
+    }> = []
+
+    for (let i = 7; i >= 0; i--) {
+      const start = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 })
+      const end = endOfWeek(subWeeks(now, i), { weekStartsOn: 1 })
+      const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
+      const label = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+      const [needsDeposit, production, preShipping, weeklyFinalPaymentNeeded] = await Promise.all([
+        prisma.order.count({
+          where: {
+            ...orderScope,
+            status: 'PENDING_PAYMENT_APPROVAL',
+            createdAt: { gte: start, lte: end },
+          },
+        }),
+        prisma.order.count({
+          where: {
+            ...orderScope,
+            status: { in: ['IN_PRODUCTION', 'APPROVED'] },
+            createdAt: { gte: start, lte: end },
+          },
+        }),
+        prisma.order.count({
+          where: {
+            ...orderScope,
+            status: 'PRE_SHIPPING',
+            createdAt: { gte: start, lte: end },
+          },
+        }),
+        prisma.order.count({
+          where: {
+            ...orderScope,
+            status: 'PRE_SHIPPING',
+            createdAt: { gte: start, lte: end },
+            media: {
+              none: {
+                docType: OrderDocType.PROOF_OF_FINAL_PAYMENT,
+              },
+            },
+          },
+        }),
+      ])
+
+      statusTrend.push({
+        key,
+        label,
+        needsDeposit,
+        production,
+        preShipping,
+        finalPaymentNeeded: weeklyFinalPaymentNeeded,
+      })
+    }
+
     // --- Órdenes recientes (incluye dealer/model/color/factoryLocation) ---
     const recentRaw = await prisma.order.findMany({
       where: orderScope,
@@ -225,6 +286,7 @@ export async function GET(request: NextRequest) {
           asapRequests,
         },
         monthly,
+        statusTrend,
         recent,
         byFactory,
       },
