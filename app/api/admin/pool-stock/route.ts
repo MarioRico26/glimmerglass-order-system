@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AdminModule } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { assertFactoryAccess, requireAdminAccess, scopedFactoryWhere } from '@/lib/adminAccess'
+import { parseDateOnlyToUtcNoon } from '@/lib/dateOnly'
 
 const STATUSES = new Set(['READY', 'RESERVED', 'IN_PRODUCTION', 'DAMAGED'])
 
@@ -12,7 +13,8 @@ function colorKeyOf(colorId?: string | null) {
 }
 
 function parseDateInput(value: string) {
-  const d = new Date(value)
+  const d = parseDateOnlyToUtcNoon(value)
+  if (!d) throw new Error('Invalid date')
   if (Number.isNaN(d.getTime())) throw new Error('Invalid date')
   return d
 }

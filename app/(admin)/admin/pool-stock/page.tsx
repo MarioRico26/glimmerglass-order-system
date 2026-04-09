@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { formatDateOnlyForInput } from '@/lib/dateOnly'
 
 type Factory = { id: string; name: string }
 
@@ -55,13 +56,19 @@ const STATUS_OPTIONS: PoolStockItem['status'][] = [
 ]
 
 function toDateInputValue(value?: string | null) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return formatDateOnlyForInput(value)
+}
+
+function formatUsDate(value?: string | null) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  })
 }
 
 function statusBadge(status: PoolStockItem['status']) {
@@ -692,7 +699,7 @@ export default function AdminPoolStockPage() {
                               className="h-9 rounded-lg border border-slate-200 bg-white px-2"
                             />
                           ) : (
-                            toDateInputValue(it.productionDate ?? it.eta) || '—'
+                            formatUsDate(it.productionDate ?? it.eta)
                           )}
                         </td>
                         <td className="py-3 pr-3">
