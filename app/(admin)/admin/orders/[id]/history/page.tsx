@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
-import { ArrowRight, CheckCircle2, PencilLine, TriangleAlert } from 'lucide-react'
+import { ArrowRight, CheckCircle2, PencilLine, Trash2, TriangleAlert } from 'lucide-react'
 
 import AddManualEntryModal from '@/components/admin/AddManualEntry'
 import ProductionBuildRecordCard from '@/components/admin/ProductionBuildRecordCard'
@@ -213,6 +213,7 @@ export default function OrderHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [allocating, setAllocating] = useState(false)
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null)
   const { labelForDocType } = useWorkflowDocLabels()
   const hasAllocatedStock = !!summary?.allocatedPoolStock
 
@@ -402,6 +403,50 @@ export default function OrderHistoryPage() {
       setMessage(`❌ ${msg}`)
     } finally {
       setAllocating(false)
+      setTimeout(() => setMessage(''), 3000)
+    }
+  }
+
+  const handleDeleteMedia = async (mediaId: string) => {
+    const target = mediaFiles.find((item) => item.id === mediaId)
+    if (!target) return
+
+    const targetLabel = target.docType
+      ? labelForDocType(target.docType) || labelDocType(target.docType) || target.docType
+      : target.type
+    const confirmed = window.confirm(`Remove "${targetLabel}" from this order? This cannot be undone.`)
+    if (!confirmed) return
+
+    try {
+      setDeletingMediaId(mediaId)
+      setMessage('🔄 Removing file...')
+
+      const res = await fetch(`/api/admin/orders/${orderId}/media?mediaId=${encodeURIComponent(mediaId)}`, {
+        method: 'DELETE',
+      })
+      const payload = await safeJson<{ message?: string }>(res)
+      if (!res.ok) {
+        setMessage(payload?.message || '❌ Could not remove file.')
+        return
+      }
+
+      setMediaFiles((current) => current.filter((item) => item.id !== mediaId))
+      setHistory((current) => [
+        {
+          id: `local-delete-${mediaId}-${Date.now()}`,
+          status: 'COMMENT',
+          comment: `Removed document: ${targetLabel}`,
+          createdAt: new Date().toISOString(),
+          user: undefined,
+        },
+        ...current,
+      ])
+      setMessage('✅ File removed.')
+    } catch (error) {
+      console.error('Delete media error:', error)
+      setMessage('❌ Network error while removing file.')
+    } finally {
+      setDeletingMediaId(null)
       setTimeout(() => setMessage(''), 3000)
     }
   }
@@ -1083,7 +1128,7 @@ export default function OrderHistoryPage() {
             {mediaFiles.map((m) => (
               <div
                 key={m.id}
-                className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between"
+                className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between gap-4"
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
@@ -1101,7 +1146,18 @@ export default function OrderHistoryPage() {
                     Uploaded by: {formatUploader(m)}
                   </p>
                 </div>
-                <p className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-slate-500 whitespace-nowrap">{new Date(m.uploadedAt).toLocaleString()}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMedia(m.id)}
+                    disabled={deletingMediaId === m.id}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Trash2 size={14} />
+                    {deletingMediaId === m.id ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

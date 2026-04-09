@@ -7,7 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { MediaType, OrderDocType, Role } from '@prisma/client'
-import { put } from '@vercel/blob'
+import { del, put } from '@vercel/blob'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
@@ -218,5 +218,90 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   } catch (e) {
     console.error('POST /orders/[id]/media error:', e)
     return NextResponse.json({ message: 'Internal server error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
+  }
+}
+
+export async function DELETE(req: NextRequest, ctx: Ctx) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (!isAdminRole((session.user as { role?: unknown }).role)) {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
+    }
+
+    const orderId = await getOrderId(ctx)
+    const mediaId = req.nextUrl.searchParams.get('mediaId')?.trim()
+    if (!mediaId) {
+      return NextResponse.json(
+        { message: 'mediaId is required' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
+    const uploader =
+      session.user.email
+        ? await prisma.user.findUnique({
+            where: { email: session.user.email.toLowerCase().trim() },
+            select: { email: true },
+          })
+        : null
+
+    const media = await prisma.orderMedia.findFirst({
+      where: { id: mediaId, orderId },
+      select: {
+        id: true,
+        fileUrl: true,
+        docType: true,
+        documentDefinition: {
+          select: {
+            label: true,
+            key: true,
+          },
+        },
+      },
+    })
+
+    if (!media) {
+      return NextResponse.json(
+        { message: 'File not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
+    const removedLabel = media.documentDefinition?.label || media.documentDefinition?.key || media.docType || 'file'
+
+    await prisma.$transaction(async (tx) => {
+      await tx.orderMedia.delete({
+        where: { id: media.id },
+      })
+
+      await tx.orderHistory.create({
+        data: {
+          orderId,
+          status: 'COMMENT',
+          comment: `Removed document: ${removedLabel}`,
+          user: uploader?.email
+            ? {
+                connect: { email: uploader.email },
+              }
+            : undefined,
+        },
+      })
+    })
+
+    try {
+      await del(media.fileUrl, {
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      })
+    } catch (blobError) {
+      console.warn('DELETE /orders/[id]/media blob cleanup warning:', blobError)
+    }
+
+    return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('DELETE /orders/[id]/media error:', e)
+    return NextResponse.json({ message: 'Failed to delete media' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

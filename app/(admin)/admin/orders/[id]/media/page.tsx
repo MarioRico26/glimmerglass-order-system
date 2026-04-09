@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { Trash2 } from 'lucide-react'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 import { labelDocType } from '@/lib/orderFlow'
 
@@ -61,6 +62,7 @@ export default function OrderMediaPage() {
 
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [mediaList, setMediaList] = useState<Media[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -163,6 +165,36 @@ export default function OrderMediaPage() {
       setMessage('❌ Network error during upload.')
     } finally {
       setLoading(false)
+      setTimeout(() => setMessage(''), 2500)
+    }
+  }
+
+  const handleDelete = async (mediaId: string) => {
+    const target = mediaList.find((item) => item.id === mediaId)
+    if (!target) return
+    const confirmed = window.confirm(
+      `Remove "${target.docType ? labelForDocType(target.docType) || labelDocType(target.docType) || target.docType : 'this file'}"? This cannot be undone.`
+    )
+    if (!confirmed) return
+
+    setDeletingId(mediaId)
+    setMessage('')
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/media?mediaId=${encodeURIComponent(mediaId)}`, {
+        method: 'DELETE',
+      })
+      const payload = await safeJson<{ message?: string }>(res)
+      if (!res.ok) {
+        setMessage(payload?.message || '❌ Could not remove file.')
+        return
+      }
+      setMediaList((current) => current.filter((item) => item.id !== mediaId))
+      setMessage('✅ File removed.')
+    } catch (err) {
+      console.error('Delete media error:', err)
+      setMessage('❌ Network error while removing file.')
+    } finally {
+      setDeletingId(null)
       setTimeout(() => setMessage(''), 2500)
     }
   }
@@ -383,8 +415,19 @@ export default function OrderMediaPage() {
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-500 whitespace-nowrap">
-                      {new Date(m.uploadedAt).toLocaleString()}
+                    <div className="flex items-center gap-3 whitespace-nowrap">
+                      <div className="text-xs text-slate-500">
+                        {new Date(m.uploadedAt).toLocaleString()}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(m.id)}
+                        disabled={deletingId === m.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 size={14} />
+                        {deletingId === m.id ? 'Removing…' : 'Remove'}
+                      </button>
                     </div>
                   </div>
                 ))}
