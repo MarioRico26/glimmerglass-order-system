@@ -56,7 +56,10 @@ const STATUS_OPTIONS: PoolStockItem['status'][] = [
 ]
 
 function toDateInputValue(value?: string | null) {
-  return formatDateOnlyForInput(value)
+  const normalized = formatDateOnlyForInput(value)
+  if (!normalized) return ''
+  const [year, month, day] = normalized.split('-')
+  return `${month}/${day}/${year}`
 }
 
 function formatUsDate(value?: string | null) {
@@ -69,6 +72,34 @@ function formatUsDate(value?: string | null) {
     day: '2-digit',
     year: 'numeric',
   })
+}
+
+function toApiDateInput(value?: string | null) {
+  const raw = value?.trim() || ''
+  if (!raw) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!match) {
+    throw new Error('Use MM/DD/YYYY for production date')
+  }
+
+  const [, monthRaw, dayRaw, yearRaw] = match
+  const month = Number(monthRaw)
+  const day = Number(dayRaw)
+  const year = Number(yearRaw)
+
+  const parsed = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error('Invalid production date')
+  }
+
+  return `${yearRaw}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 function statusBadge(status: PoolStockItem['status']) {
@@ -261,7 +292,7 @@ export default function AdminPoolStockPage() {
         colorId: createForm.colorId || null,
         status: createForm.status,
         quantity: 1,
-        productionDate: createForm.productionDate || null,
+        productionDate: toApiDateInput(createForm.productionDate),
         serialNumber: createForm.serialNumber || null,
         notes: createForm.notes || null,
       }
@@ -323,7 +354,7 @@ export default function AdminPoolStockPage() {
       const payload = {
         status: editForm.status,
         quantity: 1,
-        productionDate: editForm.productionDate || null,
+        productionDate: toApiDateInput(editForm.productionDate),
         serialNumber: editForm.serialNumber || null,
         notes: editForm.notes || null,
       }
@@ -512,10 +543,11 @@ export default function AdminPoolStockPage() {
           />
 
           <input
-            type="date"
             value={createForm.productionDate}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, productionDate: e.target.value }))}
             className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-2"
+            placeholder="MM/DD/YYYY"
+            inputMode="numeric"
           />
 
           <input
@@ -693,10 +725,11 @@ export default function AdminPoolStockPage() {
                         <td className="py-3 pr-3">
                           {editing ? (
                             <input
-                              type="date"
                               value={editForm.productionDate}
                               onChange={(e) => setEditForm((prev) => ({ ...prev, productionDate: e.target.value }))}
                               className="h-9 rounded-lg border border-slate-200 bg-white px-2"
+                              placeholder="MM/DD/YYYY"
+                              inputMode="numeric"
                             />
                           ) : (
                             formatUsDate(it.productionDate ?? it.eta)
