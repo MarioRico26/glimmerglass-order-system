@@ -79,8 +79,6 @@ export async function POST(req: NextRequest) {
     const colorIdRaw = body?.colorId
     const colorId = typeof colorIdRaw === 'string' && colorIdRaw.trim() !== '' ? colorIdRaw.trim() : null
     const status = body?.status?.toString().trim() as Status
-    const qtyRaw = body?.quantity ?? 0
-    const quantity = Number(qtyRaw)
     const notesRaw = body?.notes
     const notes = typeof notesRaw === 'string' && notesRaw.trim() !== '' ? notesRaw.trim() : null
     const etaRaw = body?.eta
@@ -102,14 +100,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid status' }, { status: 400 })
     }
 
-    if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 0) {
-      return NextResponse.json({ message: 'quantity must be an integer >= 0' }, { status: 400 })
+    const quantity = 1
+    if (body?.quantity !== undefined && Number(body.quantity) !== 1) {
+      return NextResponse.json(
+        { message: 'Pool stock is now unit-based. Add one physical pool per row.' },
+        { status: 400 }
+      )
     }
 
     const eta = etaRaw ? parseDateInput(etaRaw) : null
     const productionDate = productionDateRaw ? parseDateInput(productionDateRaw) : null
 
-    if (status === 'READY' && quantity > 0) {
+    if (status === 'READY') {
       if (!serialNumber) {
         return NextResponse.json(
           { message: 'serialNumber is required for READY stock rows' },
@@ -126,16 +128,8 @@ export async function POST(req: NextRequest) {
     const colorKey = colorKeyOf(colorId)
 
     const item = await prisma.$transaction(async (tx) => {
-      const stock = await tx.poolStock.upsert({
-        where: {
-          factoryId_poolModelId_colorKey_status: {
-            factoryId,
-            poolModelId,
-            colorKey,
-            status,
-          },
-        },
-        create: {
+      const stock = await tx.poolStock.create({
+        data: {
           factoryId,
           poolModelId,
           colorId,
@@ -147,28 +141,18 @@ export async function POST(req: NextRequest) {
           serialNumber,
           notes,
         },
-        update: {
-          quantity: quantity > 0 ? { increment: quantity } : undefined,
-          eta: etaRaw !== undefined ? eta : undefined,
-          productionDate:
-            productionDateRaw !== undefined ? productionDate : undefined,
-          serialNumber: serialNumberRaw !== undefined ? serialNumber : undefined,
-          notes: notesRaw !== undefined ? notes : undefined,
-        },
         include: baseInclude,
       })
 
-      if (quantity > 0) {
-        await tx.poolStockTxn.create({
-          data: {
-            stockId: stock.id,
-            type: 'ADD',
-            quantity,
-            referenceOrderId,
-            notes,
-          },
-        })
-      }
+      await tx.poolStockTxn.create({
+        data: {
+          stockId: stock.id,
+          type: 'ADD',
+          quantity: 1,
+          referenceOrderId,
+          notes,
+        },
+      })
 
       return stock
     })

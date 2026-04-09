@@ -419,7 +419,7 @@ model PoolStock {
   colorKey    String @default("NONE")
 
   status   PoolStockStatus
-  quantity Int             @default(0)
+  quantity Int             @default(1)
   eta      DateTime?
   productionDate DateTime?
   serialNumber   String?
@@ -436,12 +436,12 @@ model PoolStock {
   txns PoolStockTxn[]
   allocatedOrders Order[] @relation("AllocatedPoolStock")
 
-  @@unique([factoryId, poolModelId, colorKey, status])
   @@index([factoryId])
   @@index([poolModelId])
   @@index([colorId])
   @@index([status])
   @@index([serialNumber])
+  @@index([factoryId, poolModelId, colorKey, status])
 }
 
 model PoolStockTxn {

@@ -104,7 +104,7 @@ export default function AdminPoolStockPage() {
     poolModelId: '',
     colorId: '',
     status: 'READY' as PoolStockItem['status'],
-    quantity: 0,
+    quantity: 1,
     productionDate: '',
     serialNumber: '',
     notes: '',
@@ -113,7 +113,7 @@ export default function AdminPoolStockPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
     status: 'READY' as PoolStockItem['status'],
-    quantity: 0,
+    quantity: 1,
     productionDate: '',
     serialNumber: '',
     notes: '',
@@ -253,7 +253,7 @@ export default function AdminPoolStockPage() {
         poolModelId: createForm.poolModelId,
         colorId: createForm.colorId || null,
         status: createForm.status,
-        quantity: Number(createForm.quantity || 0),
+        quantity: 1,
         productionDate: createForm.productionDate || null,
         serialNumber: createForm.serialNumber || null,
         notes: createForm.notes || null,
@@ -272,7 +272,7 @@ export default function AdminPoolStockPage() {
         ...prev,
         poolModelId: '',
         colorId: '',
-        quantity: 0,
+        quantity: 1,
         productionDate: '',
         serialNumber: '',
         notes: '',
@@ -290,7 +290,7 @@ export default function AdminPoolStockPage() {
     setEditingId(item.id)
     setEditForm({
       status: item.status,
-      quantity: item.quantity,
+      quantity: 1,
       productionDate: toDateInputValue(item.productionDate ?? item.eta),
       serialNumber: item.serialNumber || '',
       notes: item.notes || '',
@@ -315,7 +315,7 @@ export default function AdminPoolStockPage() {
 
       const payload = {
         status: editForm.status,
-        quantity: Number(editForm.quantity),
+        quantity: 1,
         productionDate: editForm.productionDate || null,
         serialNumber: editForm.serialNumber || null,
         notes: editForm.notes || null,
@@ -439,7 +439,7 @@ export default function AdminPoolStockPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Pool Stock</h1>
-        <p className="text-slate-600">Finished pools by factory. Adjust quantity, status, serial number and production date.</p>
+        <p className="text-slate-600">Finished pools by factory. Each row is one physical unit with its own serial number, production date, photo, and history.</p>
       </div>
 
       {error ? (
@@ -449,7 +449,8 @@ export default function AdminPoolStockPage() {
       ) : null}
 
       <form onSubmit={submitCreate} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="text-sm font-semibold text-slate-900 mb-3">Add Stock Row</div>
+        <div className="text-sm font-semibold text-slate-900 mb-1">Add Stock Unit</div>
+        <p className="mb-3 text-xs text-slate-500">Create one physical pool per row. Matching units should be entered separately so each keeps its own serial number.</p>
         <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-12">
           <select
             value={createForm.factoryId}
@@ -497,18 +498,9 @@ export default function AdminPoolStockPage() {
           </select>
 
           <input
-            type="number"
-            min={0}
-            value={createForm.quantity}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-right xl:col-span-1"
-            placeholder="Qty"
-          />
-
-          <input
             value={createForm.serialNumber}
             onChange={(e) => setCreateForm((prev) => ({ ...prev, serialNumber: e.target.value }))}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-3"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm xl:col-span-4"
             placeholder="Serial number"
           />
 
@@ -593,7 +585,7 @@ export default function AdminPoolStockPage() {
                   <th className="py-2 pr-3">Color</th>
                   <th className="py-2 pr-3">Serial #</th>
                   <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3 text-right">Qty</th>
+                  <th className="py-2 pr-3 text-center">Unit</th>
                   <th className="py-2 pr-3">Production Date</th>
                   <th className="py-2 pr-3">Notes</th>
                   <th className="py-2 pr-3">Updated</th>
@@ -686,18 +678,10 @@ export default function AdminPoolStockPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 pr-3 text-right">
-                          {editing ? (
-                            <input
-                              type="number"
-                              min={0}
-                              value={editForm.quantity}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
-                              className="h-9 w-24 rounded-lg border border-slate-200 bg-white px-2 text-right"
-                            />
-                          ) : (
-                            it.quantity
-                          )}
+                        <td className="py-3 pr-3 text-center">
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            1 unit
+                          </span>
                         </td>
                         <td className="py-3 pr-3">
                           {editing ? (

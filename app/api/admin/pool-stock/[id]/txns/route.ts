@@ -89,50 +89,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ message: 'quantity must be non-zero for ADJUST' }, { status: 400 })
     }
 
-    const delta = type === 'ADJUST' ? quantity : deltaFor(type, quantity)
-
-    const result = await prisma.$transaction(async (tx) => {
-      const exists = await tx.poolStock.findUnique({
-        where: { id: params.id },
-        select: { id: true, factoryId: true },
-      })
-
-      if (!exists) {
-        throw Object.assign(new Error('Stock row not found'), { status: 404 })
-      }
-      assertFactoryAccess(access, exists.factoryId)
-
-      const updated = await tx.poolStock.updateMany({
-        where: {
-          id: params.id,
-          ...(delta < 0 ? { quantity: { gte: Math.abs(delta) } } : {}),
-        },
-        data: { quantity: { increment: delta } },
-      })
-
-      if (updated.count !== 1) {
-        throw Object.assign(new Error('Insufficient stock for this operation'), { status: 409 })
-      }
-
-      const txn = await tx.poolStockTxn.create({
-        data: {
-          stockId: params.id,
-          type,
-          quantity: type === 'ADJUST' ? delta : Math.abs(quantity),
-          referenceOrderId,
-          notes,
-        },
-      })
-
-      const stock = await tx.poolStock.findUnique({
-        where: { id: params.id },
-        include: baseInclude,
-      })
-
-      return { txn, stock }
-    })
-
-    return NextResponse.json(result)
+    return NextResponse.json(
+      {
+        message:
+          'Pool stock is now unit-based. Add, reserve, release, ship, or edit individual units instead of changing row quantity through transactions.',
+      },
+      { status: 400 }
+    )
   } catch (e: any) {
     return NextResponse.json(
       { message: e?.message ?? 'Internal Server Error' },

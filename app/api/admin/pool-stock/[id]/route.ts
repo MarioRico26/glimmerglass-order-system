@@ -79,6 +79,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 0) {
         return NextResponse.json({ message: 'quantity must be an integer >= 0' }, { status: 400 })
       }
+      if (quantity !== 1) {
+        return NextResponse.json(
+          { message: 'Pool stock rows now represent single physical units. Quantity must remain 1.' },
+          { status: 400 }
+        )
+      }
     }
 
     const eta = etaRaw === null ? null : etaRaw ? parseDateInput(etaRaw) : undefined
@@ -100,7 +106,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const data: any = {}
       let delta = 0
 
-      if (quantity !== undefined) {
+      if (quantity !== undefined && quantity !== current.quantity) {
         delta = quantity - current.quantity
         data.quantity = quantity
       }
@@ -118,24 +124,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (colorIdRaw !== undefined) {
         data.colorId = colorId ?? null
         data.colorKey = colorKeyOf(colorId ?? null)
-      }
-
-      if (data.status || data.colorKey) {
-        const targetKey = {
-          factoryId: current.factoryId,
-          poolModelId: current.poolModelId,
-          colorKey: data.colorKey ?? current.colorKey,
-          status: data.status ?? current.status,
-        }
-        const existing = await tx.poolStock.findUnique({
-          where: { factoryId_poolModelId_colorKey_status: targetKey },
-        })
-        if (existing && existing.id !== current.id) {
-          throw Object.assign(
-            new Error('Stock row already exists for that factory/model/color/status'),
-            { status: 409 }
-          )
-        }
       }
 
       if (Object.keys(data).length === 0) {
