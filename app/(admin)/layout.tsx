@@ -4,7 +4,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
-import { SessionProvider } from 'next-auth/react'
+import { SessionProvider, useSession } from 'next-auth/react'
 import { signOut } from 'next-auth/react'
 
 import AdminAlertsBell from './notifications/bell'
@@ -25,6 +25,7 @@ import {
   Menu,
   X,
   CalendarDays,
+  UserCircle,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -280,6 +281,29 @@ function NavGroup({
   )
 }
 
+function formatRole(role?: string | null) {
+  if (role === 'SUPERADMIN') return 'Superadmin'
+  if (role === 'ADMIN') return 'Admin'
+  if (role === 'DEALER') return 'Dealer'
+  return 'User'
+}
+
+function AccountBadge() {
+  const { data: session } = useSession()
+  const email = session?.user?.email || 'Signed in'
+  const role = formatRole((session?.user as { role?: string | null } | undefined)?.role)
+
+  return (
+    <div className="hidden md:flex min-w-0 items-center gap-2 rounded-xl border bg-white/90 px-3 py-2 text-left shadow-sm [border-color:var(--gg-border)]">
+      <UserCircle size={18} className="shrink-0 text-slate-500" />
+      <div className="min-w-0 leading-tight">
+        <div className="truncate text-[12px] font-bold text-slate-900">{email}</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{role}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -310,6 +334,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <AccountBadge />
               <AdminAlertsBell />
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}

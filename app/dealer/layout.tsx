@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   LogOut,
+  UserCircle,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -50,6 +51,21 @@ function GuardAgreement() {
   }, [status, session, pathname, router])
 
   return null
+}
+
+function AccountBadge() {
+  const { data: session } = useSession()
+  const email = session?.user?.email || 'Signed in'
+
+  return (
+    <div className="hidden md:flex min-w-0 items-center gap-2 rounded-xl border bg-white/90 px-3 py-2 text-left shadow-sm [border-color:var(--gg-border)]">
+      <UserCircle size={18} className="shrink-0 text-slate-500" />
+      <div className="min-w-0 leading-tight">
+        <div className="truncate text-[12px] font-bold text-slate-900">{email}</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Dealer</div>
+      </div>
+    </div>
+  )
 }
 
 export default function DealerLayout({ children }: { children: ReactNode }) {
@@ -111,6 +127,7 @@ export default function DealerLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <AccountBadge />
               <NotificationsBell />
               <button
                 type="button"
