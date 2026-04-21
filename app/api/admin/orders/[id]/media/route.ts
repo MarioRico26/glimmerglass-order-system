@@ -244,9 +244,28 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       session.user.email
         ? await prisma.user.findUnique({
             where: { email: session.user.email.toLowerCase().trim() },
-            select: { email: true },
+            select: { id: true, email: true },
           })
         : null
+
+    if (!uploader) {
+      return NextResponse.json(
+        { message: 'User not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, status: true },
+    })
+
+    if (!order) {
+      return NextResponse.json(
+        { message: 'Order not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
 
     const media = await prisma.orderMedia.findFirst({
       where: { id: mediaId, orderId },
@@ -280,13 +299,9 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       await tx.orderHistory.create({
         data: {
           orderId,
-          status: 'COMMENT',
+          status: order.status,
           comment: `Removed document: ${removedLabel}`,
-          user: uploader?.email
-            ? {
-                connect: { email: uploader.email },
-              }
-            : undefined,
+          userId: uploader.id,
         },
       })
     })

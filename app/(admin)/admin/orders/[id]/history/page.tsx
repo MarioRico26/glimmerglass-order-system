@@ -430,17 +430,7 @@ export default function OrderHistoryPage() {
         return
       }
 
-      setMediaFiles((current) => current.filter((item) => item.id !== mediaId))
-      setHistory((current) => [
-        {
-          id: `local-delete-${mediaId}-${Date.now()}`,
-          status: 'COMMENT',
-          comment: `Removed document: ${targetLabel}`,
-          createdAt: new Date().toISOString(),
-          user: undefined,
-        },
-        ...current,
-      ])
+      await loadAll()
       setMessage('✅ File removed.')
     } catch (error) {
       console.error('Delete media error:', error)
