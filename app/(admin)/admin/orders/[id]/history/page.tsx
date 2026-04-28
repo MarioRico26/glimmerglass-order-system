@@ -216,6 +216,8 @@ export default function OrderHistoryPage() {
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null)
   const { labelForDocType } = useWorkflowDocLabels()
   const hasAllocatedStock = !!summary?.allocatedPoolStock
+  const photoMedia = mediaFiles.filter((item) => item.type === 'photo')
+  const documentMedia = mediaFiles.filter((item) => item.type !== 'photo')
 
   useEffect(() => {
     setMounted(true)
@@ -1114,42 +1116,96 @@ export default function OrderHistoryPage() {
             No media uploaded yet.
           </div>
         ) : (
-          <div className="grid gap-3">
-            {mediaFiles.map((m) => (
-              <div
-                key={m.id}
-                className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between gap-4"
-              >
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : m.type}
-                  </p>
-                  <a
-                    href={m.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-sky-700 hover:underline"
-                  >
-                    View File
-                  </a>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Uploaded by: {formatUploader(m)}
-                  </p>
+          <div className="space-y-6">
+            {photoMedia.length ? (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Photo Gallery</h4>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {photoMedia.length} photos
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-xs text-slate-500 whitespace-nowrap">{new Date(m.uploadedAt).toLocaleString()}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteMedia(m.id)}
-                    disabled={deletingMediaId === m.id}
-                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Trash2 size={14} />
-                    {deletingMediaId === m.id ? 'Removing…' : 'Remove'}
-                  </button>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {photoMedia.map((m) => (
+                    <div key={m.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                      <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="block bg-slate-100">
+                        <img
+                          src={m.fileUrl}
+                          alt={m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
+                          className="h-44 w-full object-cover"
+                        />
+                      </a>
+                      <div className="space-y-2 px-4 py-3">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
+                        </div>
+                        <div className="text-xs text-slate-500">Uploaded by: {formatUploader(m)}</div>
+                        <div className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</div>
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <a
+                            href={m.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-semibold text-sky-700 hover:underline"
+                          >
+                            Open
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMedia(m.id)}
+                            disabled={deletingMediaId === m.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 size={14} />
+                            {deletingMediaId === m.id ? 'Removing…' : 'Remove'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            ) : null}
+
+            {documentMedia.length ? (
+              <div className="grid gap-3">
+                {documentMedia.map((m) => (
+                  <div
+                    key={m.id}
+                    className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between gap-4"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : m.type}
+                      </p>
+                      <a
+                        href={m.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-sky-700 hover:underline"
+                      >
+                        View File
+                      </a>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Uploaded by: {formatUploader(m)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-slate-500 whitespace-nowrap">{new Date(m.uploadedAt).toLocaleString()}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMedia(m.id)}
+                        disabled={deletingMediaId === m.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 size={14} />
+                        {deletingMediaId === m.id ? 'Removing…' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
