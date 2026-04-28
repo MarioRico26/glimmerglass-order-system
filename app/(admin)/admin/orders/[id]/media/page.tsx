@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, Image as ImageIcon, Trash2, UploadCloud, X } from 'lucide-react'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
@@ -36,6 +36,30 @@ async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   } catch {
     return null
   }
+}
+
+function pickDefaultPhotoDocument(items: WorkflowDocumentOption[]) {
+  return (
+    items.find((item) => item.key === 'POST_PRODUCTION_MEDIA') ||
+    items.find((item) => item.key === 'PRE_SHIPPING_MEDIA') ||
+    items[0] ||
+    null
+  )
+}
+
+function mergePhotoFiles(current: File[], incoming: File[]) {
+  const seen = new Set(current.map((file) => `${file.name}-${file.size}-${file.lastModified}`))
+  const merged = [...current]
+
+  for (const file of incoming) {
+    const signature = `${file.name}-${file.size}-${file.lastModified}`
+    if (!seen.has(signature)) {
+      seen.add(signature)
+      merged.push(file)
+    }
+  }
+
+  return merged.slice(0, 20)
 }
 
 function formatUploader(media: Pick<Media, 'uploadedByDisplayName' | 'uploadedByEmail'>) {
@@ -107,7 +131,6 @@ export default function OrderMediaPage() {
   const [file, setFile] = useState<File | null>(null)
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [docType, setDocType] = useState<string>('OTHER')
-  const [photoDocType, setPhotoDocType] = useState<string>('POST_PRODUCTION_MEDIA')
   const [visibleToDealer, setVisibleToDealer] = useState(true)
   const [photoVisibleToDealer, setPhotoVisibleToDealer] = useState(true)
   const [docOptions, setDocOptions] = useState<WorkflowDocumentOption[]>([])
@@ -121,6 +144,7 @@ export default function OrderMediaPage() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [previewPhoto, setPreviewPhoto] = useState<Media | null>(null)
   const [photoGalleryExpanded, setPhotoGalleryExpanded] = useState(false)
+  const [photoDragActive, setPhotoDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const photoInputRef = useRef<HTMLInputElement | null>(null)
   const { labelForDocType } = useWorkflowDocLabels()
@@ -128,10 +152,6 @@ export default function OrderMediaPage() {
   const selectedDoc = useMemo(
     () => docOptions.find((item) => item.key === docType) || null,
     [docOptions, docType]
-  )
-  const selectedPhotoDoc = useMemo(
-    () => docOptions.find((item) => item.key === photoDocType) || null,
-    [docOptions, photoDocType]
   )
   const legacyDocOptions = useMemo(
     () => docOptions.filter((item) => item.source === 'legacy'),
@@ -144,6 +164,10 @@ export default function OrderMediaPage() {
   const customDocKeys = useMemo(
     () => new Set(customDocOptions.map((item) => item.key)),
     [customDocOptions]
+  )
+  const photoDocumentOption = useMemo(
+    () => pickDefaultPhotoDocument(docOptions),
+    [docOptions]
   )
   const photoMedia = useMemo(
     () => mediaList.filter((item) => item.type === 'photo'),
@@ -199,13 +223,9 @@ export default function OrderMediaPage() {
           setVisibleToDealer(data.items[0].visibleToDealerDefault)
         }
 
-        const defaultPhotoDoc =
-          data.items.find((item) => item.key === 'POST_PRODUCTION_MEDIA') ||
-          data.items.find((item) => item.key === 'PRE_SHIPPING_MEDIA') ||
-          data.items[0]
+        const defaultPhotoDoc = pickDefaultPhotoDocument(data.items)
 
         if (defaultPhotoDoc) {
-          setPhotoDocType(defaultPhotoDoc.key)
           setPhotoVisibleToDealer(defaultPhotoDoc.visibleToDealerDefault)
         }
       } catch {
@@ -258,6 +278,7 @@ export default function OrderMediaPage() {
     if (!orderId) return setMessage('Missing order id.')
     if (!photoFiles.length) return setMessage('Please select at least one photo.')
     if (photoFiles.length > 20) return setMessage('Please upload at most 20 photos per batch.')
+    if (!photoDocumentOption) return setMessage('No photo document type is configured yet.')
 
     setPhotoUploading(true)
     let successCount = 0
@@ -272,7 +293,7 @@ export default function OrderMediaPage() {
           const optimized = await compressImage(rawFile)
           const formData = new FormData()
           formData.append('file', optimized)
-          formData.append('documentKey', photoDocType)
+          formData.append('documentKey', photoDocumentOption.key)
           formData.append('visibleToDealer', String(photoVisibleToDealer))
 
           setPhotoUploadProgress(`Uploading ${index + 1} of ${photoFiles.length}: ${rawFile.name}`)
@@ -311,6 +332,37 @@ export default function OrderMediaPage() {
       setPhotoUploadProgress('')
       setTimeout(() => setMessage(''), 3500)
     }
+  }
+
+  const addPhotoFiles = (incoming: File[]) => {
+    if (!incoming.length) return
+    const imageFiles = incoming.filter((file) => file.type.startsWith('image/'))
+    setPhotoFiles((current) => mergePhotoFiles(current, imageFiles))
+    setPhotoGalleryExpanded(true)
+  }
+
+  const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addPhotoFiles(Array.from(e.target.files || []))
+    if (photoInputRef.current) photoInputRef.current.value = ''
+  }
+
+  const handlePhotoDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setPhotoDragActive(false)
+    addPhotoFiles(Array.from(e.dataTransfer.files || []))
+  }
+
+  const removeSelectedPhoto = (target: File) => {
+    setPhotoFiles((current) =>
+      current.filter(
+        (file) =>
+          !(
+            file.name === target.name &&
+            file.size === target.size &&
+            file.lastModified === target.lastModified
+          )
+      )
+    )
   }
 
   const handleDelete = async (mediaId: string) => {
@@ -384,52 +436,57 @@ export default function OrderMediaPage() {
             <form onSubmit={handlePhotoUpload} className="mt-4 grid gap-4">
               <div className="grid gap-4 xl:grid-cols-[1.6fr,1fr]">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="lg:col-span-2">
+                  <div className="lg:col-span-3">
                     <label className="mb-1 block text-sm font-semibold text-slate-700">Photos</label>
                     <input
                       ref={photoInputRef}
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={(e) => setPhotoFiles(Array.from(e.target.files || []))}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                      onChange={handlePhotoInputChange}
+                      className="hidden"
                     />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Up to 20 photos per batch. Recommended for production, shipping, and warranty reference.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">Photo Label</label>
-                    <select
-                      value={photoDocType}
-                      onChange={(e) => {
-                        const nextKey = e.target.value
-                        setPhotoDocType(nextKey)
-                        const nextOption = docOptions.find((item) => item.key === nextKey)
-                        if (nextOption) setPhotoVisibleToDealer(nextOption.visibleToDealerDefault)
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setPhotoDragActive(true)
                       }}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                      onDragEnter={(e) => {
+                        e.preventDefault()
+                        setPhotoDragActive(true)
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault()
+                        setPhotoDragActive(false)
+                      }}
+                      onDrop={handlePhotoDrop}
+                      className={[
+                        'rounded-2xl border-2 border-dashed bg-white px-4 py-6 transition',
+                        photoDragActive
+                          ? 'border-sky-400 bg-sky-50'
+                          : 'border-slate-200',
+                      ].join(' ')}
                     >
-                      {legacyDocOptions.length ? (
-                        <optgroup label="Core Workflow Documents">
-                          {legacyDocOptions.map((item) => (
-                            <option key={item.id} value={item.key}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                      {customDocOptions.length ? (
-                        <optgroup label="Custom Documents">
-                          {customDocOptions.map((item) => (
-                            <option key={item.id} value={item.key}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                    </select>
+                      <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <UploadCloud size={16} />
+                            Drag and drop photos here
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Or add them in batches. Up to 20 photos per order batch, compressed automatically before upload.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                        >
+                          <ImageIcon size={16} />
+                          Add Photos
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -469,10 +526,10 @@ export default function OrderMediaPage() {
                         ? `${photoFiles.length} photo${photoFiles.length === 1 ? '' : 's'} selected`
                         : 'No photos selected yet.'}
                     </div>
-                    {selectedPhotoDoc ? (
+                    {photoDocumentOption ? (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
                         <div>
-                          Label: <span className="font-semibold text-slate-900">{selectedPhotoDoc.label}</span>
+                          Saved under: <span className="font-semibold text-slate-900">{photoDocumentOption.label}</span>
                         </div>
                         <div className="mt-1">
                           Visibility: <span className="font-semibold text-slate-900">{photoVisibleToDealer ? 'Dealer visible' : 'Internal only'}</span>
@@ -501,8 +558,20 @@ export default function OrderMediaPage() {
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {photoFiles.map((item) => (
                       <div key={`${item.name}-${item.lastModified}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        <div className="truncate font-semibold text-slate-900">{item.name}</div>
-                        <div className="mt-1 text-xs text-slate-500">{(item.size / 1024 / 1024).toFixed(2)} MB</div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-900">{item.name}</div>
+                            <div className="mt-1 text-xs text-slate-500">{(item.size / 1024 / 1024).toFixed(2)} MB</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedPhoto(item)}
+                            className="rounded-lg border border-slate-200 bg-white p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            aria-label={`Remove ${item.name}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
