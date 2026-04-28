@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Image as ImageIcon, Trash2, UploadCloud, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Image as ImageIcon, Trash2, UploadCloud, X } from 'lucide-react'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 import { labelDocType } from '@/lib/orderFlow'
 
@@ -120,6 +120,7 @@ export default function OrderMediaPage() {
   const [mediaList, setMediaList] = useState<Media[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [previewPhoto, setPreviewPhoto] = useState<Media | null>(null)
+  const [photoGalleryExpanded, setPhotoGalleryExpanded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const photoInputRef = useRef<HTMLInputElement | null>(null)
   const { labelForDocType } = useWorkflowDocLabels()
@@ -355,19 +356,32 @@ export default function OrderMediaPage() {
 
         <div className="space-y-8 p-6">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <div className="mb-4 flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-black text-slate-900">Pool Photo Gallery</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Upload multiple order photos at once. Images are compressed automatically before upload.
                 </p>
+                <p className="mt-2 text-xs font-medium text-slate-500">
+                  {photoMedia.length} photo{photoMedia.length === 1 ? '' : 's'} on this order.
+                </p>
               </div>
-              <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                {photoMedia.length} photos
-              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoGalleryExpanded((current) => !current)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                {photoGalleryExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                {photoGalleryExpanded ? 'Collapse' : 'Expand'}
+              </button>
             </div>
 
-            <form onSubmit={handlePhotoUpload} className="grid gap-4">
+            {!photoGalleryExpanded ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
+                Keep the gallery tucked away until operations needs it. Open it to batch-upload compressed photos or review the existing image set.
+              </div>
+            ) : <>
+            <form onSubmit={handlePhotoUpload} className="mt-4 grid gap-4">
               <div className="grid gap-4 xl:grid-cols-[1.6fr,1fr]">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <div className="lg:col-span-2">
@@ -556,6 +570,7 @@ export default function OrderMediaPage() {
                 </div>
               )}
             </div>
+            </>}
           </section>
 
           <section>
