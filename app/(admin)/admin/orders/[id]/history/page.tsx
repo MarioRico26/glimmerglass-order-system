@@ -106,6 +106,14 @@ const SHIPPING_LABELS: Record<string, string> = {
   QUOTE: 'Glimmerglass Freight (quote to be provided)',
 }
 
+function isVideoUrl(url: string) {
+  return /\.(mp4|mov|webm|m4v|avi)$/i.test(url)
+}
+
+function isGalleryMedia(item: OrderMedia) {
+  return item.type === 'photo' || isVideoUrl(item.fileUrl)
+}
+
 function labelPenetrationMode(mode?: string | null) {
   switch (mode) {
     case 'NO_PENETRATIONS':
@@ -217,8 +225,8 @@ export default function OrderHistoryPage() {
   const [photoGalleryExpanded, setPhotoGalleryExpanded] = useState(false)
   const { labelForDocType } = useWorkflowDocLabels()
   const hasAllocatedStock = !!summary?.allocatedPoolStock
-  const photoMedia = mediaFiles.filter((item) => item.type === 'photo')
-  const documentMedia = mediaFiles.filter((item) => item.type !== 'photo')
+  const photoMedia = mediaFiles.filter((item) => isGalleryMedia(item))
+  const documentMedia = mediaFiles.filter((item) => !isGalleryMedia(item))
 
   useEffect(() => {
     setMounted(true)
@@ -1123,11 +1131,11 @@ export default function OrderHistoryPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Photo Gallery</h4>
-                    <p className="mt-1 text-xs text-slate-500">Keep order photos tucked away until you need visual reference.</p>
+                    <p className="mt-1 text-xs text-slate-500">Keep order photos and short videos tucked away until you need visual reference.</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                      {photoMedia.length} photos
+                      {photoMedia.length} items
                     </span>
                     <button
                       type="button"
@@ -1141,21 +1149,32 @@ export default function OrderHistoryPage() {
                 </div>
                 {!photoGalleryExpanded ? (
                   <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
-                    Open the gallery to review or remove order photos without crowding the detail page.
+                    Open the gallery to review or remove order photos and short videos without crowding the detail page.
                   </div>
                 ) : <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {photoMedia.map((m) => (
                     <div key={m.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                      <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="block bg-slate-100">
-                        <img
-                          src={m.fileUrl}
-                          alt={m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
-                          className="h-44 w-full object-cover"
-                        />
-                      </a>
+                      {isVideoUrl(m.fileUrl) ? (
+                        <div className="bg-slate-950">
+                          <video src={m.fileUrl} controls preload="metadata" className="h-44 w-full object-cover" />
+                        </div>
+                      ) : (
+                        <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="block bg-slate-100">
+                          <img
+                            src={m.fileUrl}
+                            alt={m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
+                            className="h-44 w-full object-cover"
+                          />
+                        </a>
+                      )}
                       <div className="space-y-2 px-4 py-3">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
+                          </div>
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            {isVideoUrl(m.fileUrl) ? 'Video' : 'Photo'}
+                          </span>
                         </div>
                         <div className="text-xs text-slate-500">Uploaded by: {formatUploader(m)}</div>
                         <div className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</div>

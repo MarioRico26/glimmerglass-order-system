@@ -75,8 +75,20 @@ function mediaLabel(media: Media, labelForDocType: (docType?: string | null) => 
   return media.docType
     ? labelForDocType(media.docType) || labelDocType(media.docType) || media.docType
     : media.type === 'photo'
-      ? 'Photo'
+      ? 'Gallery Media'
       : 'Uncategorized'
+}
+
+function isVideoFile(file: File) {
+  return file.type.toLowerCase().startsWith('video/')
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|mov|webm|m4v|avi)$/i.test(url)
+}
+
+function isGalleryMedia(item: Media) {
+  return item.type === 'photo' || isVideoUrl(item.fileUrl)
 }
 
 async function compressImage(file: File): Promise<File> {
@@ -170,11 +182,11 @@ export default function OrderMediaPage() {
     [docOptions]
   )
   const photoMedia = useMemo(
-    () => mediaList.filter((item) => item.type === 'photo'),
+    () => mediaList.filter((item) => isGalleryMedia(item)),
     [mediaList]
   )
   const documentMedia = useMemo(
-    () => mediaList.filter((item) => item.type !== 'photo'),
+    () => mediaList.filter((item) => !isGalleryMedia(item)),
     [mediaList]
   )
 
@@ -276,8 +288,8 @@ export default function OrderMediaPage() {
     setMessage('')
 
     if (!orderId) return setMessage('Missing order id.')
-    if (!photoFiles.length) return setMessage('Please select at least one photo.')
-    if (photoFiles.length > 20) return setMessage('Please upload at most 20 photos per batch.')
+    if (!photoFiles.length) return setMessage('Please select at least one gallery file.')
+    if (photoFiles.length > 20) return setMessage('Please upload at most 20 photos or videos per batch.')
     if (!photoDocumentOption) return setMessage('No photo document type is configured yet.')
 
     setPhotoUploading(true)
@@ -287,10 +299,10 @@ export default function OrderMediaPage() {
     try {
       for (let index = 0; index < photoFiles.length; index += 1) {
         const rawFile = photoFiles[index]
-        setPhotoUploadProgress(`Optimizing ${index + 1} of ${photoFiles.length}: ${rawFile.name}`)
+        setPhotoUploadProgress(`${isVideoFile(rawFile) ? 'Preparing' : 'Optimizing'} ${index + 1} of ${photoFiles.length}: ${rawFile.name}`)
 
         try {
-          const optimized = await compressImage(rawFile)
+          const optimized = isVideoFile(rawFile) ? rawFile : await compressImage(rawFile)
           const formData = new FormData()
           formData.append('file', optimized)
           formData.append('documentKey', photoDocumentOption.key)
@@ -308,8 +320,8 @@ export default function OrderMediaPage() {
           }
           successCount += 1
         } catch (error) {
-          console.error('Photo batch upload error:', error)
-          failures.push(`${rawFile.name}: could not process image`)
+          console.error('Gallery batch upload error:', error)
+          failures.push(`${rawFile.name}: could not process media`)
         }
       }
 
@@ -318,11 +330,11 @@ export default function OrderMediaPage() {
       }
 
       if (successCount > 0 && failures.length === 0) {
-        setMessage(`✅ Uploaded ${successCount} photo${successCount === 1 ? '' : 's'}.`)
+        setMessage(`✅ Uploaded ${successCount} gallery file${successCount === 1 ? '' : 's'}.`)
       } else if (successCount > 0) {
-        setMessage(`⚠️ Uploaded ${successCount} photo${successCount === 1 ? '' : 's'}. ${failures.length} failed.`)
+        setMessage(`⚠️ Uploaded ${successCount} gallery file${successCount === 1 ? '' : 's'}. ${failures.length} failed.`)
       } else {
-        setMessage(failures[0] ? `❌ ${failures[0]}` : '❌ Photo upload failed.')
+        setMessage(failures[0] ? `❌ ${failures[0]}` : '❌ Gallery upload failed.')
       }
 
       setPhotoFiles([])
@@ -336,8 +348,8 @@ export default function OrderMediaPage() {
 
   const addPhotoFiles = (incoming: File[]) => {
     if (!incoming.length) return
-    const imageFiles = incoming.filter((file) => file.type.startsWith('image/'))
-    setPhotoFiles((current) => mergePhotoFiles(current, imageFiles))
+    const galleryFiles = incoming.filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'))
+    setPhotoFiles((current) => mergePhotoFiles(current, galleryFiles))
     setPhotoGalleryExpanded(true)
   }
 
@@ -412,10 +424,10 @@ export default function OrderMediaPage() {
               <div>
                 <h2 className="text-lg font-black text-slate-900">Pool Photo Gallery</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Upload multiple order photos at once. Images are compressed automatically before upload.
+                  Upload order photos and short videos in batches. Images are compressed automatically before upload.
                 </p>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  {photoMedia.length} photo{photoMedia.length === 1 ? '' : 's'} on this order.
+                  {photoMedia.length} gallery item{photoMedia.length === 1 ? '' : 's'} on this order.
                 </p>
               </div>
               <button
@@ -430,18 +442,18 @@ export default function OrderMediaPage() {
 
             {!photoGalleryExpanded ? (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
-                Keep the gallery tucked away until operations needs it. Open it to batch-upload compressed photos or review the existing image set.
+                Keep the gallery tucked away until operations needs it. Open it to batch-upload photos and short videos or review the existing image set.
               </div>
             ) : <>
             <form onSubmit={handlePhotoUpload} className="mt-4 grid gap-4">
               <div className="grid gap-4 xl:grid-cols-[1.6fr,1fr]">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <div className="lg:col-span-3">
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">Photos</label>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">Photos & Videos</label>
                     <input
                       ref={photoInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*"
                       multiple
                       onChange={handlePhotoInputChange}
                       className="hidden"
@@ -471,10 +483,10 @@ export default function OrderMediaPage() {
                         <div>
                           <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                             <UploadCloud size={16} />
-                            Drag and drop photos here
+                            Drag and drop photos or videos here
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
-                            Or add them in batches. Up to 20 photos per order batch, compressed automatically before upload.
+                            Or add them in batches. Up to 20 gallery files per order batch. Images are compressed automatically; short videos upload as-is.
                           </p>
                         </div>
                         <button
@@ -483,7 +495,7 @@ export default function OrderMediaPage() {
                           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
                         >
                           <ImageIcon size={16} />
-                          Add Photos
+                          Add Files
                         </button>
                       </div>
                     </div>
@@ -511,20 +523,20 @@ export default function OrderMediaPage() {
                       disabled={photoUploading || !photoFiles.length}
                       className="w-full rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
                     >
-                      {photoUploading ? 'Uploading photos…' : 'Upload Photos'}
+                      {photoUploading ? 'Uploading gallery…' : 'Upload Gallery'}
                     </button>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Photo Batch
+                    Gallery Batch
                   </div>
                   <div className="mt-3 space-y-3">
                     <div className="text-sm text-slate-700">
                       {photoFiles.length
-                        ? `${photoFiles.length} photo${photoFiles.length === 1 ? '' : 's'} selected`
-                        : 'No photos selected yet.'}
+                        ? `${photoFiles.length} gallery file${photoFiles.length === 1 ? '' : 's'} selected`
+                        : 'No gallery files selected yet.'}
                     </div>
                     {photoDocumentOption ? (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
@@ -542,7 +554,7 @@ export default function OrderMediaPage() {
                       </div>
                     ) : (
                       <p className="text-xs text-slate-500">
-                        Images are resized and compressed before upload so operations can send batches without bloating storage.
+                        Images are resized and compressed before upload, while short videos are kept intact for cleaner batch uploads.
                       </p>
                     )}
                   </div>
@@ -553,7 +565,7 @@ export default function OrderMediaPage() {
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <UploadCloud size={16} />
-                    Selected Photos
+                    Selected Files
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {photoFiles.map((item) => (
@@ -561,7 +573,7 @@ export default function OrderMediaPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="truncate font-semibold text-slate-900">{item.name}</div>
-                            <div className="mt-1 text-xs text-slate-500">{(item.size / 1024 / 1024).toFixed(2)} MB</div>
+                            <div className="mt-1 text-xs text-slate-500">{isVideoFile(item) ? 'Video' : 'Photo'} • {(item.size / 1024 / 1024).toFixed(2)} MB</div>
                           </div>
                           <button
                             type="button"
@@ -582,27 +594,41 @@ export default function OrderMediaPage() {
             <div className="mt-6">
               {photoMedia.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
-                  No order photos uploaded yet.
+                  No gallery media uploaded yet.
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {photoMedia.map((photo) => (
                     <div key={photo.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewPhoto(photo)}
-                        className="block w-full bg-slate-100"
-                      >
-                        <img
-                          src={photo.fileUrl}
-                          alt={mediaLabel(photo, labelForDocType)}
-                          className="h-52 w-full object-cover"
-                        />
-                      </button>
+                      {isVideoUrl(photo.fileUrl) ? (
+                        <div className="bg-slate-950">
+                          <video
+                            src={photo.fileUrl}
+                            controls
+                            preload="metadata"
+                            className="h-52 w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPhoto(photo)}
+                          className="block w-full bg-slate-100"
+                        >
+                          <img
+                            src={photo.fileUrl}
+                            alt={mediaLabel(photo, labelForDocType)}
+                            className="h-52 w-full object-cover"
+                          />
+                        </button>
+                      )}
                       <div className="space-y-2 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-slate-900">
                             {mediaLabel(photo, labelForDocType)}
+                          </span>
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            {isVideoUrl(photo.fileUrl) ? 'Video' : 'Photo'}
                           </span>
                           <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                             {photo.visibleToDealer ? 'Dealer' : 'Internal'}
