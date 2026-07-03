@@ -5,7 +5,7 @@
   "scripts": {
     "backup:neon": "bash scripts/backup-neon-db.sh",
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "workflow:remove-approved": "node scripts/remove-approved-workflow.cjs --execute",
     "workflow:remove-approved:dry": "node scripts/remove-approved-workflow.cjs --dry-run",
     "start": "next start",
