@@ -8,7 +8,7 @@ export async function GET() {
     try {
         await requireAdminAccess(AdminModule.DEALERS)
         const items = await prisma.dealer.findMany({
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, country: true },
             orderBy: { name: 'asc' },
         })
         return NextResponse.json({ items }, { status: 200 })

@@ -1,21 +1,18 @@
 // app/(auth)/register/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     Mail, Lock, Building2, MapPin, Phone, FileText, Landmark,
     Eye, EyeOff, User2, PenTool, CheckCircle2
 } from 'lucide-react'
-
-const STATES = [
-    'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming',
-]
+import { DEALER_COUNTRIES, getRegionLabel, getRegionsForCountry } from '@/lib/dealerLocation'
 
 export default function RegisterPage() {
     const router = useRouter()
     const [formData, setFormData] = useState({
-        name: '', email: '', password: '', address: '', phone: '', state: '', city: '',
+        name: '', email: '', password: '', address: '', phone: '', state: '', city: '', country: 'US',
     })
     const [agreementFile, setAgreementFile] = useState<File | null>(null)
     const [error, setError] = useState('')
@@ -27,6 +24,8 @@ export default function RegisterPage() {
         const { name, value } = e.target
         setFormData(f => ({ ...f, [name]: value }))
     }
+
+    const regions = useMemo(() => getRegionsForCountry(formData.country), [formData.country])
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -163,16 +162,23 @@ export default function RegisterPage() {
                                     </div>
                                 </Field>
 
-                                {/* 4. State */}
-                                <Field label="State" icon={<Landmark size={16} />} text={text}>
-                                    <select id="state" name="state" value={formData.state} onChange={onChange}
-                                            required className="field-input">
-                                        <option value="">Select a state</option>
-                                        {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                {/* 4. Country */}
+                                <Field label="Country" icon={<Building2 size={16} />} text={text}>
+                                    <select id="country" name="country" value={formData.country} onChange={(e) => { onChange(e); setFormData((prev) => ({ ...prev, state: '' })) }} required className="field-input">
+                                        {DEALER_COUNTRIES.map(country => <option key={country.value} value={country.value}>{country.label}</option>)}
                                     </select>
                                 </Field>
 
-                                {/* 5. City */}
+                                {/* 5. State / Province */}
+                                <Field label={getRegionLabel(formData.country)} icon={<Landmark size={16} />} text={text}>
+                                    <select id="state" name="state" value={formData.state} onChange={onChange}
+                                            required className="field-input">
+                                        <option value="">Select a {getRegionLabel(formData.country).toLowerCase()}</option>
+                                        {regions.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </Field>
+
+                                {/* 6. City */}
                                 <Field label="City" icon={<MapPin size={16} />} text={text}>
                                     <input id="city" name="city" value={formData.city} onChange={onChange}
                                            required placeholder="Your city" className="field-input" />

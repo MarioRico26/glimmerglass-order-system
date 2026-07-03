@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { DEALER_COUNTRIES, getRegionLabel, getRegionsForCountry } from '@/lib/dealerLocation'
 
 type Dealer = { id: string; name: string; email?: string | null }
 type PoolModel = {
@@ -35,10 +36,6 @@ type BlueprintMarker = {
   x: number
   y: number
 }
-
-const STATES = [
-  'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming',
-]
 
 function makeTemporaryPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*'
@@ -93,9 +90,12 @@ export default function AdminNewOrderPage() {
     address: '',
     city: '',
     state: '',
+    country: 'US',
     createLogin: false,
     approved: true,
   })
+
+  const dealerRegions = useMemo(() => getRegionsForCountry(dealerForm.country), [dealerForm.country])
 
   const [markerType, setMarkerType] = useState<'skimmer' | 'return' | 'drain'>('skimmer')
   const [markers, setMarkers] = useState<BlueprintMarker[]>([])
@@ -386,6 +386,7 @@ export default function AdminNewOrderPage() {
       address: '',
       city: '',
       state: '',
+      country: 'US',
       createLogin: false,
       approved: true,
     })
@@ -1159,6 +1160,16 @@ export default function AdminNewOrderPage() {
                 placeholder="City"
                 required
               />
+              <select
+                value={dealerForm.country}
+                onChange={(e) => setDealerForm((prev) => ({ ...prev, country: e.target.value, state: '' }))}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                required
+              >
+                {DEALER_COUNTRIES.map((country) => (
+                  <option key={country.value} value={country.value}>{country.label}</option>
+                ))}
+              </select>
               <input
                 value={dealerForm.address}
                 onChange={(e) => setDealerForm((prev) => ({ ...prev, address: e.target.value }))}
@@ -1172,9 +1183,9 @@ export default function AdminNewOrderPage() {
                 className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 required
               >
-                <option value="">State</option>
-                {STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                <option value="">{getRegionLabel(dealerForm.country)}</option>
+                {dealerRegions.map((region) => (
+                  <option key={region} value={region}>{region}</option>
                 ))}
               </select>
               <label className="inline-flex items-center gap-2 text-sm text-slate-700">

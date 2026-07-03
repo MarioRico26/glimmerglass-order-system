@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
 import { requireAdminAccess } from '@/lib/adminAccess'
+import { isValidRegionForCountry, normalizeDealerCountry } from '@/lib/dealerLocation'
 
 export async function GET() {
   try {
@@ -17,6 +18,7 @@ export async function GET() {
         phone: true,
         city: true,
         state: true,
+        country: true,
         workflowProfileId: true,
         workflowProfile: {
           select: { id: true, name: true, slug: true },
@@ -37,6 +39,7 @@ export async function GET() {
       phone: d.phone ?? '',
       city: d.city ?? '',
       state: d.state ?? '',
+      country: d.country ?? 'US',
       workflowProfileId: d.workflowProfileId ?? null,
       workflowProfileName: d.workflowProfile?.name ?? null,
       approved: d.User?.approved ?? false,
@@ -65,6 +68,7 @@ export async function POST(req: NextRequest) {
       address?: string
       city?: string
       state?: string
+      country?: string
       workflowProfileId?: string | null
       approved?: boolean
       createLogin?: boolean
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest) {
     const address = String(body?.address || '').trim()
     const city = String(body?.city || '').trim()
     const state = String(body?.state || '').trim()
+    const country = normalizeDealerCountry(typeof body?.country === 'string' ? body.country : 'US')
     const workflowProfileId =
       typeof body?.workflowProfileId === 'string' && body.workflowProfileId.trim()
         ? body.workflowProfileId.trim()
@@ -86,6 +91,9 @@ export async function POST(req: NextRequest) {
 
     if (!name || !email || !phone || !address || !city || !state) {
       return NextResponse.json({ message: 'All fields are required' }, { status: 400 })
+    }
+    if (!isValidRegionForCountry(country, state)) {
+      return NextResponse.json({ message: 'Please select a valid state or province for the chosen country' }, { status: 400 })
     }
     if (createLogin && password.length < 6) {
       return NextResponse.json({ message: 'Password must be at least 6 characters' }, { status: 400 })
@@ -121,6 +129,7 @@ export async function POST(req: NextRequest) {
           address,
           city,
           state,
+          country,
           workflowProfileId,
         },
       })

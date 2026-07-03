@@ -119,7 +119,7 @@ async function getOrderSummary(orderId: string) {
       hardwareMainDrains: true,
 
       dealer: {
-        select: { name: true, email: true, phone: true, address: true, city: true, state: true },
+        select: { name: true, email: true, phone: true, address: true, city: true, state: true, country: true },
       },
       poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },
       color: { select: { name: true } },

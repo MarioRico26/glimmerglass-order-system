@@ -51,6 +51,7 @@ interface OrderSummary {
     address?: string | null
     city?: string | null
     state?: string | null
+    country?: string | null
   } | null
 
   poolModel?: { name: string; blueprintUrl?: string | null; hasIntegratedSpa?: boolean } | null
@@ -798,10 +799,10 @@ export default function OrderHistoryPage() {
                   </p>
                 )}
 
-                {(summary.dealer?.address || summary.dealer?.city || summary.dealer?.state) && (
+                {(summary.dealer?.address || summary.dealer?.city || summary.dealer?.state || summary.dealer?.country) && (
                   <p className="text-xs">
                     <span className="font-semibold">Dealer Address:</span>{' '}
-                    {[summary.dealer?.address, summary.dealer?.city, summary.dealer?.state]
+                    {[summary.dealer?.address, summary.dealer?.city, summary.dealer?.state, summary.dealer?.country === 'CA' ? 'Canada' : summary.dealer?.country === 'US' ? 'United States' : summary.dealer?.country]
                       .filter(Boolean)
                       .join(', ')}
                   </p>

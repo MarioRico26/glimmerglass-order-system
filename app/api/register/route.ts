@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcryptjs'
 import { Prisma } from '@prisma/client'
+import { isValidRegionForCountry, normalizeDealerCountry } from '@/lib/dealerLocation'
 import { put } from '@vercel/blob'
 
 async function uploadAgreementToBlob(file: File) {
@@ -30,10 +31,14 @@ export async function POST(req: NextRequest) {
     const address = String(formData.get('address') || '')
     const city = String(formData.get('city') || '')
     const state = String(formData.get('state') || '')
+    const country = normalizeDealerCountry(String(formData.get('country') || 'US'))
     const agreement = formData.get('agreement') as File | null // opcional
 
     if (!name || !email || !rawPassword || !phone || !address || !city || !state) {
       return NextResponse.json({ message: 'All fields are required' }, { status: 400 })
+    }
+    if (!isValidRegionForCountry(country, state)) {
+      return NextResponse.json({ message: 'Please select a valid state or province' }, { status: 400 })
     }
     if (rawPassword.length < 6) {
       return NextResponse.json({ message: 'Password must be at least 6 characters' }, { status: 400 })
@@ -64,6 +69,7 @@ export async function POST(req: NextRequest) {
           address,
           city,
           state,
+          country,
           agreementUrl, // puede ser null (si firmará digitalmente después)
         },
       })

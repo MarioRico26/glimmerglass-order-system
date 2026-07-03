@@ -23,6 +23,7 @@ export async function GET() {
       phone: dealer.phone,
       city: dealer.city,
       state: dealer.state,
+      country: dealer.country ?? 'US',
       approved: dealer.user?.approved ?? false
     }))
 

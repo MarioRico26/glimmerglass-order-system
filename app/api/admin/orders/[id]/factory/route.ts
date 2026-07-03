@@ -29,6 +29,7 @@ function toSummaryDTO(o: any) {
           address: o.dealer.address,
           city: o.dealer.city,
           state: o.dealer.state,
+          country: o.dealer.country ?? 'US',
         }
       : null,
     factory: o.factoryLocation
@@ -267,6 +268,7 @@ export async function PATCH(
               address: true,
               city: true,
               state: true,
+              country: true,
             },
           },
           poolModel: { select: { name: true, blueprintUrl: true, hasIntegratedSpa: true } },

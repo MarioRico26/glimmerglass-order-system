@@ -75,6 +75,7 @@ export async function GET() {
             email: d.email,
             city: d.city,
             state: d.state,
+            country: d.country ?? 'US',
             createdAt: d.createdAt,
             hasLogin: Boolean(owner),
             approved,

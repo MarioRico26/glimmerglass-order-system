@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, FileSignature, KeyRound, RefreshCw, Search, XCircle } from 'lucide-react'
+import { DEALER_COUNTRIES, getCountryLabel, getRegionLabel, getRegionsForCountry, normalizeDealerCountry } from '@/lib/dealerLocation'
 
 type Row = {
     id: string
@@ -11,6 +12,7 @@ type Row = {
     email: string | null
     city: string | null
     state: string | null
+    country?: string | null
     createdAt: string
     hasLogin: boolean
     approved: boolean
@@ -38,10 +40,6 @@ type Overview = {
 
 const aqua = '#00B2CA'
 const deep = '#007A99'
-const STATES = [
-    'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming',
-]
-
 function makeTemporaryPassword() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*'
     let out = ''
@@ -73,6 +71,7 @@ export default function AdminDealersPage() {
         createLogin: true,
         approved: true,
         workflowProfileId: '',
+        country: 'US',
     })
     const [resetTarget, setResetTarget] = useState<Row | null>(null)
     const [resetBusy, setResetBusy] = useState(false)
@@ -129,6 +128,8 @@ export default function AdminDealersPage() {
         )
     }
 
+    const selectedRegions = useMemo(() => getRegionsForCountry(createForm.country), [createForm.country])
+
     const filtered = useMemo(() => {
         if (!data) return []
         return data.items.filter(r => {
@@ -137,7 +138,8 @@ export default function AdminDealersPage() {
                 (r.name?.toLowerCase().includes(q.toLowerCase()) ||
                     r.email?.toLowerCase().includes(q.toLowerCase()) ||
                     r.city?.toLowerCase().includes(q.toLowerCase()) ||
-                    r.state?.toLowerCase().includes(q.toLowerCase()))
+                    r.state?.toLowerCase().includes(q.toLowerCase()) ||
+                    r.country?.toLowerCase().includes(q.toLowerCase()))
             const matchStatus = statusFilter === 'ALL' || r.onboardingStatus === statusFilter
             return matchQ && matchStatus
         })
@@ -189,6 +191,7 @@ export default function AdminDealersPage() {
                 createLogin: true,
                 approved: true,
                 workflowProfileId: '',
+                country: 'US',
             })
             await load()
         } catch (e: any) {
@@ -390,6 +393,16 @@ export default function AdminDealersPage() {
                         placeholder="Phone"
                         required
                     />
+                    <select
+                        value={createForm.country}
+                        onChange={(e)=>setCreateForm(f=>({ ...f, country: e.target.value, state: '' }))}
+                        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                        required
+                    >
+                        {DEALER_COUNTRIES.map((country) => (
+                            <option key={country.value} value={country.value}>{country.label}</option>
+                        ))}
+                    </select>
                     <input
                         value={createForm.address}
                         onChange={(e)=>setCreateForm(f=>({ ...f, address: e.target.value }))}
@@ -410,9 +423,9 @@ export default function AdminDealersPage() {
                         className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                         required
                     >
-                        <option value="">State</option>
-                        {STATES.map((s) => (
-                            <option key={s} value={s}>{s}</option>
+                        <option value="">{getRegionLabel(createForm.country)}</option>
+                        {selectedRegions.map((region) => (
+                            <option key={region} value={region}>{region}</option>
                         ))}
                     </select>
                     <label className="inline-flex items-center gap-2 text-sm text-slate-700">
@@ -477,7 +490,7 @@ export default function AdminDealersPage() {
             <Search size={16} />
           </span>
                     <input
-                        placeholder="Search by name, email, city or state"
+                        placeholder="Search by name, email, city, state/province, or country"
                         value={q}
                         onChange={e=>setQ(e.target.value)}
                         className="w-full h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-3"
@@ -535,7 +548,7 @@ export default function AdminDealersPage() {
                                 <div className="text-slate-600">{r.email || '—'}</div>
                             </td>
                             <td className="p-3 text-slate-700">
-                                {(r.city || '—') + (r.state ? `, ${r.state}` : '')}
+                                {[r.city || '—', r.state, r.country ? getCountryLabel(r.country) : null].filter(Boolean).join(', ')}
                             </td>
                             <td className="p-3"><Badge s={r.onboardingStatus} /></td>
                             <td className="p-3">

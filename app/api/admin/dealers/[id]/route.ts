@@ -64,6 +64,7 @@ export async function PATCH(
         phone: true,
         city: true,
         state: true,
+        country: true,
         workflowProfileId: true,
         workflowProfile: {
           select: { id: true, name: true, slug: true },
@@ -82,6 +83,7 @@ export async function PATCH(
         phone: dealer.phone ?? '',
         city: dealer.city ?? '',
         state: dealer.state ?? '',
+        country: dealer.country ?? 'US',
         workflowProfileId: dealer.workflowProfileId ?? null,
         workflowProfileName: dealer.workflowProfile?.name ?? null,
         approved: dealer.User?.approved ?? false,
