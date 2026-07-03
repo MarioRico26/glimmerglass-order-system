@@ -48,6 +48,7 @@ model Dealer {
   address               String?
   city                  String?
   state                 String?
+  country               String    @default("US")
   agreementUrl          String?
   agreementSignatureUrl String?
   agreementSignedAt     DateTime?
