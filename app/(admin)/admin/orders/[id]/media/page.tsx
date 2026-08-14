@@ -91,6 +91,10 @@ function isGalleryMedia(item: Media) {
   return item.type === 'photo' || isVideoUrl(item.fileUrl)
 }
 
+function adminMediaHref(orderId: string, mediaId: string) {
+  return `/api/admin/orders/${orderId}/media?mediaId=${encodeURIComponent(mediaId)}&download=1`
+}
+
 async function compressImage(file: File): Promise<File> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -642,7 +646,7 @@ export default function OrderMediaPage() {
                         </div>
                         <div className="flex items-center justify-between gap-2 pt-1">
                           <a
-                            href={photo.fileUrl}
+                            href={adminMediaHref(orderId, photo.id)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-sky-700 hover:underline"
@@ -856,7 +860,7 @@ export default function OrderMediaPage() {
                         </div>
 
                         <a
-                          href={m.fileUrl}
+                          href={adminMediaHref(orderId, m.id)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-1 inline-block max-w-[52ch] truncate text-sm text-sky-700 hover:underline"

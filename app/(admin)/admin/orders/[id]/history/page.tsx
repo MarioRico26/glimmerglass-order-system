@@ -187,6 +187,10 @@ function shippingMethodLabel(value?: string | null) {
   return SHIPPING_LABELS[value] || value
 }
 
+function adminMediaHref(orderId: string, mediaId: string) {
+  return `/api/admin/orders/${orderId}/media?mediaId=${encodeURIComponent(mediaId)}&download=1`
+}
+
 export default function OrderHistoryPage() {
   const params = useParams()
   const orderId = params.id as string
@@ -1160,7 +1164,7 @@ export default function OrderHistoryPage() {
                           <video src={m.fileUrl} controls preload="metadata" className="h-44 w-full object-cover" />
                         </div>
                       ) : (
-                        <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="block bg-slate-100">
+                        <a href={adminMediaHref(orderId, m.id)} target="_blank" rel="noopener noreferrer" className="block bg-slate-100">
                           <img
                             src={m.fileUrl}
                             alt={m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : 'Photo'}
@@ -1181,7 +1185,7 @@ export default function OrderHistoryPage() {
                         <div className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</div>
                         <div className="flex items-center justify-between gap-2 pt-1">
                           <a
-                            href={m.fileUrl}
+                            href={adminMediaHref(orderId, m.id)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-sky-700 hover:underline"
@@ -1217,7 +1221,7 @@ export default function OrderHistoryPage() {
                         {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : m.type}
                       </p>
                       <a
-                        href={m.fileUrl}
+                        href={adminMediaHref(orderId, m.id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm text-sky-700 hover:underline"

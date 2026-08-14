@@ -73,6 +73,10 @@ function toApiUrl(u: string) {
   return u.startsWith('/uploads/') ? '/api/uploads/' + u.replace('/uploads/', '') : u
 }
 
+function dealerMediaHref(orderId: string, mediaId: string) {
+  return `/api/orders/${orderId}/media?mediaId=${encodeURIComponent(mediaId)}&download=1`
+}
+
 const STATUS_META: Record<string, { icon: LucideIcon; badge: string }> = {
   PENDING_PAYMENT_APPROVAL: {
     icon: BadgeDollarSign,
@@ -338,7 +342,7 @@ export default function DealerOrderHistoryPage() {
         ) : (
           <div className="grid gap-3">
             {normalizedMedia.map((m) => {
-              const href = toApiUrl(m.fileUrl || '')
+              const href = m.id ? dealerMediaHref(orderId, m.id) : toApiUrl(m.fileUrl || '')
               const docLabel = labelForDocType(m.docType) || labelDocType(m.docType)
               const fallbackLabel = m.type ? m.type.replaceAll('_', ' ') : 'File'
 

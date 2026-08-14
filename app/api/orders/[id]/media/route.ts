@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { buildOrderMediaDownloadName } from '@/lib/orderMediaFiles'
 
 function json(message: string, status = 400) {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -41,6 +42,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!dbUser?.dealer) return json('Dealer not found for this user', 403)
 
     const orderId = params.id
+    const mediaId = _req.nextUrl.searchParams.get('mediaId')?.trim()
+    const shouldDownload = _req.nextUrl.searchParams.get('download') === '1'
 
     // Verify order belongs to this dealer
     const order = await prisma.order.findUnique({
@@ -50,6 +53,43 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     if (!order) return json('Order not found', 404)
     if (order.dealerId !== dbUser.dealer.id) return json('Forbidden', 403)
+
+    if (mediaId && shouldDownload) {
+      const media = await prisma.orderMedia.findFirst({
+        where: {
+          id: mediaId,
+          orderId,
+          visibleToDealer: true,
+        },
+        select: {
+          id: true,
+          fileUrl: true,
+          docType: true,
+          documentDefinition: { select: { key: true } },
+        },
+      })
+
+      if (!media?.fileUrl) return json('File not found', 404)
+
+      const upstream = await fetch(media.fileUrl, { cache: 'no-store' })
+      if (!upstream.ok || !upstream.body) return json('Unable to fetch file', 404)
+
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
+      const fileName = buildOrderMediaDownloadName(
+        media.fileUrl,
+        media.documentDefinition?.key || media.docType || `order-file-${media.id}`,
+        contentType
+      )
+
+      return new NextResponse(upstream.body, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'private, max-age=0, must-revalidate',
+          'Content-Disposition': `inline; filename="${fileName}"`,
+          'Content-Type': contentType,
+        },
+      })
+    }
 
     // Return only dealer-visible docs
     const items = await prisma.orderMedia.findMany({

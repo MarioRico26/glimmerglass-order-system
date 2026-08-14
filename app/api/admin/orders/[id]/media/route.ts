@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { MediaType, OrderDocType, Role } from '@prisma/client'
 import { del, put } from '@vercel/blob'
+import { buildOrderMediaBlobKey, buildOrderMediaDownloadName } from '@/lib/orderMediaFiles'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
@@ -53,6 +54,45 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     }
 
     const orderId = await getOrderId(ctx)
+    const mediaId = _req.nextUrl.searchParams.get('mediaId')?.trim()
+    const shouldDownload = _req.nextUrl.searchParams.get('download') === '1'
+
+    if (mediaId && shouldDownload) {
+      const media = await prisma.orderMedia.findFirst({
+        where: { id: mediaId, orderId },
+        select: {
+          id: true,
+          fileUrl: true,
+          docType: true,
+          documentDefinition: { select: { key: true } },
+        },
+      })
+
+      if (!media?.fileUrl) {
+        return NextResponse.json({ message: 'File not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
+      }
+
+      const upstream = await fetch(media.fileUrl, { cache: 'no-store' })
+      if (!upstream.ok || !upstream.body) {
+        return NextResponse.json({ message: 'Unable to fetch file' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
+      }
+
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
+      const fileName = buildOrderMediaDownloadName(
+        media.fileUrl,
+        media.documentDefinition?.key || media.docType || `order-file-${media.id}`,
+        contentType
+      )
+
+      return new NextResponse(upstream.body, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'private, max-age=0, must-revalidate',
+          'Content-Disposition': `inline; filename="${fileName}"`,
+          'Content-Type': contentType,
+        },
+      })
+    }
 
     const items = await prisma.orderMedia.findMany({
       where: { orderId },
@@ -168,8 +208,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const uploadedByDisplayName = uploaderDisplayNameFor(uploadedByRole, uploader?.dealer?.name)
 
     const buf = await file.arrayBuffer()
-    const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9_.-]/g, '_')
-    const key = `orders/${orderId}/${Date.now()}-${safeName}`
+    const key = buildOrderMediaBlobKey(orderId, file.name || 'upload', file.type)
 
     const { url } = await put(key, buf, {
       access: 'public',
