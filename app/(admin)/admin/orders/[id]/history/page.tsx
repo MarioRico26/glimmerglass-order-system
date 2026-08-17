@@ -14,6 +14,7 @@ import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 import { formatDateOnlyForDisplay, formatDateOnlyForInput } from '@/lib/dateOnly'
 import { displayInvoiceRef } from '@/lib/invoiceRef'
+import { isLegacyShortcutUrl } from '@/lib/orderMediaFiles'
 
 interface OrderHistory {
   id: string
@@ -1183,15 +1184,26 @@ export default function OrderHistoryPage() {
                         </div>
                         <div className="text-xs text-slate-500">Uploaded by: {formatUploader(m)}</div>
                         <div className="text-xs text-slate-500">{new Date(m.uploadedAt).toLocaleString()}</div>
+                        {isLegacyShortcutUrl(m.fileUrl) ? (
+                          <div className="text-xs font-medium text-rose-700">
+                            Legacy web shortcut detected. Re-upload the real file before shipping.
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between gap-2 pt-1">
-                          <a
-                            href={adminMediaHref(orderId, m.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-semibold text-sky-700 hover:underline"
-                          >
-                            Open
-                          </a>
+                          {isLegacyShortcutUrl(m.fileUrl) ? (
+                            <span className="text-sm font-semibold text-rose-700">
+                              Invalid legacy shortcut
+                            </span>
+                          ) : (
+                            <a
+                              href={adminMediaHref(orderId, m.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-semibold text-sky-700 hover:underline"
+                            >
+                              Open
+                            </a>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleDeleteMedia(m.id)}
@@ -1220,14 +1232,20 @@ export default function OrderHistoryPage() {
                       <p className="text-sm font-medium text-slate-900">
                         {m.docType ? labelForDocType(m.docType) || labelDocType(m.docType) || m.docType : m.type}
                       </p>
-                      <a
-                        href={adminMediaHref(orderId, m.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-sky-700 hover:underline"
-                      >
-                        View File
-                      </a>
+                      {isLegacyShortcutUrl(m.fileUrl) ? (
+                        <p className="text-sm font-medium text-rose-700">
+                          Invalid legacy shortcut. Please re-upload the real file.
+                        </p>
+                      ) : (
+                        <a
+                          href={adminMediaHref(orderId, m.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-sky-700 hover:underline"
+                        >
+                          View File
+                        </a>
+                      )}
                       <p className="text-xs text-slate-500 mt-1">
                         Uploaded by: {formatUploader(m)}
                       </p>

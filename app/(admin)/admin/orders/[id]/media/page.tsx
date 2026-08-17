@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, Image as ImageIcon, Trash2, UploadCloud, X } from 'lucide-react'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
 import { labelDocType } from '@/lib/orderFlow'
+import { detectLegacyShortcutUpload, isLegacyShortcutUrl } from '@/lib/orderMediaFiles'
 
 type Media = {
   id: string
@@ -194,6 +195,11 @@ export default function OrderMediaPage() {
     [mediaList]
   )
 
+  const fileIsLegacyShortcut = useMemo(
+    () => (file ? isLegacyShortcutUrl(file.name) : false),
+    [file]
+  )
+
   const fetchMedia = async () => {
     if (!orderId) return
     setFetchError(null)
@@ -256,6 +262,9 @@ export default function OrderMediaPage() {
 
     if (!orderId) return setMessage('Missing order id.')
     if (!file) return setMessage('Please select a file.')
+
+    const shortcutReason = await detectLegacyShortcutUpload(file)
+    if (shortcutReason) return setMessage(`❌ ${shortcutReason}`)
 
     const formData = new FormData()
     formData.append('file', file)
@@ -686,10 +695,30 @@ export default function OrderMediaPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      onChange={async (e) => {
+                        const nextFile = e.target.files?.[0] || null
+                        if (!nextFile) {
+                          setFile(null)
+                          return
+                        }
+                        const shortcutReason = await detectLegacyShortcutUpload(nextFile)
+                        if (shortcutReason) {
+                          setFile(null)
+                          setMessage(`❌ ${shortcutReason}`)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                          setTimeout(() => setMessage(''), 4000)
+                          return
+                        }
+                        setFile(nextFile)
+                      }}
                       required
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                     />
+                    {fileIsLegacyShortcut ? (
+                      <p className="mt-1 text-xs font-medium text-rose-600">
+                        This looks like a web shortcut, not the real document.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="lg:col-span-1">
@@ -857,16 +886,27 @@ export default function OrderMediaPage() {
                           <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">
                             {m.type}
                           </span>
+                          {isLegacyShortcutUrl(m.fileUrl) ? (
+                            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                              Invalid legacy shortcut
+                            </span>
+                          ) : null}
                         </div>
 
-                        <a
-                          href={adminMediaHref(orderId, m.id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 inline-block max-w-[52ch] truncate text-sm text-sky-700 hover:underline"
-                        >
-                          View / Download
-                        </a>
+                        {isLegacyShortcutUrl(m.fileUrl) ? (
+                          <div className="mt-1 text-sm text-rose-700">
+                            This old file is a `.webloc` shortcut and needs a real re-upload.
+                          </div>
+                        ) : (
+                          <a
+                            href={adminMediaHref(orderId, m.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-block max-w-[52ch] truncate text-sm text-sky-700 hover:underline"
+                          >
+                            View / Download
+                          </a>
+                        )}
 
                         <div className="mt-1 text-xs text-slate-500">
                           Uploaded by: {formatUploader(m)}

@@ -32,6 +32,8 @@ const KNOWN_FILE_EXTENSIONS = [
   '.avi',
 ] as const
 
+const LEGACY_SHORTCUT_EXTENSIONS = ['.webloc', '.url'] as const
+
 function sanitizeBaseName(value: string) {
   const cleaned = value
     .replace(/^\d{12,}-/, '')
@@ -62,6 +64,59 @@ export function extensionFromContentType(contentType?: string | null) {
     .toLowerCase()
 
   return MIME_EXTENSION_MAP[normalized] || ''
+}
+
+export function isLegacyShortcutName(fileName?: string | null) {
+  const normalized = String(fileName || '').trim().toLowerCase()
+  return LEGACY_SHORTCUT_EXTENSIONS.some((ext) => normalized.endsWith(ext))
+}
+
+export function isLegacyShortcutUrl(fileUrl?: string | null) {
+  const raw = String(fileUrl || '').trim()
+  if (!raw) return false
+
+  try {
+    const parsed = new URL(raw)
+    return isLegacyShortcutName(parsed.pathname)
+  } catch {
+    return isLegacyShortcutName(raw.split(/[?#]/)[0] || raw)
+  }
+}
+
+export async function detectLegacyShortcutUpload(file: File) {
+  if (isLegacyShortcutName(file.name)) {
+    return 'Web shortcut files (.webloc/.url) are not supported. Upload the actual PDF, image, or video instead.'
+  }
+
+  const mime = String(file.type || '').toLowerCase()
+  const shouldInspectContent =
+    file.size > 0 &&
+    file.size <= 512_000 &&
+    (!mime ||
+      mime === 'application/octet-stream' ||
+      mime === 'application/xml' ||
+      mime === 'text/xml' ||
+      mime === 'text/plain')
+
+  if (!shouldInspectContent) return null
+
+  try {
+    const snippet = (await file.text()).slice(0, 4000).toLowerCase()
+    const looksLikeMacWebloc =
+      snippet.includes('<plist') &&
+      snippet.includes('<key>url</key>')
+    const looksLikeWindowsShortcut =
+      snippet.includes('[internetshortcut]') &&
+      snippet.includes('url=')
+
+    if (looksLikeMacWebloc || looksLikeWindowsShortcut) {
+      return 'This upload is a web shortcut, not the real document. Please upload the actual PDF, image, or video file.'
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }
 
 export function normalizeStoredUploadName(fileName: string, contentType?: string | null) {

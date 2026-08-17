@@ -8,7 +8,11 @@ import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 import { MediaType, OrderDocType, Role } from '@prisma/client'
 import { del, put } from '@vercel/blob'
-import { buildOrderMediaBlobKey, buildOrderMediaDownloadName } from '@/lib/orderMediaFiles'
+import {
+  buildOrderMediaBlobKey,
+  buildOrderMediaDownloadName,
+  detectLegacyShortcutUpload,
+} from '@/lib/orderMediaFiles'
 
 type Ctx = { params: { id: string } } | { params: Promise<{ id: string }> }
 async function getOrderId(ctx: Ctx) {
@@ -171,6 +175,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const file = form.get('file') as File | null
     if (!file) {
       return NextResponse.json({ message: 'file is required' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+    }
+
+    const legacyShortcutReason = await detectLegacyShortcutUpload(file)
+    if (legacyShortcutReason) {
+      return NextResponse.json(
+        { message: legacyShortcutReason, code: 'LEGACY_SHORTCUT_UPLOAD_BLOCKED' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      )
     }
 
     // ✅ IMPORTANT: this is the business category you care about

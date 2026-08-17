@@ -17,6 +17,7 @@ import {
 import BlueprintMarkersCard, { type BlueprintMarker } from '@/components/orders/BlueprintMarkersCard'
 import { labelDocType, labelOrderStatus } from '@/lib/orderFlow'
 import { useWorkflowDocLabels } from '@/hooks/useWorkflowDocLabels'
+import { isLegacyShortcutUrl } from '@/lib/orderMediaFiles'
 
 type OrderHistory = {
   id: string
@@ -345,6 +346,7 @@ export default function DealerOrderHistoryPage() {
               const href = m.id ? dealerMediaHref(orderId, m.id) : toApiUrl(m.fileUrl || '')
               const docLabel = labelForDocType(m.docType) || labelDocType(m.docType)
               const fallbackLabel = m.type ? m.type.replaceAll('_', ' ') : 'File'
+              const isLegacyShortcut = isLegacyShortcutUrl(m.fileUrl)
 
               return (
                 <div
@@ -360,18 +362,30 @@ export default function DealerOrderHistoryPage() {
                       <span className="text-[11px] rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600 capitalize">
                         {m.type}
                       </span>
+                      {isLegacyShortcut ? (
+                        <span className="text-[11px] rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 font-semibold text-rose-700">
+                          Legacy shortcut
+                        </span>
+                      ) : null}
                     </div>
 
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex items-center gap-2 text-sm text-sky-700 hover:underline truncate max-w-[70ch]"
-                      title="View / Download"
-                    >
-                      <FileDown size={16} />
-                      View / Download
-                    </a>
+                    {isLegacyShortcut ? (
+                      <div className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-rose-700">
+                        <AlertCircle size={16} />
+                        This legacy file was saved as a web shortcut and needs to be replaced.
+                      </div>
+                    ) : (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-2 text-sm text-sky-700 hover:underline truncate max-w-[70ch]"
+                        title="View / Download"
+                      >
+                        <FileDown size={16} />
+                        View / Download
+                      </a>
+                    )}
 
                     {m.uploadedAt ? (
                       <>
