@@ -25,6 +25,12 @@ function uploaderDisplayNameFor(
   return 'User'
 }
 
+function contentDispositionAttachment(fileName: string) {
+  const asciiName = fileName.replace(/["\r\n]/g, '_')
+  const encodedName = encodeURIComponent(fileName)
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions)
@@ -85,7 +91,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         status: 200,
         headers: {
           'Cache-Control': 'private, max-age=0, must-revalidate',
-          'Content-Disposition': `inline; filename="${fileName}"`,
+          'Content-Disposition': contentDispositionAttachment(fileName),
           'Content-Type': contentType,
         },
       })
